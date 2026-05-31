@@ -42,7 +42,7 @@ export function FeedbackButtons({ conversationId, message }: FeedbackButtonsProp
         className={cn(
           'h-7 w-7 text-slate-500',
           feedbackScore === 1 &&
-            'bg-primary/10 text-primary ring-1 ring-primary/20 hover:bg-primary/10 hover:text-primary disabled:opacity-100',
+            'bg-green-50 text-green-600 ring-1 ring-green-600/20 hover:bg-green-50 hover:text-green-600 disabled:opacity-100',
           hasFeedback && feedbackScore !== 1 && 'disabled:opacity-40'
         )}
         aria-label="Hài lòng"
@@ -60,7 +60,7 @@ export function FeedbackButtons({ conversationId, message }: FeedbackButtonsProp
         className={cn(
           'h-7 w-7 text-slate-500',
           feedbackScore === -1 &&
-            'bg-primary/10 text-primary ring-1 ring-primary/20 hover:bg-primary/10 hover:text-primary disabled:opacity-100',
+            'bg-red-50 text-red-600 ring-1 ring-red-600/20 hover:bg-red-50 hover:text-red-600 disabled:opacity-100',
           hasFeedback && feedbackScore !== -1 && 'disabled:opacity-40'
         )}
         aria-label="Chưa hài lòng"

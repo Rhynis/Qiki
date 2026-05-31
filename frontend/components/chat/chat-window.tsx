@@ -1,7 +1,7 @@
 'use client'
 
 import { MessageCircle, Minus, X } from 'lucide-react'
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useMessages, useSendMessage, useStartConversation } from '@/lib/hooks/use-conversation'
 import { useChatStore } from '@/lib/stores/chat-store'
@@ -9,14 +9,45 @@ import { EscalationNotice } from './escalation-notice'
 import { MessageInput } from './message-input'
 import { MessageList } from './message-list'
 
+const MESSAGE_RATE_LIMIT_COUNT = 10
+const MESSAGE_RATE_LIMIT_WINDOW_MS = 60_000
+
 export function ChatWindow() {
   const close = useChatStore((state) => state.close)
   const sessionId = useChatStore((state) => state.sessionId)
   const conversationId = useChatStore((state) => state.conversationId)
   const setConversationId = useChatStore((state) => state.setConversationId)
+  const sentAtRef = useRef<number[]>([])
+  const rateLimitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [rateLimited, setRateLimited] = useState(false)
   const startConversation = useStartConversation()
   const sendMessage = useSendMessage()
   const messages = useMessages(conversationId, true, sendMessage.isPending)
+
+  function clearRateLimitTimer() {
+    if (rateLimitTimeoutRef.current) {
+      clearTimeout(rateLimitTimeoutRef.current)
+      rateLimitTimeoutRef.current = null
+    }
+  }
+
+  function scheduleRateLimitReset(recentSentAt: number[], now: number) {
+    clearRateLimitTimer()
+    const oldestTimestamp = recentSentAt[0]
+    if (oldestTimestamp === undefined) return
+
+    const waitMs = Math.max(MESSAGE_RATE_LIMIT_WINDOW_MS - (now - oldestTimestamp) + 100, 100)
+    rateLimitTimeoutRef.current = setTimeout(() => {
+      const nextNow = Date.now()
+      const nextSentAt = sentAtRef.current.filter(
+        (timestamp) => nextNow - timestamp < MESSAGE_RATE_LIMIT_WINDOW_MS
+      )
+      sentAtRef.current = nextSentAt
+      const stillLimited = nextSentAt.length >= MESSAGE_RATE_LIMIT_COUNT
+      setRateLimited(stillLimited)
+      if (stillLimited) scheduleRateLimitReset(nextSentAt, nextNow)
+    }, waitMs)
+  }
 
   useEffect(() => {
     if (!conversationId && !startConversation.isPending) {
@@ -28,6 +59,13 @@ export function ChatWindow() {
     if (startConversation.data?.id) setConversationId(startConversation.data.id)
   }, [setConversationId, startConversation.data?.id])
 
+  useEffect(
+    () => () => {
+      if (rateLimitTimeoutRef.current) clearTimeout(rateLimitTimeoutRef.current)
+    },
+    []
+  )
+
   const latestConversation = startConversation.data
   const isEscalated = latestConversation?.status === 'escalated'
   const isBusy = sendMessage.isPending || startConversation.isPending
@@ -35,11 +73,26 @@ export function ChatWindow() {
 
   function handleSend(content: string) {
     const targetConversationId = conversationId ?? startConversation.data?.id
-    if (!targetConversationId) return
+    if (!targetConversationId) return false
+
+    const now = Date.now()
+    const recentSentAt = sentAtRef.current.filter(
+      (timestamp) => now - timestamp < MESSAGE_RATE_LIMIT_WINDOW_MS
+    )
+    sentAtRef.current = recentSentAt
+    if (recentSentAt.length >= MESSAGE_RATE_LIMIT_COUNT) {
+      setRateLimited(true)
+      scheduleRateLimitReset(recentSentAt, now)
+      return false
+    }
+
+    sentAtRef.current = [...recentSentAt, now]
+    setRateLimited(false)
     sendMessage.mutate({
       conversationId: targetConversationId,
       data: { content, session_id: sessionId },
     })
+    return true
   }
 
   return (
@@ -87,6 +140,7 @@ export function ChatWindow() {
       />
       <MessageInput
         disabled={!conversationReady || startConversation.isPending}
+        rateLimited={rateLimited}
         sending={sendMessage.isPending}
         onSend={handleSend}
       />
