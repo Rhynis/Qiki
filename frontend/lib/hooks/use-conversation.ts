@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import * as conversationsApi from '@/lib/api/conversations'
 import { useChatStore } from '@/lib/stores/chat-store'
 import type {
+  Conversation,
   FeedbackRequest,
   Message,
   MessageListResponse,
@@ -132,7 +133,42 @@ export function useSubmitFeedback() {
       messageId: string
       data: FeedbackRequest
     }) => conversationsApi.submitFeedback(conversationId, messageId, data),
-    onSuccess: async (_message, variables) => {
+    onMutate: async ({ conversationId, messageId, data }) => {
+      const messagesKey = conversationKeys.messages(conversationId)
+      const detailKey = conversationKeys.detail(conversationId)
+      await queryClient.cancelQueries({ queryKey: messagesKey })
+      await queryClient.cancelQueries({ queryKey: detailKey })
+
+      const previousMessages = queryClient.getQueryData<MessageListResponse>(messagesKey)
+      const previousConversation = queryClient.getQueryData<Conversation>(detailKey)
+      const applyFeedback = (message: Message): Message =>
+        message.id === messageId ? { ...message, feedback_score: data.score } : message
+
+      queryClient.setQueryData<MessageListResponse>(messagesKey, (old) =>
+        old ? { ...old, items: old.items.map(applyFeedback) } : old
+      )
+      queryClient.setQueryData<Conversation>(detailKey, (old) =>
+        old ? { ...old, messages: old.messages.map(applyFeedback) } : old
+      )
+
+      return { conversationId, previousConversation, previousMessages }
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previousMessages !== undefined) {
+        queryClient.setQueryData(
+          conversationKeys.messages(context.conversationId),
+          context.previousMessages
+        )
+      }
+      if (context?.previousConversation !== undefined) {
+        queryClient.setQueryData(
+          conversationKeys.detail(context.conversationId),
+          context.previousConversation
+        )
+      }
+      toast.error('Không gửi được phản hồi. Vui lòng thử lại.')
+    },
+    onSettled: async (_message, _error, variables) => {
       await queryClient.invalidateQueries({
         queryKey: conversationKeys.messages(variables.conversationId),
       })
