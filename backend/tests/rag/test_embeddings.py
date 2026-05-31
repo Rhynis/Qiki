@@ -1,9 +1,9 @@
-"""Tests for Vietnamese embedding service."""
+"""Tests for the Gemini-backed embedding service."""
 
 import asyncio
-from unittest.mock import MagicMock
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock
 
-import numpy as np
 import pytest
 
 from app.rag.embeddings import EmbeddingService
@@ -11,25 +11,27 @@ from app.rag.embeddings import EmbeddingService
 pytestmark = pytest.mark.asyncio
 
 
+def _embedding(value: float) -> SimpleNamespace:
+    return SimpleNamespace(values=[value] * 768)
+
+
 @pytest.fixture(autouse=True)
-def mock_sentence_transformer(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
+def mock_gemini_embed(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
     EmbeddingService.reset()
-    mock_model = MagicMock()
 
-    def encode(value: object, **kwargs: object) -> np.ndarray:
-        del kwargs
-        if isinstance(value, list):
-            return np.vstack(
-                [np.full(768, index + 1, dtype=np.float32) for index, _ in enumerate(value)]
+    async def embed_content(*, model: str, contents: object, **kwargs: object) -> SimpleNamespace:
+        del model, kwargs
+        if isinstance(contents, list):
+            return SimpleNamespace(
+                embeddings=[_embedding(index + 1) for index, _ in enumerate(contents)]
             )
-        return np.full(768, 0.5, dtype=np.float32)
+        return SimpleNamespace(embeddings=[_embedding(0.5)])
 
-    mock_model.encode.side_effect = encode
-    monkeypatch.setattr(
-        "app.rag.embeddings.SentenceTransformer",
-        lambda *args, **kwargs: mock_model,
-    )
-    yield mock_model
+    embed_mock = AsyncMock(side_effect=embed_content)
+    client = Mock()
+    client.aio.models.embed_content = embed_mock
+    monkeypatch.setattr("app.rag.embeddings.genai.Client", Mock(return_value=client))
+    yield embed_mock
     EmbeddingService.reset()
 
 
@@ -61,26 +63,26 @@ async def test_embed_handles_empty_text() -> None:
     assert embedding == [0.0] * 768
 
 
-async def test_embed_handles_long_text(mock_sentence_transformer: MagicMock) -> None:
+async def test_embed_handles_long_text(mock_gemini_embed: AsyncMock) -> None:
     long_text = "gas " * 1000
 
     await EmbeddingService().embed_text(long_text)
 
-    encoded_text = mock_sentence_transformer.encode.call_args.args[0]
-    assert isinstance(encoded_text, str)
-    assert len(encoded_text) <= 1500
+    sent = mock_gemini_embed.await_args.kwargs["contents"]
+    assert isinstance(sent, str)
+    assert len(sent) <= 1500
 
 
 async def test_embed_handles_vietnamese_diacritics() -> None:
-    embedding = await EmbeddingService().embed_text("Bình gas Petrolimex")
+    embedding = await EmbeddingService().embed_text("Bình gas Petrolimex")
 
     assert len(embedding) == 768
 
 
-async def test_embed_singleton(mock_sentence_transformer: MagicMock) -> None:
+async def test_embed_singleton(mock_gemini_embed: AsyncMock) -> None:
     first = EmbeddingService()
     second = EmbeddingService()
     await asyncio.gather(first.embed_text("a"), second.embed_text("b"))
 
     assert first is second
-    assert mock_sentence_transformer.encode.call_count == 2
+    assert mock_gemini_embed.await_count == 2
