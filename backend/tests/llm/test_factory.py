@@ -23,8 +23,7 @@ def reset_factory() -> object:
 
 @pytest.fixture(autouse=True)
 def mock_gemini(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("app.llm.providers.gemini_provider.genai.configure", Mock())
-    monkeypatch.setattr("app.llm.providers.gemini_provider.genai.GenerativeModel", Mock())
+    monkeypatch.setattr("app.llm.providers.gemini_provider.genai.Client", Mock())
 
 
 def test_create_returns_ollama_provider() -> None:

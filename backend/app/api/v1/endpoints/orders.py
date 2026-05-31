@@ -37,7 +37,7 @@ def build_order_service(session: AsyncSession) -> OrderService:
     return OrderService(OrderRepository(session), ProductRepository(session))
 
 
-@retry(  # type: ignore[arg-type]
+@retry(
     retry=retry_if_exception(is_serialization_failure),
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=0.1, min=0.1, max=1),
@@ -74,7 +74,7 @@ async def checkout(
 ) -> OrderResponse:
     """Create a guest or authenticated order."""
     service = build_order_service(session)
-    return await _create_order_with_retry(service, payload, current_user, idempotency_key, session)  # type: ignore[misc, no-any-return]
+    return await _create_order_with_retry(service, payload, current_user, idempotency_key, session)
 
 
 @router.post(
