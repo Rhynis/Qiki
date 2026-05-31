@@ -4,7 +4,9 @@ from typing import ClassVar
 
 from app.core.config import Settings, get_settings
 from app.llm.base import BaseLLMProvider
+from app.llm.providers.fallback_provider import FallbackLLMProvider
 from app.llm.providers.gemini_provider import GeminiProvider
+from app.llm.providers.groq_provider import GroqProvider
 from app.llm.providers.ollama_provider import OllamaProvider
 
 
@@ -36,11 +38,23 @@ class LLMProviderFactory:
         elif name == "gemini":
             if not resolved_settings.GEMINI_API_KEY:
                 raise ValueError("GEMINI_API_KEY not configured")
-            provider = GeminiProvider(
+            gemini_provider = GeminiProvider(
                 api_key=resolved_settings.GEMINI_API_KEY,
                 model=resolved_settings.GEMINI_MODEL,
                 embed_model=resolved_settings.GEMINI_EMBED_MODEL,
             )
+            if resolved_settings.GROQ_API_KEY:
+                provider = FallbackLLMProvider(
+                    [
+                        gemini_provider,
+                        GroqProvider(
+                            api_key=resolved_settings.GROQ_API_KEY,
+                            model=resolved_settings.GROQ_MODEL,
+                        ),
+                    ]
+                )
+            else:
+                provider = gemini_provider
         else:
             raise ValueError(f"Unknown LLM provider: {name}")
 

@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str | None = None
     GEMINI_MODEL: str = "gemini-2.0-flash-exp"
     GEMINI_EMBED_MODEL: str = "gemini-embedding-001"
+    GROQ_API_KEY: str | None = None
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
 
     EMBEDDING_MODEL: str = "keepitreal/vietnamese-sbert"
     EMBEDDING_DIMENSIONS: int = 768
