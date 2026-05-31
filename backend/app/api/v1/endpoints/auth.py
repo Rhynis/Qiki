@@ -1,6 +1,6 @@
 """Authentication endpoints."""
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Body, Depends, Request, Response, status
 
@@ -36,6 +36,11 @@ from app.services.auth_service import (
 router = APIRouter()
 settings = get_settings()
 
+# Frontend (Vercel) and backend (Railway) live on different sites, so the auth
+# cookies must be SameSite=None to be sent on cross-site requests. None requires
+# Secure, which holds in production (HTTPS). Locally we stay on lax for same-origin.
+_COOKIE_SAMESITE: Literal["lax", "none"] = "none" if settings.is_production else "lax"
+
 
 def _set_auth_cookies(response: Response, result: AuthResult) -> None:
     response.set_cookie(
@@ -43,7 +48,7 @@ def _set_auth_cookies(response: Response, result: AuthResult) -> None:
         result.access_token,
         httponly=True,
         secure=settings.is_production,
-        samesite="lax",
+        samesite=_COOKIE_SAMESITE,
         path=ACCESS_TOKEN_COOKIE_PATH,
     )
     response.set_cookie(
@@ -51,14 +56,18 @@ def _set_auth_cookies(response: Response, result: AuthResult) -> None:
         result.refresh_token,
         httponly=True,
         secure=settings.is_production,
-        samesite="lax",
+        samesite=_COOKIE_SAMESITE,
         path=REFRESH_TOKEN_COOKIE_PATH,
     )
 
 
 def _delete_auth_cookies(response: Response) -> None:
-    response.delete_cookie(ACCESS_TOKEN_COOKIE, path=ACCESS_TOKEN_COOKIE_PATH, samesite="lax")
-    response.delete_cookie(REFRESH_TOKEN_COOKIE, path=REFRESH_TOKEN_COOKIE_PATH, samesite="lax")
+    response.delete_cookie(
+        ACCESS_TOKEN_COOKIE, path=ACCESS_TOKEN_COOKIE_PATH, samesite=_COOKIE_SAMESITE
+    )
+    response.delete_cookie(
+        REFRESH_TOKEN_COOKIE, path=REFRESH_TOKEN_COOKIE_PATH, samesite=_COOKIE_SAMESITE
+    )
 
 
 @router.post(
