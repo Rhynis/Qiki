@@ -31,6 +31,7 @@ export function ChatWindow() {
   const latestConversation = startConversation.data
   const isEscalated = latestConversation?.status === 'escalated'
   const isBusy = sendMessage.isPending || startConversation.isPending
+  const conversationReady = Boolean(conversationId ?? startConversation.data?.id)
 
   function handleSend(content: string) {
     const targetConversationId = conversationId ?? startConversation.data?.id
@@ -84,7 +85,11 @@ export function ChatWindow() {
         messages={messages.data?.items ?? latestConversation?.messages ?? []}
         isPending={isBusy}
       />
-      <MessageInput disabled={isBusy} onSend={handleSend} />
+      <MessageInput
+        disabled={!conversationReady || startConversation.isPending}
+        sending={sendMessage.isPending}
+        onSend={handleSend}
+      />
     </section>
   )
 }

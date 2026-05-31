@@ -1,9 +1,11 @@
 'use client'
 
-import { ThumbsDown, ThumbsUp } from 'lucide-react'
+import { Copy, ThumbsDown, ThumbsUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useSubmitFeedback } from '@/lib/hooks/use-conversation'
+import { cn } from '@/lib/utils'
 import type { Message } from '@/types/conversation'
+import { toast } from 'sonner'
 
 type FeedbackButtonsProps = {
   conversationId: string
@@ -12,8 +14,24 @@ type FeedbackButtonsProps = {
 
 export function FeedbackButtons({ conversationId, message }: FeedbackButtonsProps) {
   const mutation = useSubmitFeedback()
+  const pendingScore =
+    mutation.isPending && mutation.variables?.messageId === message.id
+      ? mutation.variables.data.score
+      : undefined
+  const feedbackScore = pendingScore ?? message.feedback_score ?? 0
+  const hasFeedback = feedbackScore === 1 || feedbackScore === -1
+  const feedbackDisabled = hasFeedback || mutation.isPending
 
   if (message.role !== 'assistant') return null
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(message.content)
+      toast.success('Đã sao chép')
+    } catch {
+      toast.error('Không sao chép được')
+    }
+  }
 
   return (
     <div className="mt-2 flex gap-1">
@@ -21,9 +39,14 @@ export function FeedbackButtons({ conversationId, message }: FeedbackButtonsProp
         type="button"
         variant="ghost"
         size="icon"
-        className="h-7 w-7"
+        className={cn(
+          'h-7 w-7 text-slate-500',
+          feedbackScore === 1 &&
+            'bg-primary/10 text-primary ring-1 ring-primary/20 hover:bg-primary/10 hover:text-primary disabled:opacity-100',
+          hasFeedback && feedbackScore !== 1 && 'disabled:opacity-40'
+        )}
         aria-label="Hài lòng"
-        disabled={mutation.isPending}
+        disabled={feedbackDisabled}
         onClick={() =>
           mutation.mutate({ conversationId, messageId: message.id, data: { score: 1 } })
         }
@@ -34,14 +57,29 @@ export function FeedbackButtons({ conversationId, message }: FeedbackButtonsProp
         type="button"
         variant="ghost"
         size="icon"
-        className="h-7 w-7"
+        className={cn(
+          'h-7 w-7 text-slate-500',
+          feedbackScore === -1 &&
+            'bg-primary/10 text-primary ring-1 ring-primary/20 hover:bg-primary/10 hover:text-primary disabled:opacity-100',
+          hasFeedback && feedbackScore !== -1 && 'disabled:opacity-40'
+        )}
         aria-label="Chưa hài lòng"
-        disabled={mutation.isPending}
+        disabled={feedbackDisabled}
         onClick={() =>
           mutation.mutate({ conversationId, messageId: message.id, data: { score: -1 } })
         }
       >
         <ThumbsDown className="h-3.5 w-3.5" />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7 text-slate-500 hover:text-slate-900"
+        aria-label="Sao chép câu trả lời"
+        onClick={handleCopy}
+      >
+        <Copy className="h-3.5 w-3.5" />
       </Button>
     </div>
   )
