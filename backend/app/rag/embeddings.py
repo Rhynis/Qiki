@@ -8,7 +8,7 @@ import unicodedata
 from typing import ClassVar
 
 from google import genai
-from google.genai import errors
+from google.genai import errors, types
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
@@ -65,6 +65,7 @@ class EmbeddingService:
             response = await self._get_client().aio.models.embed_content(
                 model=self.model_name,
                 contents=normalized,
+                config=types.EmbedContentConfig(output_dimensionality=self.dimensions),
             )
         except errors.APIError as exc:
             self.logger.error("embedding_failed", error=str(exc))
@@ -83,6 +84,7 @@ class EmbeddingService:
                 response = await self._get_client().aio.models.embed_content(
                     model=self.model_name,
                     contents=chunk,
+                    config=types.EmbedContentConfig(output_dimensionality=self.dimensions),
                 )
             except errors.APIError as exc:
                 self.logger.error("embedding_batch_failed", error=str(exc))
