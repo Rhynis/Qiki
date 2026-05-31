@@ -16,7 +16,7 @@ export function ChatWindow() {
   const setConversationId = useChatStore((state) => state.setConversationId)
   const startConversation = useStartConversation()
   const sendMessage = useSendMessage()
-  const messages = useMessages(conversationId)
+  const messages = useMessages(conversationId, true, sendMessage.isPending)
 
   useEffect(() => {
     if (!conversationId && !startConversation.isPending) {
