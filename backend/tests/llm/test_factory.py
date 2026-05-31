@@ -9,7 +9,9 @@ from app.llm.base import BaseLLMProvider
 from app.llm.dependencies import get_llm_provider, get_observability, get_prompt_library
 from app.llm.factory import LLMProviderFactory
 from app.llm.observability import LLMObservability
+from app.llm.providers.fallback_provider import FallbackLLMProvider
 from app.llm.providers.gemini_provider import GeminiProvider
+from app.llm.providers.groq_provider import GroqProvider
 from app.llm.providers.ollama_provider import OllamaProvider
 from app.llm.schemas import LLMResponse
 
@@ -41,6 +43,22 @@ def test_create_returns_gemini_provider() -> None:
     provider = LLMProviderFactory.create(settings=settings)
 
     assert isinstance(provider, GeminiProvider)
+
+
+def test_create_returns_fallback_provider_when_groq_key_configured() -> None:
+    settings = Settings(
+        LLM_PROVIDER="gemini",
+        GEMINI_API_KEY="secret",
+        GROQ_API_KEY="groq-secret",
+        GROQ_MODEL="llama-test",
+    )
+
+    provider = LLMProviderFactory.create(settings=settings)
+
+    assert isinstance(provider, FallbackLLMProvider)
+    assert isinstance(provider.providers[0], GeminiProvider)
+    assert isinstance(provider.providers[1], GroqProvider)
+    assert provider.providers[1].model == "llama-test"
 
 
 def test_create_with_invalid_provider_raises() -> None:
