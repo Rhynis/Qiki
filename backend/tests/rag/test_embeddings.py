@@ -5,7 +5,15 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from google.genai import errors
 
+from app.llm.exceptions import (
+    LLMConnectionError,
+    LLMInvalidRequestError,
+    LLMQuotaExceededError,
+    LLMRateLimitError,
+    LLMTimeoutError,
+)
 from app.rag.embeddings import EmbeddingService
 
 pytestmark = pytest.mark.asyncio
@@ -13,6 +21,14 @@ pytestmark = pytest.mark.asyncio
 
 def _embedding(value: float) -> SimpleNamespace:
     return SimpleNamespace(values=[value] * 768)
+
+
+def _client_error(code: int, message: str) -> errors.ClientError:
+    return errors.ClientError(code, {"error": {"message": message}})
+
+
+def _server_error(code: int, message: str) -> errors.ServerError:
+    return errors.ServerError(code, {"error": {"message": message}})
 
 
 @pytest.fixture(autouse=True)
@@ -86,3 +102,38 @@ async def test_embed_singleton(mock_gemini_embed: AsyncMock) -> None:
 
     assert first is second
     assert mock_gemini_embed.await_count == 2
+
+
+async def test_embed_text_maps_quota_error(mock_gemini_embed: AsyncMock) -> None:
+    mock_gemini_embed.side_effect = _client_error(429, "quota exhausted")
+
+    with pytest.raises(LLMQuotaExceededError):
+        await EmbeddingService().embed_text("Bình gas")
+
+
+async def test_embed_text_maps_rate_limit_error(mock_gemini_embed: AsyncMock) -> None:
+    mock_gemini_embed.side_effect = _client_error(429, "too many requests")
+
+    with pytest.raises(LLMRateLimitError):
+        await EmbeddingService().embed_text("Bình gas")
+
+
+async def test_embed_text_maps_invalid_request(mock_gemini_embed: AsyncMock) -> None:
+    mock_gemini_embed.side_effect = _client_error(400, "bad request")
+
+    with pytest.raises(LLMInvalidRequestError):
+        await EmbeddingService().embed_text("Bình gas")
+
+
+async def test_embed_batch_maps_timeout(mock_gemini_embed: AsyncMock) -> None:
+    mock_gemini_embed.side_effect = _server_error(504, "deadline exceeded")
+
+    with pytest.raises(LLMTimeoutError):
+        await EmbeddingService().embed_batch(["Bình gas"])
+
+
+async def test_embed_batch_maps_connection_error(mock_gemini_embed: AsyncMock) -> None:
+    mock_gemini_embed.side_effect = _server_error(500, "backend unavailable")
+
+    with pytest.raises(LLMConnectionError):
+        await EmbeddingService().embed_batch(["Bình gas"])

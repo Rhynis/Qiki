@@ -8,6 +8,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.logging import get_logger
 from app.llm.base import BaseLLMProvider
+from app.llm.exceptions import LLMProviderError
 from app.llm.observability import LLMObservability
 from app.llm.prompts.templates import PromptLibrary
 from app.rag.context_builder import ContextBuilder
@@ -157,7 +158,7 @@ class RAGPipeline:
                 top_k=top_k,
                 category_filter=category_filter,
             )
-        except (RuntimeError, ValueError, TypeError, SQLAlchemyError) as exc:
+        except (LLMProviderError, RuntimeError, ValueError, TypeError, SQLAlchemyError) as exc:
             self.logger.error("rag_retrieval_failed", error=str(exc))
             return []
         return documents

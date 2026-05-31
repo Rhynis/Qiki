@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import pytest
 
+from app.llm.exceptions import LLMQuotaExceededError
 from app.llm.prompts.templates import PromptTemplate
 from app.llm.schemas import LLMResponse, LLMStreamChunk
 from app.rag.context_builder import ContextBuilder
@@ -157,6 +158,31 @@ async def test_query_with_category_filter() -> None:
         top_k=3,
         category_filter="delivery",
     )
+
+
+@pytest.mark.asyncio
+async def test_retrieve_degrades_when_embedding_provider_fails() -> None:
+    rag, retriever, _, _ = pipeline()
+    retriever.retrieve.side_effect = LLMQuotaExceededError("Gemini quota exceeded")
+
+    documents = await rag._retrieve("Có giao hàng không?", top_k=5, category_filter=None)
+
+    assert documents == []
+
+
+@pytest.mark.asyncio
+async def test_query_still_generates_answer_when_retrieval_fails() -> None:
+    rag, retriever, llm, observability = pipeline()
+    retriever.retrieve.side_effect = LLMQuotaExceededError("Gemini quota exceeded")
+
+    response = await rag.query("GasBot có giao hàng không?")
+
+    assert response.answer == "GasBot có giao hàng trong nội thành TP.HCM."
+    assert response.sources == []
+    assert response.retrieval_count == 0
+    assert response.confidence_score == 0.0
+    llm.generate.assert_awaited_once()
+    observability.track_generation.assert_awaited_once()
 
 
 @pytest.mark.asyncio

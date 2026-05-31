@@ -12,6 +12,28 @@ from google.genai import errors, types
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
+from app.llm.exceptions import (
+    LLMConnectionError,
+    LLMInvalidRequestError,
+    LLMQuotaExceededError,
+    LLMRateLimitError,
+    LLMTimeoutError,
+)
+
+
+def _map_error(exc: errors.APIError) -> Exception:
+    """Translate a google-genai APIError into the app's LLM exception types."""
+    code = getattr(exc, "code", None)
+    message = str(getattr(exc, "message", exc) or exc)
+    if code == 429:
+        if "quota" in message.lower() or "exhausted" in message.lower():
+            return LLMQuotaExceededError(f"Gemini quota exceeded: {message}")
+        return LLMRateLimitError(f"Gemini rate limited: {message}")
+    if code == 400:
+        return LLMInvalidRequestError(f"Gemini invalid request: {message}")
+    if code in (408, 504):
+        return LLMTimeoutError(f"Gemini timeout: {message}")
+    return LLMConnectionError(f"Gemini error: {message}")
 
 
 class EmbeddingService:
@@ -69,7 +91,7 @@ class EmbeddingService:
             )
         except errors.APIError as exc:
             self.logger.error("embedding_failed", error=str(exc))
-            raise
+            raise _map_error(exc) from exc
         return self._values(response, 0)
 
     async def embed_batch(self, texts: list[str], batch_size: int = 32) -> list[list[float]]:
@@ -88,7 +110,7 @@ class EmbeddingService:
                 )
             except errors.APIError as exc:
                 self.logger.error("embedding_batch_failed", error=str(exc))
-                raise
+                raise _map_error(exc) from exc
             results.extend(self._values(response, index) for index in range(len(chunk)))
         return results
 
