@@ -1,21 +1,24 @@
-"""Vietnamese text embedding service using SBERT."""
+"""Vietnamese text embedding service backed by the Gemini embedding API.
 
-import asyncio
+Uses the hosted Gemini embedding model instead of a local SBERT model so the
+container stays lightweight (no torch/sentence-transformers) and never OOMs.
+"""
+
 import unicodedata
-from typing import Any, ClassVar, cast
+from typing import ClassVar
 
-import numpy as np
+from google import genai
+from google.genai import errors
 
+from app.core.config import get_settings
 from app.core.logging import get_logger
-
-SentenceTransformer: Any | None = None
 
 
 class EmbeddingService:
-    """Generate embeddings for Vietnamese text using a lazily loaded SBERT model."""
+    """Generate embeddings for Vietnamese text via the Gemini embedding API."""
 
     _instance: ClassVar["EmbeddingService | None"] = None
-    _model: ClassVar[Any | None] = None
+    _client: ClassVar[genai.Client | None] = None
 
     def __new__(cls, *args: object, **kwargs: object) -> "EmbeddingService":
         """Return the singleton service instance."""
@@ -24,9 +27,12 @@ class EmbeddingService:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self, model_name: str = "keepitreal/vietnamese-sbert") -> None:
+    def __init__(self) -> None:
         if not hasattr(self, "_initialized"):
-            self.model_name = model_name
+            settings = get_settings()
+            self.model_name = settings.GEMINI_EMBED_MODEL
+            self.dimensions = settings.EMBEDDING_DIMENSIONS
+            self._api_key = settings.GEMINI_API_KEY or ""
             self.logger = get_logger(__name__)
             self._initialized = True
 
@@ -34,21 +40,13 @@ class EmbeddingService:
     def reset(cls) -> None:
         """Reset singleton state for tests."""
         cls._instance = None
-        cls._model = None
+        cls._client = None
 
-    def _get_model(self) -> Any:
-        """Load model lazily on first use."""
-        if EmbeddingService._model is None:
-            global SentenceTransformer
-            if SentenceTransformer is None:
-                from sentence_transformers import SentenceTransformer as LoadedSentenceTransformer
-
-                SentenceTransformer = LoadedSentenceTransformer
-
-            self.logger.info("loading_embedding_model", model=self.model_name)
-            EmbeddingService._model = SentenceTransformer(self.model_name)
-            self.logger.info("embedding_model_loaded")
-        return EmbeddingService._model
+    def _get_client(self) -> genai.Client:
+        """Create the Gemini client lazily on first use."""
+        if EmbeddingService._client is None:
+            EmbeddingService._client = genai.Client(api_key=self._api_key)
+        return EmbeddingService._client
 
     def _normalize_text(self, text: str) -> str:
         """Normalize Vietnamese text before embedding."""
@@ -59,36 +57,46 @@ class EmbeddingService:
         return normalized[:1500]
 
     async def embed_text(self, text: str) -> list[float]:
-        """Embed one text in a thread pool."""
+        """Embed one text via the Gemini embedding API."""
         normalized = self._normalize_text(text)
         if not normalized:
             return [0.0] * self.get_dimensions()
-
-        loop = asyncio.get_running_loop()
-        embedding = await loop.run_in_executor(
-            None,
-            lambda: self._get_model().encode(normalized, convert_to_numpy=True),
-        )
-        return cast(list[float], np.asarray(embedding, dtype=np.float32).tolist())
+        try:
+            response = await self._get_client().aio.models.embed_content(
+                model=self.model_name,
+                contents=normalized,
+            )
+        except errors.APIError as exc:
+            self.logger.error("embedding_failed", error=str(exc))
+            raise
+        return self._values(response, 0)
 
     async def embed_batch(self, texts: list[str], batch_size: int = 32) -> list[list[float]]:
-        """Embed multiple texts efficiently using batching in a thread pool."""
+        """Embed multiple texts, chunked to keep request sizes reasonable."""
         if not texts:
             return []
-
         normalized = [self._normalize_text(text) for text in texts]
-        loop = asyncio.get_running_loop()
-        embeddings = await loop.run_in_executor(
-            None,
-            lambda: self._get_model().encode(
-                normalized,
-                convert_to_numpy=True,
-                batch_size=batch_size,
-                show_progress_bar=False,
-            ),
-        )
-        return [np.asarray(item, dtype=np.float32).tolist() for item in embeddings]
+        results: list[list[float]] = []
+        for start in range(0, len(normalized), batch_size):
+            chunk = normalized[start : start + batch_size]
+            try:
+                response = await self._get_client().aio.models.embed_content(
+                    model=self.model_name,
+                    contents=chunk,
+                )
+            except errors.APIError as exc:
+                self.logger.error("embedding_batch_failed", error=str(exc))
+                raise
+            results.extend(self._values(response, index) for index in range(len(chunk)))
+        return results
+
+    def _values(self, response: object, index: int) -> list[float]:
+        embeddings = list(getattr(response, "embeddings", None) or [])
+        if index >= len(embeddings):
+            return [0.0] * self.get_dimensions()
+        values = list(getattr(embeddings[index], "values", None) or [])
+        return [float(value) for value in values]
 
     def get_dimensions(self) -> int:
         """Return embedding dimensionality."""
-        return 768
+        return self.dimensions
