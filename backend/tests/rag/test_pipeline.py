@@ -167,7 +167,7 @@ async def test_query_prepends_address_lookup_note() -> None:
     await rag.query("Tôi ở Phường Hiệp Bình Chánh có giao gas không?")
 
     system_prompt = llm.generate.await_args.kwargs["system_prompt"]
-    assert "Phường Hiệp Bình Chánh thuộc khu Thủ Đức" in system_prompt
+    assert "Phường Hiệp Bình Chánh thuộc khu vực giao Thủ Đức" in system_prompt
 
 
 @pytest.mark.asyncio

@@ -1,4 +1,4 @@
-"""Lookup helpers for HCMC ward names and old district references."""
+"""Lookup helpers for HCMC ward names and delivery zone references."""
 
 import json
 import re
@@ -11,47 +11,54 @@ WARD_PREFIX_PATTERN = re.compile(r"\b(?:phường|p\.?|p)\s+", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
-class WardDistrictMatch:
-    """Resolved ward and its old district reference."""
+class WardDeliveryZoneMatch:
+    """Resolved ward and its delivery zone reference."""
 
     ward: str
-    district: str
+    delivery_zone: str
 
 
-def resolve_district_from_ward(text: str) -> str | None:
-    """Return the old district for a known ward mention, or None when unknown."""
-    match = resolve_ward_district(text)
-    return match.district if match else None
+def resolve_delivery_zone_from_ward(text: str) -> str | None:
+    """Return the delivery zone for a known ward mention, or None when unknown."""
+    match = resolve_ward_delivery_zone(text)
+    return match.delivery_zone if match else None
 
 
-def resolve_ward_district(text: str) -> WardDistrictMatch | None:
-    """Return the matched ward and old district for a known ward mention."""
+def resolve_ward_delivery_zone(text: str) -> WardDeliveryZoneMatch | None:
+    """Return the matched ward and delivery zone for a known ward mention."""
     normalized_text = _normalize_text(text)
     if not normalized_text:
         return None
 
-    wards = _load_ward_district_map()
+    wards = _load_ward_delivery_zone_map()
     direct = wards.get(normalized_text)
     if direct:
-        return WardDistrictMatch(ward=normalized_text, district=direct)
+        return WardDeliveryZoneMatch(ward=normalized_text, delivery_zone=direct)
 
     text_without_prefixes = _strip_ward_prefixes(normalized_text)
     direct_without_prefix = wards.get(text_without_prefixes)
     if direct_without_prefix:
-        return WardDistrictMatch(ward=text_without_prefixes, district=direct_without_prefix)
+        return WardDeliveryZoneMatch(
+            ward=text_without_prefixes,
+            delivery_zone=direct_without_prefix,
+        )
 
-    for ward, district in sorted(wards.items(), key=lambda item: len(item[0]), reverse=True):
+    for ward, delivery_zone in sorted(
+        wards.items(),
+        key=lambda item: len(item[0]),
+        reverse=True,
+    ):
         if ward.isdigit():
             if _contains_numbered_ward(normalized_text, ward):
-                return WardDistrictMatch(ward=ward, district=district)
+                return WardDeliveryZoneMatch(ward=ward, delivery_zone=delivery_zone)
             continue
         if _contains_phrase(text_without_prefixes, ward):
-            return WardDistrictMatch(ward=ward, district=district)
+            return WardDeliveryZoneMatch(ward=ward, delivery_zone=delivery_zone)
     return None
 
 
 @lru_cache(maxsize=1)
-def _load_ward_district_map() -> dict[str, str]:
+def _load_ward_delivery_zone_map() -> dict[str, str]:
     path = Path(__file__).resolve().parents[1] / "data" / "hcmc_ward_district.json"
     raw_data = json.loads(path.read_text(encoding="utf-8"))
     return {_normalize_text(key): str(value) for key, value in raw_data.items()}

@@ -16,7 +16,7 @@ from app.rag.context_builder import ContextBuilder
 from app.rag.retriever import BaseRetriever
 from app.rag.safety import SafetyChecker
 from app.rag.schemas import RAGResponse, RetrievedDocument
-from app.services.address_lookup import resolve_ward_district
+from app.services.address_lookup import resolve_ward_delivery_zone
 
 VN_UTC_OFFSET = timedelta(hours=7)
 
@@ -107,7 +107,7 @@ class RAGPipeline:
                 "top_similarity": documents[0].similarity if documents else 0.0,
                 "category_filter": category_filter,
                 "has_product_context": bool(product_context),
-                "address_district_resolved": bool(address_note),
+                "address_delivery_zone_resolved": bool(address_note),
             },
         )
 
@@ -191,9 +191,10 @@ class RAGPipeline:
 
     @staticmethod
     def _build_address_context_note(query: str) -> str | None:
-        match = resolve_ward_district(query)
+        match = resolve_ward_delivery_zone(query)
         if match is None:
             return None
         return (
-            f"Lưu ý địa chỉ: Phường {match.ward.title()} " f"thuộc khu {match.district} (quận cũ)."
+            f"Lưu ý địa chỉ: Phường {match.ward.title()} "
+            f"thuộc khu vực giao {match.delivery_zone}."
         )
