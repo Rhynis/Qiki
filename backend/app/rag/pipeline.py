@@ -2,6 +2,7 @@
 
 import time
 from collections.abc import AsyncIterator, Mapping, Sequence
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -15,6 +16,9 @@ from app.rag.context_builder import ContextBuilder
 from app.rag.retriever import BaseRetriever
 from app.rag.safety import SafetyChecker
 from app.rag.schemas import RAGResponse, RetrievedDocument
+from app.services.address_lookup import resolve_ward_district
+
+VN_UTC_OFFSET = timedelta(hours=7)
 
 
 class RAGPipeline:
@@ -75,10 +79,14 @@ class RAGPipeline:
             documents,
             product_context=product_context,
         )
+        address_note = self._build_address_context_note(query)
+        if address_note:
+            context = f"{address_note}\n\n{context}"
         history = self.context_builder.format_conversation_history(conversation_history or [])
         system_prompt = self.prompts.get("system_chatbot_vi").render(
             context=context,
             conversation_history=history,
+            current_date=self._current_date_vn(),
         )
         llm_response = await self.llm_provider.generate(
             prompt=query,
@@ -99,6 +107,7 @@ class RAGPipeline:
                 "top_similarity": documents[0].similarity if documents else 0.0,
                 "category_filter": category_filter,
                 "has_product_context": bool(product_context),
+                "address_district_resolved": bool(address_note),
             },
         )
 
@@ -142,10 +151,14 @@ class RAGPipeline:
             documents,
             product_context=product_context,
         )
+        address_note = self._build_address_context_note(query)
+        if address_note:
+            context = f"{address_note}\n\n{context}"
         history = self.context_builder.format_conversation_history(conversation_history or [])
         system_prompt = self.prompts.get("system_chatbot_vi").render(
             context=context,
             conversation_history=history,
+            current_date=self._current_date_vn(),
         )
         async for chunk in self.llm_provider.stream(
             prompt=query,
@@ -171,3 +184,16 @@ class RAGPipeline:
             self.logger.error("rag_retrieval_failed", error=str(exc))
             return []
         return documents
+
+    @staticmethod
+    def _current_date_vn() -> str:
+        return (datetime.now(UTC) + VN_UTC_OFFSET).strftime("%d/%m/%Y")
+
+    @staticmethod
+    def _build_address_context_note(query: str) -> str | None:
+        match = resolve_ward_district(query)
+        if match is None:
+            return None
+        return (
+            f"Lưu ý địa chỉ: Phường {match.ward.title()} " f"thuộc khu {match.district} (quận cũ)."
+        )
