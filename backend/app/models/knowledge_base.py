@@ -22,6 +22,7 @@ class KnowledgeBase(Base, UUIDMixin, TimestampMixin):
     category: Mapped[str] = mapped_column(String(50), nullable=False)
     source: Mapped[str | None] = mapped_column(String(255), nullable=True)
     embedding: Mapped[list[float] | None] = mapped_column(Vector(768), nullable=True)
+    embedding_jina: Mapped[list[float] | None] = mapped_column(Vector(768), nullable=True)
     metadata_: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, default=dict)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     source_message_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)

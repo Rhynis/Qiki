@@ -50,6 +50,8 @@ class Settings(BaseSettings):
     GEMINI_EMBED_MODEL: str = "gemini-embedding-001"
     GROQ_API_KEY: str | None = None
     GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    JINA_API_KEY: str | None = None
+    JINA_EMBED_MODEL: str = "jina-embeddings-v3"
 
     EMBEDDING_MODEL: str = "keepitreal/vietnamese-sbert"
     EMBEDDING_DIMENSIONS: int = 768

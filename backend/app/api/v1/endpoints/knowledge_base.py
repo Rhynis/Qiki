@@ -11,6 +11,7 @@ from app.core.rate_limit import limiter
 from app.db.session import get_db
 from app.models.user import User
 from app.rag.embeddings import EmbeddingService
+from app.rag.jina_embeddings import JinaEmbeddingService
 from app.rag.text_processor import VietnameseTextProcessor
 from app.repositories.knowledge_base_repository import KnowledgeBaseRepository
 from app.schemas.knowledge_base import (
@@ -36,6 +37,7 @@ def get_knowledge_base_service(
     return KnowledgeBaseService(
         KnowledgeBaseRepository(session),
         EmbeddingService(),
+        JinaEmbeddingService(),
         VietnameseTextProcessor(),
     )
 

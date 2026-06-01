@@ -20,9 +20,14 @@ class KnowledgeBaseRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def create(self, data: dict[str, Any], embedding: list[float]) -> KnowledgeBase:
+    async def create(
+        self,
+        data: dict[str, Any],
+        embedding: list[float] | None,
+        embedding_jina: list[float] | None = None,
+    ) -> KnowledgeBase:
         """Create one knowledge base document."""
-        document = KnowledgeBase(**data, embedding=embedding)
+        document = KnowledgeBase(**data, embedding=embedding, embedding_jina=embedding_jina)
         self.session.add(document)
         await self.session.flush()
         await self.session.refresh(document)
@@ -30,12 +35,14 @@ class KnowledgeBaseRepository:
 
     async def create_batch(
         self,
-        items_with_embeddings: Sequence[tuple[dict[str, Any], list[float]]],
+        items_with_embeddings: Sequence[
+            tuple[dict[str, Any], list[float] | None, list[float] | None]
+        ],
     ) -> list[KnowledgeBase]:
         """Create many knowledge base documents."""
         documents = [
-            KnowledgeBase(**item_data, embedding=embedding)
-            for item_data, embedding in items_with_embeddings
+            KnowledgeBase(**item_data, embedding=embedding, embedding_jina=embedding_jina)
+            for item_data, embedding, embedding_jina in items_with_embeddings
         ]
         self.session.add_all(documents)
         await self.session.flush()
@@ -52,6 +59,7 @@ class KnowledgeBaseRepository:
         kb_id: UUID,
         data: dict[str, Any],
         embedding: list[float] | None = None,
+        embedding_jina: list[float] | None = None,
     ) -> KnowledgeBase:
         """Update document fields and optionally embedding."""
         document = await self.get_by_id(kb_id)
@@ -64,6 +72,8 @@ class KnowledgeBaseRepository:
                 setattr(document, key, value)
         if embedding is not None:
             document.embedding = embedding
+        if embedding_jina is not None:
+            document.embedding_jina = embedding_jina
         await self.session.flush()
         await self.session.refresh(document)
         return document
@@ -101,20 +111,32 @@ class KnowledgeBaseRepository:
         top_k: int = 5,
         threshold: float = 0.5,
         category_filter: str | None = None,
+        use_fallback: bool = False,
     ) -> list[KnowledgeBaseSearchResult]:
         """Search via pgvector similarity using the migration's match_documents function."""
+        sql = (
+            """
+            SELECT id, title, content, category, similarity
+            FROM match_documents_jina(
+                CAST(:query_embedding AS vector),
+                :threshold,
+                :top_k,
+                :category_filter
+            )
+            """
+            if use_fallback
+            else """
+            SELECT id, title, content, category, similarity
+            FROM match_documents(
+                CAST(:query_embedding AS vector),
+                :threshold,
+                :top_k,
+                :category_filter
+            )
+            """
+        )
         result = await self.session.execute(
-            text(
-                """
-                SELECT id, title, content, category, similarity
-                FROM match_documents(
-                    CAST(:query_embedding AS vector),
-                    :threshold,
-                    :top_k,
-                    :category_filter
-                )
-                """
-            ),
+            text(sql),
             {
                 "query_embedding": self._vector_literal(query_embedding),
                 "threshold": threshold,
@@ -141,6 +163,7 @@ class KnowledgeBaseRepository:
         top_k: int = 5,
         semantic_weight: float = 0.7,
         category_filter: str | None = None,
+        use_fallback: bool = False,
     ) -> list[KnowledgeBaseSearchResult]:
         """Blend vector similarity with PostgreSQL keyword ranking."""
         semantic = await self.similarity_search(
@@ -148,6 +171,7 @@ class KnowledgeBaseRepository:
             top_k=max(top_k * 3, top_k),
             threshold=0.0,
             category_filter=category_filter,
+            use_fallback=use_fallback,
         )
         keyword = await self.bm25_search(
             query_text,

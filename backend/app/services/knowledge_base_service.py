@@ -6,12 +6,16 @@ from io import StringIO
 from typing import Any, cast
 from uuid import UUID
 
+import sentry_sdk
 from fastapi import UploadFile
 
 from app.core.exceptions import ForbiddenException, NotFoundException, ValidationException
+from app.core.logging import get_logger
+from app.llm.exceptions import LLMQuotaExceededError, LLMRateLimitError
 from app.models.knowledge_base import KnowledgeBase
 from app.models.user import User
 from app.rag.embeddings import EmbeddingService
+from app.rag.jina_embeddings import JinaEmbeddingService
 from app.rag.text_processor import VietnameseTextProcessor
 from app.repositories.knowledge_base_repository import KnowledgeBaseRepository
 from app.schemas.knowledge_base import (
@@ -33,11 +37,14 @@ class KnowledgeBaseService:
         self,
         repository: KnowledgeBaseRepository,
         embedding_service: EmbeddingService | None = None,
+        jina_embedding_service: JinaEmbeddingService | None = None,
         text_processor: VietnameseTextProcessor | None = None,
     ) -> None:
         self.repository = repository
         self.embedding_service = embedding_service or EmbeddingService()
+        self.jina_embedding_service = jina_embedding_service or JinaEmbeddingService()
         self.text_processor = text_processor or VietnameseTextProcessor()
+        self.logger = get_logger(__name__)
 
     async def create_document(
         self,
@@ -47,10 +54,11 @@ class KnowledgeBaseService:
         """Create a document and generate its embedding."""
         self._ensure_staff(current_user)
         normalized = self._normalize_payload(data.model_dump())
-        embedding = await self.embedding_service.embed_text(
-            self._embedding_text(normalized["title"], normalized["content"])
+        embedding, embedding_jina = await self._embed_document(
+            str(normalized["title"]),
+            str(normalized["content"]),
         )
-        document = await self.repository.create(normalized, embedding)
+        document = await self.repository.create(normalized, embedding, embedding_jina)
         return self._response(document)
 
     async def update_document(
@@ -68,12 +76,15 @@ class KnowledgeBaseService:
         update_data = data.model_dump(exclude_unset=True)
         normalized = self._normalize_payload(update_data)
         embedding = None
-        if "content" in normalized:
+        embedding_jina = None
+        if "content" in normalized or "title" in normalized:
             title = str(normalized.get("title", existing.title))
-            embedding = await self.embedding_service.embed_text(
-                self._embedding_text(title, str(normalized["content"]))
+            content = str(normalized.get("content", existing.content))
+            embedding, embedding_jina = await self._embed_document(
+                title,
+                content,
             )
-        document = await self.repository.update(kb_id, normalized, embedding)
+        document = await self.repository.update(kb_id, normalized, embedding, embedding_jina)
         return self._response(document)
 
     async def delete_document(self, kb_id: UUID, current_user: User) -> None:
@@ -128,19 +139,21 @@ class KnowledgeBaseService:
         normalized_query = self.text_processor.normalize(query)
         if not normalized_query:
             return []
-        embedding = await self.embedding_service.embed_text(normalized_query)
+        embedding, use_fallback = await self._embed_query(normalized_query)
         if use_hybrid:
             return await self.repository.hybrid_search(
                 normalized_query,
                 embedding,
                 top_k=top_k,
                 category_filter=category,
+                use_fallback=use_fallback,
             )
         return await self.repository.similarity_search(
             embedding,
             top_k=top_k,
             threshold=0.0,
             category_filter=category,
+            use_fallback=use_fallback,
         )
 
     async def bulk_import_from_file(
@@ -163,7 +176,14 @@ class KnowledgeBaseService:
             self._embedding_text(str(item["title"]), str(item["content"])) for item in documents
         ]
         embeddings = await self.embedding_service.embed_batch(texts, batch_size=32)
-        created = await self.repository.create_batch(list(zip(documents, embeddings, strict=True)))
+        embeddings_jina = await self.jina_embedding_service.embed_batch(
+            texts,
+            task="retrieval.passage",
+            batch_size=32,
+        )
+        created = await self.repository.create_batch(
+            list(zip(documents, embeddings, embeddings_jina, strict=True))
+        )
         return KnowledgeBaseImportResponse(count=len(created), errors=[])
 
     async def get_statistics(self, current_user: User) -> KnowledgeBaseStatistics:
@@ -229,6 +249,36 @@ class KnowledgeBaseService:
     @staticmethod
     def _embedding_text(title: str, content: str) -> str:
         return f"{title}\n\n{content}"
+
+    async def _embed_query(self, query: str) -> tuple[list[float], bool]:
+        try:
+            return await self.embedding_service.embed_text(query), False
+        except (LLMQuotaExceededError, LLMRateLimitError):
+            sentry_sdk.capture_message(
+                "Gemini embed quota exceeded, falling back to Jina",
+                level="warning",
+            )
+            embedding = await self.jina_embedding_service.embed_text(
+                query,
+                task="retrieval.query",
+            )
+            return embedding, True
+
+    async def _embed_document(
+        self, title: str, content: str
+    ) -> tuple[list[float] | None, list[float]]:
+        text = self._embedding_text(title, content)
+        embedding: list[float] | None
+        try:
+            embedding = await self.embedding_service.embed_text(text)
+        except (LLMQuotaExceededError, LLMRateLimitError) as exc:
+            embedding = None
+            self.logger.warning("gemini_document_embedding_unavailable", error=str(exc))
+        embedding_jina = await self.jina_embedding_service.embed_text(
+            text,
+            task="retrieval.passage",
+        )
+        return embedding, embedding_jina
 
     @staticmethod
     def _ensure_staff(user: User) -> None:

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from app.db.session import AsyncSessionLocal
 from app.rag.embeddings import EmbeddingService
+from app.rag.jina_embeddings import JinaEmbeddingService
 from app.repositories.knowledge_base_repository import KnowledgeBaseRepository
 from app.services.knowledge_base_service import parse_front_matter
 
@@ -30,13 +31,22 @@ async def main() -> None:
         )
 
     embedding_service = EmbeddingService()
+    jina_embedding_service = JinaEmbeddingService()
     texts = [f"{document['title']}\n\n{document['content']}" for document in documents]
-    print("Generating embeddings...")
+    print("Generating Gemini embeddings...")
     embeddings = await embedding_service.embed_batch(texts, batch_size=32)
+    print("Generating Jina embeddings...")
+    embeddings_jina = await jina_embedding_service.embed_batch(
+        texts,
+        task="retrieval.passage",
+        batch_size=32,
+    )
 
     async with AsyncSessionLocal() as session:
         repo = KnowledgeBaseRepository(session)
-        created = await repo.create_batch(list(zip(documents, embeddings, strict=True)))
+        created = await repo.create_batch(
+            list(zip(documents, embeddings, embeddings_jina, strict=True))
+        )
         await session.commit()
         print(f"Created {len(created)} knowledge base entries")
 
