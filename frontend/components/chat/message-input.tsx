@@ -27,6 +27,7 @@ export function MessageInput({ disabled, rateLimited, sending, onSend }: Message
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.nativeEvent.isComposing || event.keyCode === 229) return
     if (event.key !== 'Enter' || event.shiftKey) return
     event.preventDefault()
     submitMessage()
