@@ -25,7 +25,7 @@ def reset_factory() -> object:
 
 @pytest.fixture(autouse=True)
 def mock_gemini(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("app.llm.providers.gemini_provider.genai.Client", Mock())
+    monkeypatch.setattr("app.llm.genai_client.genai.Client", Mock())
 
 
 def test_create_returns_ollama_provider() -> None:
@@ -92,6 +92,19 @@ def test_gemini_without_api_key_raises() -> None:
 
     with pytest.raises(ValueError, match="GEMINI_API_KEY"):
         LLMProviderFactory.create(settings=settings)
+
+
+def test_gemini_vertex_mode_does_not_require_api_key() -> None:
+    settings = Settings(
+        LLM_PROVIDER="gemini",
+        GEMINI_USE_VERTEX=True,
+        GEMINI_API_KEY=None,
+        GOOGLE_CLOUD_PROJECT="gasbot-prod",
+    )
+
+    provider = LLMProviderFactory.create(settings=settings)
+
+    assert isinstance(provider, GeminiProvider)
 
 
 @pytest.mark.asyncio

@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str | None = None
     GEMINI_MODEL: str = "gemini-2.0-flash-exp"
     GEMINI_EMBED_MODEL: str = "gemini-embedding-001"
+    GEMINI_USE_VERTEX: bool = False
+    GOOGLE_CLOUD_PROJECT: str | None = None
+    GOOGLE_CLOUD_LOCATION: str = "us-central1"
+    GOOGLE_APPLICATION_CREDENTIALS_JSON: str | None = None
     GROQ_API_KEY: str | None = None
     GROQ_MODEL: str = "llama-3.3-70b-versatile"
     JINA_API_KEY: str | None = None

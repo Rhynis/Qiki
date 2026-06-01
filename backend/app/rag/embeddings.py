@@ -5,9 +5,8 @@ container stays lightweight (no torch/sentence-transformers) and never OOMs.
 """
 
 import unicodedata
-from typing import ClassVar
+from typing import Any, ClassVar
 
-from google import genai
 from google.genai import errors, types
 
 from app.core.config import get_settings
@@ -19,6 +18,7 @@ from app.llm.exceptions import (
     LLMRateLimitError,
     LLMTimeoutError,
 )
+from app.llm.genai_client import build_genai_client
 
 
 def _map_error(exc: errors.APIError) -> Exception:
@@ -40,7 +40,7 @@ class EmbeddingService:
     """Generate embeddings for Vietnamese text via the Gemini embedding API."""
 
     _instance: ClassVar["EmbeddingService | None"] = None
-    _client: ClassVar[genai.Client | None] = None
+    _client: ClassVar[Any | None] = None
 
     def __new__(cls, *args: object, **kwargs: object) -> "EmbeddingService":
         """Return the singleton service instance."""
@@ -54,7 +54,7 @@ class EmbeddingService:
             settings = get_settings()
             self.model_name = settings.GEMINI_EMBED_MODEL
             self.dimensions = settings.EMBEDDING_DIMENSIONS
-            self._api_key = settings.GEMINI_API_KEY or ""
+            self._settings = settings
             self.logger = get_logger(__name__)
             self._initialized = True
 
@@ -64,10 +64,10 @@ class EmbeddingService:
         cls._instance = None
         cls._client = None
 
-    def _get_client(self) -> genai.Client:
+    def _get_client(self) -> Any:
         """Create the Gemini client lazily on first use."""
         if EmbeddingService._client is None:
-            EmbeddingService._client = genai.Client(api_key=self._api_key)
+            EmbeddingService._client = build_genai_client(self._settings)
         return EmbeddingService._client
 
     def _normalize_text(self, text: str) -> str:

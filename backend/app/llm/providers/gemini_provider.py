@@ -9,10 +9,10 @@ from collections.abc import AsyncIterator
 from typing import Any, ClassVar
 
 import httpx
-from google import genai
 from google.genai import errors, types
 from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 
+from app.core.config import Settings, get_settings
 from app.llm.base import BaseLLMProvider
 from app.llm.exceptions import (
     LLMConnectionError,
@@ -21,6 +21,7 @@ from app.llm.exceptions import (
     LLMRateLimitError,
     LLMTimeoutError,
 )
+from app.llm.genai_client import build_genai_client
 from app.llm.schemas import EmbeddingResponse, LLMResponse, LLMStreamChunk
 
 # thinking_budget=0 turns off the model's hidden reasoning tokens -> fast, small,
@@ -67,13 +68,17 @@ class GeminiProvider(BaseLLMProvider):
 
     def __init__(
         self,
-        api_key: str,
+        api_key: str | None = None,
         model: str = "gemini-2.5-flash",
         embed_model: str = "text-embedding-004",
+        settings: Settings | None = None,
     ) -> None:
         super().__init__(model)
         self.embed_model = embed_model
-        self._client = genai.Client(api_key=api_key)
+        resolved_settings = settings or get_settings()
+        if api_key is not None and not resolved_settings.GEMINI_USE_VERTEX:
+            resolved_settings = resolved_settings.model_copy(update={"GEMINI_API_KEY": api_key})
+        self._client = build_genai_client(resolved_settings)
 
     @property
     def provider_name(self) -> str:

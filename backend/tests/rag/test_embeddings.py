@@ -46,7 +46,7 @@ def mock_gemini_embed(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
     embed_mock = AsyncMock(side_effect=embed_content)
     client = Mock()
     client.aio.models.embed_content = embed_mock
-    monkeypatch.setattr("app.rag.embeddings.genai.Client", Mock(return_value=client))
+    monkeypatch.setattr("app.llm.genai_client.genai.Client", Mock(return_value=client))
     yield embed_mock
     EmbeddingService.reset()
 
