@@ -23,6 +23,10 @@ def _embedding(value: float) -> SimpleNamespace:
     return SimpleNamespace(values=[value] * 768)
 
 
+def _embedding_values(values: list[float]) -> SimpleNamespace:
+    return SimpleNamespace(values=values)
+
+
 def _client_error(code: int, message: str) -> errors.ClientError:
     return errors.ClientError(code, {"error": {"message": message}})
 
@@ -71,6 +75,33 @@ async def test_embed_batch_efficiency() -> None:
 
     assert len(embeddings) == 3
     assert all(len(embedding) == 768 for embedding in embeddings)
+
+
+async def test_values_truncates_vertex_3072_embedding_to_768() -> None:
+    response = SimpleNamespace(embeddings=[_embedding_values([float(i) for i in range(3072)])])
+
+    embedding = EmbeddingService()._values(response, 0)
+
+    assert len(embedding) == 768
+    assert embedding[0] == 0.0
+    assert embedding[-1] == 767.0
+
+
+async def test_values_keeps_768_embedding_unchanged() -> None:
+    response = SimpleNamespace(embeddings=[_embedding_values([0.25] * 768)])
+
+    embedding = EmbeddingService()._values(response, 0)
+
+    assert embedding == [0.25] * 768
+
+
+async def test_values_pads_short_embedding_to_768() -> None:
+    response = SimpleNamespace(embeddings=[_embedding_values([0.1, 0.2])])
+
+    embedding = EmbeddingService()._values(response, 0)
+
+    assert len(embedding) == 768
+    assert embedding[:3] == [0.1, 0.2, 0.0]
 
 
 async def test_embed_handles_empty_text() -> None:
