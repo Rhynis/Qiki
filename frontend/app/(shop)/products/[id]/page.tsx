@@ -25,11 +25,11 @@ export async function generateMetadata({ params }: ProductDetailPageProps): Prom
   const product = await getProduct(id)
 
   if (!product) {
-    return { title: 'Sản phẩm | GasBot Vietnam' }
+    return { title: 'Sản phẩm | Gas Quốc Cường' }
   }
 
   return {
-    title: `${product.name} | GasBot Vietnam`,
+    title: `${product.name} | Gas Quốc Cường`,
     description: product.description ?? `${product.brand} ${product.size_kg}kg`,
   }
 }

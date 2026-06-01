@@ -3,7 +3,7 @@ import { Suspense } from 'react'
 import { LoginForm } from '@/components/auth/login-form'
 
 export const metadata: Metadata = {
-  title: 'Đăng nhập | GasBot Vietnam',
+  title: 'Đăng nhập | Gas Quốc Cường',
 }
 
 export default function LoginPage() {

@@ -6,11 +6,11 @@ import { Header } from '@/components/shared/header'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'GasBot Vietnam',
-  description: 'Mua gas LPG online với AI hỗ trợ 24/7',
+  title: 'Gas Quốc Cường',
+  description: 'Mua gas LPG an toàn tại Bình Thạnh và Thủ Đức',
   openGraph: {
-    title: 'GasBot Vietnam',
-    description: 'Mua gas LPG online với AI hỗ trợ 24/7',
+    title: 'Gas Quốc Cường',
+    description: 'Mua gas LPG an toàn tại Bình Thạnh và Thủ Đức',
     locale: 'vi_VN',
     type: 'website',
   },

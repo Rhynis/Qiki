@@ -109,7 +109,7 @@ export function useSendMessage() {
         response.conversation
       )
       if (response.assistant_message?.is_emergency) {
-        toast.error('Khẩn cấp an toàn gas: gọi 1900-1234 ngay')
+        toast.error('Khẩn cấp an toàn gas: gọi 114 hoặc 115 ngay')
       }
     },
     onSettled: async (_data, _error, variables) => {

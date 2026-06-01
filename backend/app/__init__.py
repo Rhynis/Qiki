@@ -1,1 +1,1 @@
-"""GasBot Vietnam backend application."""
+"""Gas Quoc Cuong backend application."""

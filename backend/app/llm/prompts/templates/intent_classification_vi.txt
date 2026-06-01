@@ -4,7 +4,7 @@ Phân loại ý định (intent) của câu hỏi sau vào MỘT trong 8 nhóm:
    Ví dụ: "Bình gas 12kg giá bao nhiêu?", "Có bán gas Petrolimex không?"
 
 2. place_order - Muốn đặt hàng, mua gas
-   Ví dụ: "Tôi muốn mua gas", "Đặt 2 bình 12kg giao Q1"
+   Ví dụ: "Tôi muốn mua gas", "Đặt 2 bình 12kg giao Bình Thạnh"
 
 3. delivery_status - Hỏi tình trạng đơn hàng đang giao
    Ví dụ: "Đơn của tôi đến đâu rồi?", "Khi nào giao?"

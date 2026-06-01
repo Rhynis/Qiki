@@ -101,8 +101,8 @@ export function ChatWindow() {
         <div className="flex items-center gap-2">
           <MessageCircle className="h-5 w-5" />
           <div>
-            <p className="text-sm font-semibold">GasBot</p>
-            <p className="text-xs text-slate-300">Hỗ trợ gas an toàn</p>
+            <p className="text-sm font-semibold">Qiki</p>
+            <p className="text-xs text-slate-300">Trợ lý Gas Quốc Cường</p>
           </div>
         </div>
         <div className="flex gap-1">

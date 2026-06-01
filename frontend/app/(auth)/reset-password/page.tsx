@@ -3,7 +3,7 @@ import { Suspense } from 'react'
 import { PasswordResetConfirmForm } from '@/components/auth/password-reset-form'
 
 export const metadata: Metadata = {
-  title: 'Đặt lại mật khẩu | GasBot Vietnam',
+  title: 'Đặt lại mật khẩu | Gas Quốc Cường',
 }
 
 export default function ResetPasswordPage() {

@@ -1,7 +1,7 @@
 /** Application-wide constants. */
 
-export const APP_NAME = 'GasBot Vietnam'
-export const APP_DESCRIPTION = 'Mua gas LPG online với AI hỗ trợ 24/7'
+export const APP_NAME = 'Gas Quốc Cường'
+export const APP_DESCRIPTION = 'Mua gas LPG an toàn tại Bình Thạnh và Thủ Đức'
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
 export const ROUTES = {

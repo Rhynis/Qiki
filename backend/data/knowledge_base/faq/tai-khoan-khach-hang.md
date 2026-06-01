@@ -1,5 +1,5 @@
 ---
-title: Tài khoản khách hàng GasBot
+title: Tài khoản khách hàng Gas Quốc Cường
 category: faq
 source: internal_docs
 ---
