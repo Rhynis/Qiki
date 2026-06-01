@@ -2,9 +2,12 @@
 
 from collections.abc import Mapping, Sequence
 
+import sentry_sdk
+
 from app.intent.base import BaseIntentClassifier
 from app.intent.categories import IntentCategory
 from app.intent.schemas import IntentResult
+from app.llm.exceptions import LLMQuotaExceededError, LLMRateLimitError
 
 
 class HybridIntentClassifier(BaseIntentClassifier):
@@ -26,7 +29,23 @@ class HybridIntentClassifier(BaseIntentClassifier):
         conversation_history: Sequence[Mapping[str, str]] | None = None,
     ) -> IntentResult:
         """Classify with embedding, then double-check when required."""
-        embedding_result = await self.embedding_classifier.classify(text, conversation_history)
+        try:
+            embedding_result = await self.embedding_classifier.classify(
+                text,
+                conversation_history,
+            )
+        except (LLMQuotaExceededError, LLMRateLimitError):
+            sentry_sdk.capture_message(
+                "Gemini embed quota exceeded, intent via LLM fallback",
+                level="warning",
+            )
+            llm_result = await self.llm_classifier.classify(text, conversation_history)
+            return IntentResult(
+                category=llm_result.category,
+                confidence=llm_result.confidence,
+                reasoning=llm_result.reasoning,
+                classifier="llm_fallback",
+            )
         must_check_llm = (
             embedding_result.category == IntentCategory.SAFETY_EMERGENCY
             or embedding_result.confidence < self.confidence_threshold
