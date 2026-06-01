@@ -1,3 +1,6 @@
+'use client'
+
+import { useEffect, useRef } from 'react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { Message } from '@/types/conversation'
 import { EmergencyBanner } from './emergency-banner'
@@ -12,6 +15,12 @@ type MessageListProps = {
 
 export function MessageList({ conversationId, messages, isPending }: MessageListProps) {
   const hasEmergency = messages.some((message) => message.is_emergency)
+  const bottomRef = useRef<HTMLDivElement>(null)
+  const lastMessageId = messages[messages.length - 1]?.id
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  }, [messages.length, lastMessageId, isPending])
 
   return (
     <ScrollArea className="h-96">
@@ -25,6 +34,7 @@ export function MessageList({ conversationId, messages, isPending }: MessageList
           ))
         )}
         {isPending ? <TypingIndicator /> : null}
+        <div ref={bottomRef} />
       </div>
     </ScrollArea>
   )
