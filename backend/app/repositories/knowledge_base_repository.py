@@ -7,6 +7,7 @@ from uuid import UUID
 
 from rank_bm25 import BM25Okapi
 from sqlalchemy import Select, func, select, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundException
@@ -135,15 +136,20 @@ class KnowledgeBaseRepository:
             )
             """
         )
-        result = await self.session.execute(
-            text(sql),
-            {
-                "query_embedding": self._vector_literal(query_embedding),
-                "threshold": threshold,
-                "top_k": top_k,
-                "category_filter": category_filter,
-            },
-        )
+        try:
+            async with self.session.begin_nested():
+                result = await self.session.execute(
+                    text(sql),
+                    {
+                        "query_embedding": self._vector_literal(query_embedding),
+                        "threshold": threshold,
+                        "top_k": top_k,
+                        "category_filter": category_filter,
+                    },
+                )
+                rows = result.fetchall()
+        except SQLAlchemyError:
+            return []
         return [
             KnowledgeBaseSearchResult(
                 id=row.id,
@@ -153,7 +159,7 @@ class KnowledgeBaseRepository:
                 similarity=float(row.similarity),
                 source=None,
             )
-            for row in result
+            for row in rows
         ]
 
     async def hybrid_search(
@@ -166,18 +172,21 @@ class KnowledgeBaseRepository:
         use_fallback: bool = False,
     ) -> list[KnowledgeBaseSearchResult]:
         """Blend vector similarity with PostgreSQL keyword ranking."""
-        semantic = await self.similarity_search(
-            query_embedding,
-            top_k=max(top_k * 3, top_k),
-            threshold=0.0,
-            category_filter=category_filter,
-            use_fallback=use_fallback,
-        )
-        keyword = await self.bm25_search(
-            query_text,
-            top_k=max(top_k * 5, 20),
-            category_filter=category_filter,
-        )
+        try:
+            semantic = await self.similarity_search(
+                query_embedding,
+                top_k=max(top_k * 3, top_k),
+                threshold=0.0,
+                category_filter=category_filter,
+                use_fallback=use_fallback,
+            )
+            keyword = await self.bm25_search(
+                query_text,
+                top_k=max(top_k * 5, 20),
+                category_filter=category_filter,
+            )
+        except SQLAlchemyError:
+            return []
         semantic_by_id = {item.id: item for item in semantic}
         keyword_by_id = {item.id: item for item in keyword}
         keyword_scores = {item.id: item.similarity for item in keyword}
@@ -207,12 +216,16 @@ class KnowledgeBaseRepository:
         category_filter: str | None = None,
     ) -> list[KnowledgeBaseSearchResult]:
         """Search active documents using BM25."""
-        documents, _ = await self.list_documents(
-            skip=0,
-            limit=1000,
-            category_filter=category_filter,
-            active_only=True,
-        )
+        try:
+            async with self.session.begin_nested():
+                documents, _ = await self.list_documents(
+                    skip=0,
+                    limit=1000,
+                    category_filter=category_filter,
+                    active_only=True,
+                )
+        except SQLAlchemyError:
+            return []
         if not documents:
             return []
         tokenized_corpus = [self._tokenize(f"{doc.title} {doc.content}") for doc in documents]

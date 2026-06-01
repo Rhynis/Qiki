@@ -119,7 +119,10 @@ class EmbeddingService:
         if index >= len(embeddings):
             return [0.0] * self.get_dimensions()
         values = list(getattr(embeddings[index], "values", None) or [])
-        return [float(value) for value in values]
+        embedding = [float(value) for value in values]
+        if len(embedding) >= self.dimensions:
+            return embedding[: self.dimensions]
+        return embedding + [0.0] * (self.dimensions - len(embedding))
 
     def get_dimensions(self) -> int:
         """Return embedding dimensionality."""
