@@ -58,7 +58,10 @@ class FakeObservability:
 class FakePromptLibrary:
     def get(self, name: str) -> PromptTemplate:
         assert name == "system_chatbot_vi"
-        return PromptTemplate("Context: ${context}\nHistory: ${conversation_history}", name=name)
+        return PromptTemplate(
+            "Date: ${current_date}\nContext: ${context}\nHistory: ${conversation_history}",
+            name=name,
+        )
 
 
 def pipeline() -> tuple[RAGPipeline, FakeRetriever, FakeLLM, FakeObservability]:
@@ -145,6 +148,26 @@ async def test_query_includes_conversation_history() -> None:
 
     system_prompt = llm.generate.await_args.kwargs["system_prompt"]
     assert "Khách hàng: Tôi ở Quận 1" in system_prompt
+
+
+@pytest.mark.asyncio
+async def test_query_includes_current_date() -> None:
+    rag, _, llm, _ = pipeline()
+
+    await rag.query("Có giao hàng không?")
+
+    system_prompt = llm.generate.await_args.kwargs["system_prompt"]
+    assert f"Date: {RAGPipeline._current_date_vn()}" in system_prompt
+
+
+@pytest.mark.asyncio
+async def test_query_prepends_address_lookup_note() -> None:
+    rag, _, llm, _ = pipeline()
+
+    await rag.query("Tôi ở Phường Hiệp Bình Chánh có giao gas không?")
+
+    system_prompt = llm.generate.await_args.kwargs["system_prompt"]
+    assert "Phường Hiệp Bình Chánh thuộc khu Thủ Đức" in system_prompt
 
 
 @pytest.mark.asyncio

@@ -1,4 +1,6 @@
 import { Bot, UserRound } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
 import type { Message } from '@/types/conversation'
@@ -12,6 +14,7 @@ type MessageBubbleProps = {
 export function MessageBubble({ conversationId, message }: MessageBubbleProps) {
   const isUser = message.role === 'user'
   const isStaff = message.role === 'staff'
+  const shouldRenderMarkdown = message.role === 'assistant'
 
   return (
     <div className={cn('flex gap-2', isUser && 'flex-row-reverse')}>
@@ -31,7 +34,36 @@ export function MessageBubble({ conversationId, message }: MessageBubbleProps) {
             isStaff && 'bg-sky-700 text-white'
           )}
         >
-          {message.content}
+          {shouldRenderMarkdown ? (
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                ul: ({ children }) => (
+                  <ul className="my-2 list-disc space-y-1 pl-5 last:mb-0">{children}</ul>
+                ),
+                ol: ({ children }) => (
+                  <ol className="my-2 list-decimal space-y-1 pl-5 last:mb-0">{children}</ol>
+                ),
+                li: ({ children }) => <li className="pl-1">{children}</li>,
+                strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                a: ({ children, href }) => (
+                  <a
+                    href={href}
+                    className="font-medium underline underline-offset-2"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {children}
+                  </a>
+                ),
+              }}
+            >
+              {message.content}
+            </ReactMarkdown>
+          ) : (
+            message.content
+          )}
         </div>
         <FeedbackButtons conversationId={conversationId} message={message} />
       </div>
