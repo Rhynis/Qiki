@@ -58,8 +58,12 @@ async def test_normal_queries_not_flagged(case: dict[str, object]) -> None:
     assert result.suggested_action == "normal_response"
 
 
-def test_emergency_response_includes_hotline_1900_1234() -> None:
-    assert "1900-1234" in SafetyChecker().get_emergency_response()
+def test_emergency_response_includes_official_and_store_hotlines() -> None:
+    response = SafetyChecker().get_emergency_response()
+
+    assert "114" in response
+    assert "115" in response
+    assert "090 3026306" in response
 
 
 def test_emergency_response_is_consistent() -> None:

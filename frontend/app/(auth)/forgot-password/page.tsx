@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { PasswordResetRequestForm } from '@/components/auth/password-reset-form'
 
 export const metadata: Metadata = {
-  title: 'Quên mật khẩu | GasBot Vietnam',
+  title: 'Quên mật khẩu | Gas Quốc Cường',
 }
 
 export default function ForgotPasswordPage() {

@@ -1,4 +1,4 @@
--- Seed data for GasBot Vietnam local development.
+-- Seed data for Gas Quốc Cường local development.
 
 INSERT INTO users (email, full_name, phone, role)
 VALUES
@@ -29,7 +29,7 @@ ON CONFLICT (sku) DO NOTHING;
 INSERT INTO knowledge_base (title, content, category, source, embedding)
 SELECT
   'Hướng dẫn an toàn gas số ' || gs::text,
-  'Khi sử dụng gas trong gia đình, khách hàng cần đặt bình ở nơi thông thoáng, khóa van sau khi dùng, kiểm tra dây dẫn định kỳ và liên hệ kỹ thuật viên khi nghi ngờ rò rỉ. Nếu ngửi thấy mùi gas, không bật tắt thiết bị điện, mở cửa thông gió và gọi hotline 1900-1234 ngay lập tức.',
+  'Khi sử dụng gas trong gia đình, khách hàng cần đặt bình ở nơi thông thoáng, khóa van sau khi dùng, kiểm tra dây dẫn định kỳ và liên hệ kỹ thuật viên khi nghi ngờ rò rỉ. Nếu ngửi thấy mùi gas, không bật tắt thiết bị điện, mở cửa thông gió, gọi 114 hoặc 115 trước, sau đó gọi hotline 090 3026306 nếu cần hỗ trợ từ cửa hàng.',
   'safety',
   'seed_data',
   array_fill(0.0::float8, ARRAY[768])::vector
@@ -39,7 +39,7 @@ ON CONFLICT DO NOTHING;
 INSERT INTO knowledge_base (title, content, category, source, embedding)
 SELECT
   'Thông tin sản phẩm gas số ' || gs::text,
-  'GasBot Vietnam cung cấp các thương hiệu gas phổ biến như Petrolimex, Saigon Petro, Total Gas, Elf Gas, VT Gas, Shell Gas và MT Gas. Bình 6kg phù hợp nhu cầu nhỏ, bình 12kg phù hợp gia đình, bình 45kg phù hợp nhà hàng hoặc bếp công nghiệp.',
+  'Gas Quốc Cường cung cấp các thương hiệu gas phổ biến như Petrolimex, Saigon Petro, Total Gas, Elf Gas, VT Gas, Shell Gas và MT Gas. Bình 6kg phù hợp nhu cầu nhỏ, bình 12kg phù hợp gia đình, bình 45kg phù hợp nhà hàng hoặc bếp công nghiệp.',
   'product_info',
   'seed_data',
   array_fill(0.0::float8, ARRAY[768])::vector
@@ -49,7 +49,7 @@ ON CONFLICT DO NOTHING;
 INSERT INTO knowledge_base (title, content, category, source, embedding)
 SELECT
   'Thông tin giao hàng số ' || gs::text,
-  'GasBot Vietnam hỗ trợ giao hàng tại TP. Hồ Chí Minh và một số khu vực lân cận. Thời gian giao hàng phụ thuộc vào quận, phường và tình trạng giao thông. Đơn hàng trong nội thành thường được xử lý nhanh trong giờ làm việc.',
+  'Gas Quốc Cường hỗ trợ giao hàng tại Bình Thạnh và Thủ Đức. Thời gian giao hàng phụ thuộc vào phường, tuyến giao và tình trạng giao thông. Khách cần cung cấp số nhà, đường, phường và mốc gần nhà để điều phối chính xác.',
   'delivery',
   'seed_data',
   array_fill(0.0::float8, ARRAY[768])::vector
@@ -59,7 +59,7 @@ ON CONFLICT DO NOTHING;
 INSERT INTO knowledge_base (title, content, category, source, embedding)
 SELECT
   'Câu hỏi thường gặp số ' || gs::text,
-  'Khách hàng có thể đặt hàng không cần tài khoản, tra cứu đơn bằng mã đơn và số điện thoại, yêu cầu hóa đơn VAT khi thanh toán, và liên hệ hotline 1900-1234 để được hỗ trợ nhanh.',
+  'Khách hàng có thể đặt hàng không cần tài khoản, tra cứu đơn bằng mã đơn và số điện thoại, yêu cầu hóa đơn VAT khi thanh toán, và liên hệ hotline 090 3026306 để được hỗ trợ nhanh.',
   'faq',
   'seed_data',
   array_fill(0.0::float8, ARRAY[768])::vector
@@ -69,7 +69,7 @@ ON CONFLICT DO NOTHING;
 INSERT INTO knowledge_base (title, content, category, source, embedding)
 SELECT
   'Thông tin công ty số ' || gs::text,
-  'GasBot Vietnam là dịch vụ bán gas LPG trực tuyến với trợ lý AI tiếng Việt, tập trung vào tư vấn sản phẩm, hỗ trợ đặt hàng và cung cấp thông tin an toàn cho khách hàng.',
+  'Cửa hàng Gas Quốc Cường là cửa hàng gas LPG tại TP. Hồ Chí Minh với trợ lý ảo Qiki hỗ trợ tư vấn sản phẩm, đặt hàng và cung cấp thông tin an toàn cho khách hàng.',
   'company',
   'seed_data',
   array_fill(0.0::float8, ARRAY[768])::vector

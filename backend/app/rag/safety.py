@@ -24,9 +24,9 @@ SAFETY_EMERGENCY_RESPONSE_VI = """⚠️ CẢNH BÁO AN TOÀN ⚠️
 6. KHÔNG bật điện thoại trong khu vực nghi ngờ rò gas
 
 🚨 GỌI NGAY các số khẩn cấp:
-- Hotline GasBot Vietnam: 1900-1234 (24/7)
 - Cảnh sát PCCC: 114
 - Cấp cứu: 115
+- Hotline Gas Quốc Cường: 090 3026306
 
 ⛔ KHÔNG tự xử lý. Hãy gọi kỹ thuật viên chuyên nghiệp.
 

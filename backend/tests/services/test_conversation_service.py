@@ -179,7 +179,7 @@ class FakeRAGPipeline:
         self.calls += 1
         is_emergency = "mui gas" in query.lower()
         return RAGResponse(
-            answer="Gọi ngay 1900-1234" if is_emergency else "Câu trả lời từ RAG",
+            answer="Gọi ngay 114, 115 hoặc 090 3026306" if is_emergency else "Câu trả lời từ RAG",
             sources=[],
             query=query,
             processed_query=query,
@@ -321,7 +321,7 @@ async def test_safety_emergency_escalates_and_keeps_hotline() -> None:
 
     assert response.conversation.status == "escalated"
     assert response.assistant_message is not None
-    assert "1900-1234" in response.assistant_message.content
+    assert "090 3026306" in response.assistant_message.content
     assert response.assistant_message.is_emergency is True
     assert product_service.calls == 0
     assert rag.last_kwargs["product_context"] is None

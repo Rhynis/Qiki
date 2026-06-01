@@ -12,6 +12,11 @@ def test_resolve_thu_duc_wards_return_thu_duc() -> None:
     assert resolve_delivery_zone_from_ward("Linh Đông") == "Thủ Đức"
 
 
+def test_resolve_new_hiep_binh_ward_returns_thu_duc() -> None:
+    assert resolve_delivery_zone_from_ward("Hiệp Bình") == "Thủ Đức"
+    assert resolve_delivery_zone_from_ward("Phường Hiệp Bình") == "Thủ Đức"
+
+
 def test_resolve_with_phuong_prefix() -> None:
     assert resolve_delivery_zone_from_ward("Phường Hiệp Bình Chánh") == "Thủ Đức"
     assert resolve_delivery_zone_from_ward("P. Hiệp Bình Chánh") == "Thủ Đức"

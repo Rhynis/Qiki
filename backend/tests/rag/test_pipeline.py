@@ -88,7 +88,9 @@ async def test_safety_query_returns_emergency_response_immediately() -> None:
     assert response.is_safety_critical is True
     assert response.llm_response is None
     assert response.retrieval_count == 0
-    assert "1900-1234" in response.answer
+    assert "114" in response.answer
+    assert "115" in response.answer
+    assert "090 3026306" in response.answer
     assert response.confidence_score == 1.0
 
 

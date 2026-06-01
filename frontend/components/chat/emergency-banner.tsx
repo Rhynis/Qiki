@@ -8,9 +8,9 @@ export function EmergencyBanner() {
         <div className="space-y-1">
           <p className="font-semibold">Khẩn cấp an toàn gas</p>
           <p>Khóa van gas, mở cửa thông gió, không bật/tắt thiết bị điện.</p>
-          <a className="inline-flex items-center gap-1 font-semibold" href="tel:19001234">
+          <a className="inline-flex items-center gap-1 font-semibold" href="tel:0903026306">
             <Phone className="h-4 w-4" />
-            1900-1234
+            090 3026306
           </a>
         </div>
       </div>

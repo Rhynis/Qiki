@@ -49,7 +49,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 def create_app() -> FastAPI:
     """Create and configure the FastAPI app."""
     app = FastAPI(
-        title="GasBot Vietnam API",
+        title="Gas Quốc Cường API",
         description="Simple gas LPG sales website with Vietnamese AI chatbot",
         version="0.1.0",
         docs_url=None if settings.is_production else "/docs",
