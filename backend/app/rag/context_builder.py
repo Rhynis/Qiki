@@ -12,10 +12,12 @@ class ContextBuilder:
         self,
         documents: list[RetrievedDocument],
         max_chars: int = 3000,
+        product_context: str | None = None,
     ) -> str:
         """Build a bounded context string from retrieved documents."""
         if not documents:
-            return "Không có thông tin liên quan trong cơ sở dữ liệu."
+            knowledge_context = "Không có thông tin liên quan trong cơ sở dữ liệu."
+            return self.combine_context(knowledge_context, product_context)
 
         parts: list[str] = []
         total_chars = 0
@@ -31,7 +33,20 @@ class ContextBuilder:
                 break
             parts.append(document_text)
             total_chars += len(document_text)
-        return "\n".join(parts)
+        knowledge_context = "\n".join(parts)
+        return self.combine_context(knowledge_context, product_context)
+
+    @staticmethod
+    def combine_context(knowledge_context: str, product_context: str | None = None) -> str:
+        """Combine KB context with optional live product catalog context."""
+        if not product_context:
+            return knowledge_context
+        return (
+            "Thông tin từ cơ sở kiến thức:\n"
+            f"{knowledge_context}\n\n"
+            "Thông tin sản phẩm đang bán:\n"
+            f"{product_context.strip()}"
+        )
 
     def format_conversation_history(
         self,

@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -15,6 +16,7 @@ from app.models.message import Message
 from app.models.user import User
 from app.rag.schemas import RAGResponse, SafetyResult
 from app.schemas.conversation import SendMessageRequest
+from app.schemas.product import ProductResponse
 from app.services.conversation_service import ConversationService
 from app.services.routing_service import RoutingDecision
 
@@ -170,9 +172,10 @@ class FakeRoutingService:
 class FakeRAGPipeline:
     def __init__(self) -> None:
         self.calls = 0
+        self.last_kwargs: dict[str, object] = {}
 
     async def query(self, query: str, **kwargs: object) -> RAGResponse:
-        del kwargs
+        self.last_kwargs = kwargs
         self.calls += 1
         is_emergency = "mui gas" in query.lower()
         return RAGResponse(
@@ -204,20 +207,50 @@ class FakeRAGPipeline:
         )
 
 
+class FakeProductService:
+    def __init__(self, products: list[ProductResponse] | None = None) -> None:
+        now = datetime.now(UTC)
+        self.products = products or [
+            ProductResponse(
+                id=uuid.uuid4(),
+                sku="PETROLIMEX-12KG",
+                name="Bình gas Petrolimex 12kg",
+                brand="Petrolimex",
+                size_kg=Decimal("12"),
+                price=Decimal("440000"),
+                stock_quantity=20,
+                description=None,
+                image_url=None,
+                safety_info=None,
+                is_active=True,
+                created_at=now,
+                updated_at=now,
+            )
+        ]
+        self.calls = 0
+
+    async def list_active_catalog(self, limit: int = 50) -> list[ProductResponse]:
+        self.calls += 1
+        return self.products[:limit]
+
+
 def make_service(
     category: IntentCategory = IntentCategory.PRODUCT_INQUIRY,
     confidence: float = 0.9,
     requires_human: bool = False,
+    product_service: FakeProductService | None = None,
 ) -> tuple[ConversationService, FakeConversationRepository, FakeMessageRepository, FakeRAGPipeline]:
     conversations = FakeConversationRepository()
     messages = FakeMessageRepository(conversations)
     rag = FakeRAGPipeline()
+    product_service = product_service or FakeProductService()
     service = ConversationService(
         conversation_repository=conversations,  # type: ignore[arg-type]
         message_repository=messages,  # type: ignore[arg-type]
         intent_classifier=FakeIntentClassifier(category, confidence),
         routing_service=FakeRoutingService(requires_human),  # type: ignore[arg-type]
         rag_pipeline=rag,  # type: ignore[arg-type]
+        product_service=product_service,  # type: ignore[arg-type]
     )
     return service, conversations, messages, rag
 
@@ -250,10 +283,33 @@ async def test_send_message_saves_user_and_assistant_messages() -> None:
 
 
 @pytest.mark.asyncio
+async def test_send_message_adds_product_catalog_context_to_rag() -> None:
+    product_service = FakeProductService()
+    service, _conversations, _messages, rag = make_service(product_service=product_service)
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Giá bình gas 12kg bao nhiêu?"),
+        user=None,
+    )
+
+    assert product_service.calls == 1
+    product_context = rag.last_kwargs["product_context"]
+    assert isinstance(product_context, str)
+    assert "Bảng giá sản phẩm hiện có" in product_context
+    assert "Bình gas Petrolimex 12kg" in product_context
+    assert "440.000đ" in product_context
+    assert "còn 20 bình" in product_context
+
+
+@pytest.mark.asyncio
 async def test_safety_emergency_escalates_and_keeps_hotline() -> None:
-    service, _conversations, _messages, _rag = make_service(
+    product_service = FakeProductService()
+    service, _conversations, _messages, rag = make_service(
         category=IntentCategory.SAFETY_EMERGENCY,
         requires_human=True,
+        product_service=product_service,
     )
     conversation = await service.start_conversation(user=None, session_id="abc")
 
@@ -267,6 +323,8 @@ async def test_safety_emergency_escalates_and_keeps_hotline() -> None:
     assert response.assistant_message is not None
     assert "1900-1234" in response.assistant_message.content
     assert response.assistant_message.is_emergency is True
+    assert product_service.calls == 0
+    assert rag.last_kwargs["product_context"] is None
 
 
 @pytest.mark.asyncio

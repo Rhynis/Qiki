@@ -59,6 +59,13 @@ class ProductService:
             has_more=has_more,
         )
 
+    async def list_active_catalog(self, limit: int = 50) -> list[ProductResponse]:
+        """Return active products for compact chatbot catalog context."""
+        result = await self.search_products(
+            ProductSearchParams(limit=limit, sort_by="name", sort_order="asc")
+        )
+        return result.items
+
     async def update_product(
         self,
         product_id: UUID,

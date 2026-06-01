@@ -48,6 +48,18 @@ def test_build_context_handles_empty_docs() -> None:
     assert ContextBuilder().build_context([]) == "Không có thông tin liên quan trong cơ sở dữ liệu."
 
 
+def test_build_context_includes_product_catalog_context() -> None:
+    context = ContextBuilder().build_context(
+        [],
+        product_context="Bảng giá sản phẩm hiện có:\n- Bình gas Petrolimex 12kg: 440.000đ",
+    )
+
+    assert "Thông tin từ cơ sở kiến thức" in context
+    assert "Thông tin sản phẩm đang bán" in context
+    assert "Bình gas Petrolimex 12kg" in context
+    assert "440.000đ" in context
+
+
 def test_format_conversation_history_with_recent_messages() -> None:
     messages = [
         {"role": "system", "content": "start"},
