@@ -36,12 +36,13 @@ class LLMProviderFactory:
                 timeout=resolved_settings.OLLAMA_TIMEOUT,
             )
         elif name == "gemini":
-            if not resolved_settings.GEMINI_API_KEY:
+            if not resolved_settings.GEMINI_USE_VERTEX and not resolved_settings.GEMINI_API_KEY:
                 raise ValueError("GEMINI_API_KEY not configured")
             gemini_provider = GeminiProvider(
                 api_key=resolved_settings.GEMINI_API_KEY,
                 model=resolved_settings.GEMINI_MODEL,
                 embed_model=resolved_settings.GEMINI_EMBED_MODEL,
+                settings=resolved_settings,
             )
             if resolved_settings.GROQ_API_KEY:
                 provider = FallbackLLMProvider(

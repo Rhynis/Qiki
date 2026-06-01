@@ -47,7 +47,7 @@ def gemini_models(monkeypatch: pytest.MonkeyPatch) -> Mock:
     client = Mock()
     client.aio.models = models
     monkeypatch.setattr(
-        "app.llm.providers.gemini_provider.genai.Client",
+        "app.llm.genai_client.genai.Client",
         Mock(return_value=client),
     )
     return models
