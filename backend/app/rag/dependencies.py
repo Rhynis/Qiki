@@ -13,6 +13,7 @@ from app.llm.observability import LLMObservability
 from app.llm.prompts.templates import PromptLibrary
 from app.rag.context_builder import ContextBuilder
 from app.rag.embeddings import EmbeddingService
+from app.rag.jina_embeddings import JinaEmbeddingService
 from app.rag.pipeline import RAGPipeline
 from app.rag.retriever import BaseRetriever, HybridRetriever, VectorRetriever
 from app.rag.safety import SafetyChecker
@@ -39,14 +40,25 @@ def get_embedding_service() -> EmbeddingService:
     return EmbeddingService()
 
 
+@lru_cache(maxsize=1)
+def get_jina_embedding_service() -> JinaEmbeddingService:
+    """Return cached Jina embedding fallback service."""
+    return JinaEmbeddingService()
+
+
 def get_knowledge_base_service(
     session: Annotated[AsyncSession, Depends(get_db)],
     embedding_service: Annotated[EmbeddingService, Depends(get_embedding_service)],
+    jina_embedding_service: Annotated[
+        JinaEmbeddingService,
+        Depends(get_jina_embedding_service),
+    ],
 ) -> KnowledgeBaseService:
     """Build a request-scoped knowledge base service."""
     return KnowledgeBaseService(
         KnowledgeBaseRepository(session),
         embedding_service,
+        jina_embedding_service,
         VietnameseTextProcessor(),
     )
 
