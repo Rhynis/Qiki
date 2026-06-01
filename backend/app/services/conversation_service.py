@@ -1,6 +1,7 @@
 """Conversation orchestration service for chatbot and staff messages."""
 
 from collections.abc import Mapping, Sequence
+from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -20,6 +21,8 @@ from app.schemas.conversation import (
     SendMessageResponse,
 )
 from app.schemas.message import MessageResponse
+from app.schemas.product import ProductResponse
+from app.services.product_service import ProductService
 from app.services.routing_service import RoutingDecision, RoutingService
 
 
@@ -33,12 +36,14 @@ class ConversationService:
         intent_classifier: BaseIntentClassifier,
         routing_service: RoutingService,
         rag_pipeline: RAGPipeline,
+        product_service: ProductService,
     ) -> None:
         self.conversation_repository = conversation_repository
         self.message_repository = message_repository
         self.intent_classifier = intent_classifier
         self.routing_service = routing_service
         self.rag_pipeline = rag_pipeline
+        self.product_service = product_service
 
     async def start_conversation(
         self,
@@ -219,11 +224,17 @@ class ConversationService:
         intent: IntentCategory,
         confidence: float,
     ) -> Message:
+        product_context = (
+            None
+            if intent == IntentCategory.SAFETY_EMERGENCY
+            else await self._build_product_catalog_context()
+        )
         response = await self.rag_pipeline.query(
             content,
             conversation_history=history,
             conversation_id=conversation.id,
             user_id=user.id if user else None,
+            product_context=product_context,
         )
         return await self.message_repository.create(
             {
@@ -242,6 +253,41 @@ class ConversationService:
                 "flagged_for_review": confidence < 0.6,
             }
         )
+
+    async def _build_product_catalog_context(self) -> str | None:
+        products = await self.product_service.list_active_catalog(limit=50)
+        if not products:
+            return None
+
+        lines = ["Bảng giá sản phẩm hiện có:"]
+        for product in products:
+            lines.append(self._format_product_catalog_line(product))
+        return "\n".join(lines)
+
+    @classmethod
+    def _format_product_catalog_line(cls, product: ProductResponse) -> str:
+        display_name = cls._format_product_display_name(product)
+        price = cls._format_vnd(product.price)
+        stock = (
+            f"còn {product.stock_quantity} bình" if product.stock_quantity > 0 else "tạm hết hàng"
+        )
+        return f"- {display_name} ({product.brand}): {price}, {stock}"
+
+    @classmethod
+    def _format_product_display_name(cls, product: ProductResponse) -> str:
+        size = f"{cls._format_decimal(product.size_kg)}kg"
+        normalized_name = product.name.lower().replace(" ", "")
+        if size.lower() in normalized_name:
+            return product.name
+        return f"{product.name} {size}"
+
+    @staticmethod
+    def _format_vnd(price: Decimal) -> str:
+        return f"{int(price):,}".replace(",", ".") + "đ"
+
+    @staticmethod
+    def _format_decimal(value: Decimal) -> str:
+        return format(value.normalize(), "f").rstrip("0").rstrip(".")
 
     async def _create_handoff_message(
         self,

@@ -24,6 +24,7 @@ from app.rag.embeddings import EmbeddingService
 from app.rag.pipeline import RAGPipeline
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.message_repository import MessageRepository
+from app.repositories.product_repository import ProductRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.conversation import (
     ConversationCreateRequest,
@@ -38,6 +39,7 @@ from app.schemas.conversation import (
 )
 from app.schemas.message import MessageListResponse, MessageResponse
 from app.services.conversation_service import ConversationService
+from app.services.product_service import ProductService
 from app.services.routing_service import RoutingService
 
 router = APIRouter()
@@ -66,6 +68,7 @@ def get_conversation_service(
         intent_classifier=intent_classifier,
         routing_service=RoutingService(UserRepository(session)),
         rag_pipeline=rag_pipeline,
+        product_service=ProductService(ProductRepository(session)),
     )
 
 

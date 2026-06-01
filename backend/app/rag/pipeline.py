@@ -45,6 +45,7 @@ class RAGPipeline:
         top_k: int = 5,
         conversation_id: UUID | None = None,
         user_id: UUID | None = None,
+        product_context: str | None = None,
     ) -> RAGResponse:
         """Execute safety check, retrieval, context construction, and generation."""
         start_time = time.monotonic()
@@ -70,7 +71,10 @@ class RAGPipeline:
             )
 
         documents = await self._retrieve(query, top_k, category_filter)
-        context = self.context_builder.build_context(documents)
+        context = self.context_builder.build_context(
+            documents,
+            product_context=product_context,
+        )
         history = self.context_builder.format_conversation_history(conversation_history or [])
         system_prompt = self.prompts.get("system_chatbot_vi").render(
             context=context,
@@ -94,6 +98,7 @@ class RAGPipeline:
                 "retrieved_doc_count": len(documents),
                 "top_similarity": documents[0].similarity if documents else 0.0,
                 "category_filter": category_filter,
+                "has_product_context": bool(product_context),
             },
         )
 
@@ -124,6 +129,7 @@ class RAGPipeline:
         conversation_history: Sequence[Mapping[str, str]] | None = None,
         category_filter: str | None = None,
         top_k: int = 5,
+        product_context: str | None = None,
     ) -> AsyncIterator[str]:
         """Stream an answer while keeping the same safety-first behavior."""
         safety = await self.safety_checker.check_query(query)
@@ -132,7 +138,10 @@ class RAGPipeline:
             return
 
         documents = await self._retrieve(query, top_k, category_filter)
-        context = self.context_builder.build_context(documents)
+        context = self.context_builder.build_context(
+            documents,
+            product_context=product_context,
+        )
         history = self.context_builder.format_conversation_history(conversation_history or [])
         system_prompt = self.prompts.get("system_chatbot_vi").render(
             context=context,

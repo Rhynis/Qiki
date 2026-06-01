@@ -148,6 +148,21 @@ async def test_query_includes_conversation_history() -> None:
 
 
 @pytest.mark.asyncio
+async def test_query_includes_product_catalog_context() -> None:
+    rag, _, llm, _ = pipeline()
+
+    await rag.query(
+        "Giá bình gas 12kg bao nhiêu?",
+        product_context="Bảng giá sản phẩm hiện có:\n- Bình gas Petrolimex 12kg: 440.000đ",
+    )
+
+    system_prompt = llm.generate.await_args.kwargs["system_prompt"]
+    assert "Thông tin sản phẩm đang bán" in system_prompt
+    assert "Bình gas Petrolimex 12kg" in system_prompt
+    assert "440.000đ" in system_prompt
+
+
+@pytest.mark.asyncio
 async def test_query_with_category_filter() -> None:
     rag, retriever, _, _ = pipeline()
 
