@@ -472,6 +472,33 @@ def _multi_catalog() -> list[ProductResponse]:
     ]
 
 
+def _multi_word_brand_catalog() -> list[ProductResponse]:
+    now = datetime.now(UTC)
+    specs = [
+        ("SHELL-GAS-12KG", "Bình gas Shell Gas 12kg", "Shell Gas", "12", "430000", 18),
+        ("ELF-GAS-12KG", "Bình gas Elf Gas 12kg", "Elf Gas", "12", "425000", 16),
+        ("MT-GAS-12KG", "Bình gas MT Gas 12kg", "MT Gas", "12", "420000", 22),
+    ]
+    return [
+        ProductResponse(
+            id=uuid.uuid4(),
+            sku=sku,
+            name=name,
+            brand=brand,
+            size_kg=Decimal(size),
+            price=Decimal(price),
+            stock_quantity=stock,
+            description=None,
+            image_url=None,
+            safety_info=None,
+            is_active=True,
+            created_at=now,
+            updated_at=now,
+        )
+        for sku, name, brand, size, price, stock in specs
+    ]
+
+
 @pytest.mark.asyncio
 async def test_product_cards_filtered_for_specific_product() -> None:
     service, _conversations, _messages, _rag, _orders = make_service(
@@ -486,6 +513,22 @@ async def test_product_cards_filtered_for_specific_product() -> None:
     )
 
     assert [product.sku for product in response.products] == ["MT-GAS-12KG"]
+
+
+@pytest.mark.asyncio
+async def test_product_cards_brand_match_without_generic_gas_word() -> None:
+    service, _conversations, _messages, _rag, _orders = make_service(
+        product_service=FakeProductService(products=_multi_word_brand_catalog())
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="bình shell 12kg"),
+        user=None,
+    )
+
+    assert [product.sku for product in response.products] == ["SHELL-GAS-12KG"]
 
 
 @pytest.mark.asyncio

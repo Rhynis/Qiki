@@ -567,7 +567,10 @@ Tin mới:
         size_only: list[ProductResponse] = []
         for product in products:
             brand_tokens = set(self._normalize_match_text(product.brand).split())
-            brand_hit = bool(brand_tokens) and brand_tokens <= query_tokens
+            distinctive_brand_tokens = brand_tokens - {"gas"}
+            brand_hit = bool(distinctive_brand_tokens) and not distinctive_brand_tokens.isdisjoint(
+                query_tokens
+            )
             size_value = self._normalize_match_text(self._format_decimal(product.size_kg))
             size_hit = f"{size_value}kg" in normalized_query or size_value in query_tokens
             if brand_hit and size_hit:
