@@ -578,6 +578,22 @@ async def test_product_cards_brand_match_all_substring_brands() -> None:
 
 
 @pytest.mark.asyncio
+async def test_product_cards_full_brand_name_does_not_match_shorter_substring_brand() -> None:
+    service, _conversations, _messages, _rag, _orders = make_service(
+        product_service=FakeProductService(products=_substring_brand_catalog())
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="bình petrolimex 12kg"),
+        user=None,
+    )
+
+    assert [product.sku for product in response.products] == ["PETROLIMEX-12KG"]
+
+
+@pytest.mark.asyncio
 async def test_product_cards_filtered_by_brand() -> None:
     service, _conversations, _messages, _rag, _orders = make_service(
         product_service=FakeProductService(products=_multi_catalog())
