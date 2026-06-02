@@ -1,6 +1,8 @@
 """Tests for conversation orchestration service."""
 
+import json
 import uuid
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
@@ -10,6 +12,7 @@ import pytest
 from app.intent.base import BaseIntentClassifier
 from app.intent.categories import IntentCategory
 from app.intent.schemas import IntentResult
+from app.llm.base import BaseLLMProvider
 from app.llm.schemas import LLMResponse
 from app.models.conversation import Conversation
 from app.models.message import Message
@@ -234,16 +237,112 @@ class FakeProductService:
         return self.products[:limit]
 
 
+class FakeLLMProvider(BaseLLMProvider):
+    def __init__(self, payloads: list[dict[str, object]] | None = None) -> None:
+        super().__init__(model="fake")
+        self.payloads = payloads or []
+        self.calls = 0
+
+    @property
+    def provider_name(self) -> str:
+        return "fake"
+
+    async def generate(
+        self,
+        prompt: str,
+        system_prompt: str | None = None,
+        temperature: float = 0.7,
+        max_tokens: int = 1024,
+        stop_sequences: list[str] | None = None,
+        **kwargs: object,
+    ) -> LLMResponse:
+        del prompt, system_prompt, temperature, max_tokens, stop_sequences, kwargs
+        payload = self.payloads[min(self.calls, len(self.payloads) - 1)] if self.payloads else {}
+        self.calls += 1
+        return LLMResponse(
+            text=json.dumps(payload),
+            latency_ms=1,
+            model="fake",
+            provider="fake",
+            total_tokens=1,
+        )
+
+    async def stream(
+        self,
+        prompt: str,
+        system_prompt: str | None = None,
+        temperature: float = 0.7,
+        max_tokens: int = 1024,
+        **kwargs: object,
+    ) -> AsyncIterator[object]:
+        del prompt, system_prompt, temperature, max_tokens, kwargs
+        if False:
+            yield object()
+
+    async def health_check(self) -> bool:
+        return True
+
+
+class FakeOrderResponse:
+    def __init__(self) -> None:
+        self.id = uuid.uuid4()
+        self.order_number = "QC-000123"
+
+
+class FakeOrderService:
+    def __init__(self) -> None:
+        self.calls = 0
+        self.last_checkout: Any = None
+        self.last_user: User | None = None
+        self.last_idempotency_key: uuid.UUID | None = None
+
+    async def create_order(
+        self,
+        checkout_data,
+        current_user,
+        idempotency_key,
+        session,
+    ):  # type: ignore[no-untyped-def]
+        del session
+        self.calls += 1
+        self.last_checkout = checkout_data
+        self.last_user = current_user
+        self.last_idempotency_key = idempotency_key
+        return FakeOrderResponse()
+
+
+class FakeSession:
+    def __init__(self) -> None:
+        self.commits = 0
+        self.rollbacks = 0
+
+    async def commit(self) -> None:
+        self.commits += 1
+
+    async def rollback(self) -> None:
+        self.rollbacks += 1
+
+
 def make_service(
     category: IntentCategory = IntentCategory.PRODUCT_INQUIRY,
     confidence: float = 0.9,
     requires_human: bool = False,
     product_service: FakeProductService | None = None,
-) -> tuple[ConversationService, FakeConversationRepository, FakeMessageRepository, FakeRAGPipeline]:
+    llm_provider: FakeLLMProvider | None = None,
+    order_service: FakeOrderService | None = None,
+) -> tuple[
+    ConversationService,
+    FakeConversationRepository,
+    FakeMessageRepository,
+    FakeRAGPipeline,
+    FakeOrderService,
+]:
     conversations = FakeConversationRepository()
     messages = FakeMessageRepository(conversations)
     rag = FakeRAGPipeline()
     product_service = product_service or FakeProductService()
+    order_service = order_service or FakeOrderService()
+    session = FakeSession()
     service = ConversationService(
         conversation_repository=conversations,  # type: ignore[arg-type]
         message_repository=messages,  # type: ignore[arg-type]
@@ -251,13 +350,16 @@ def make_service(
         routing_service=FakeRoutingService(requires_human),  # type: ignore[arg-type]
         rag_pipeline=rag,  # type: ignore[arg-type]
         product_service=product_service,  # type: ignore[arg-type]
+        order_service=order_service,  # type: ignore[arg-type]
+        llm_provider=llm_provider or FakeLLMProvider(),  # type: ignore[arg-type]
+        session=session,  # type: ignore[arg-type]
     )
-    return service, conversations, messages, rag
+    return service, conversations, messages, rag, order_service
 
 
 @pytest.mark.asyncio
 async def test_starts_conversation() -> None:
-    service, _conversations, _messages, _rag = make_service()
+    service, _conversations, _messages, _rag, _orders = make_service()
 
     response = await service.start_conversation(user=None, session_id="abc")
 
@@ -267,7 +369,7 @@ async def test_starts_conversation() -> None:
 
 @pytest.mark.asyncio
 async def test_send_message_saves_user_and_assistant_messages() -> None:
-    service, _conversations, _messages, rag = make_service()
+    service, _conversations, _messages, rag, _orders = make_service()
     conversation = await service.start_conversation(user=None, session_id="abc")
 
     response = await service.send_message(
@@ -288,7 +390,7 @@ async def test_send_message_saves_user_and_assistant_messages() -> None:
 @pytest.mark.asyncio
 async def test_send_message_adds_product_catalog_context_to_rag() -> None:
     product_service = FakeProductService()
-    service, _conversations, _messages, rag = make_service(product_service=product_service)
+    service, _conversations, _messages, rag, _orders = make_service(product_service=product_service)
     conversation = await service.start_conversation(user=None, session_id="abc")
 
     await service.send_message(
@@ -308,7 +410,9 @@ async def test_send_message_adds_product_catalog_context_to_rag() -> None:
 
 @pytest.mark.asyncio
 async def test_send_message_adds_product_cards_for_place_order() -> None:
-    service, _conversations, _messages, _rag = make_service(category=IntentCategory.PLACE_ORDER)
+    service, _conversations, _messages, _rag, _orders = make_service(
+        category=IntentCategory.PLACE_ORDER
+    )
     conversation = await service.start_conversation(user=None, session_id="abc")
 
     response = await service.send_message(
@@ -327,7 +431,9 @@ async def test_send_message_adds_product_cards_for_place_order() -> None:
 
 @pytest.mark.asyncio
 async def test_send_message_omits_product_cards_for_general_info() -> None:
-    service, _conversations, _messages, _rag = make_service(category=IntentCategory.GENERAL_INFO)
+    service, _conversations, _messages, _rag, _orders = make_service(
+        category=IntentCategory.GENERAL_INFO
+    )
     conversation = await service.start_conversation(user=None, session_id="abc")
 
     response = await service.send_message(
@@ -339,10 +445,135 @@ async def test_send_message_omits_product_cards_for_general_info() -> None:
     assert response.products == []
 
 
+def complete_order_payload(
+    confirmed: bool = False, address: str | None = None
+) -> dict[str, object]:
+    return {
+        "product": "Petrolimex 12kg",
+        "quantity": 1,
+        "customer_name": "Nguyen Van A",
+        "customer_phone": "0903026306",
+        "delivery_address": address or "15 đường số 5, Phường Hiệp Bình, TP. Hồ Chí Minh",
+        "payment_method": "cod",
+        "confirmed": confirmed,
+    }
+
+
+@pytest.mark.asyncio
+async def test_chat_order_creates_order_on_confirmation() -> None:
+    order_service = FakeOrderService()
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([complete_order_payload(confirmed=True)]),
+        order_service=order_service,
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Đúng rồi, xác nhận đặt đơn này"),
+        user=None,
+    )
+
+    assert orders.calls == 1
+    assert response.assistant_message is not None
+    assert "QC-000123" in response.assistant_message.content
+    assert "Nhân viên sẽ sớm gọi điện lại xác nhận" in response.assistant_message.content
+    assert orders.last_checkout.source == "chatbot"
+    assert orders.last_checkout.referral_conversation_id == conversation.id
+    assert orders.last_checkout.delivery_district == "Thủ Đức"
+    assert orders.last_checkout.items[0].quantity == 1
+    assert orders.last_user is None
+    assert response.assistant_message.retrieved_documents[0]["order_number"] == "QC-000123"
+
+
+@pytest.mark.asyncio
+async def test_chat_order_missing_slot_asks_again() -> None:
+    payload = complete_order_payload()
+    payload["customer_phone"] = None
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([payload]),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Tôi muốn đặt gas"),
+        user=None,
+    )
+
+    assert orders.calls == 0
+    assert response.assistant_message is not None
+    assert "số điện thoại" in response.assistant_message.content
+
+
+@pytest.mark.asyncio
+async def test_chat_order_outside_zone_declined() -> None:
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider(
+            [complete_order_payload(address="12 Lê Lợi, Phường Bến Nghé, Quận 1")]
+        ),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Giao qua Quận 1 giúp tôi"),
+        user=None,
+    )
+
+    assert orders.calls == 0
+    assert response.assistant_message is not None
+    assert "chỉ giao trong khu vực Bình Thạnh và Thủ Đức" in response.assistant_message.content
+
+
+@pytest.mark.asyncio
+async def test_chat_order_requires_explicit_confirmation() -> None:
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([complete_order_payload(confirmed=False)]),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Tôi muốn đặt 1 bình Petrolimex 12kg"),
+        user=None,
+    )
+
+    assert orders.calls == 0
+    assert response.assistant_message is not None
+    assert "Qiki tóm tắt đơn hàng" in response.assistant_message.content
+    assert "Bạn xác nhận đặt đơn này không?" in response.assistant_message.content
+
+
+@pytest.mark.asyncio
+async def test_chat_order_rejects_string_false_confirmation() -> None:
+    payload = complete_order_payload()
+    payload["confirmed"] = "false"
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([payload]),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Tôi muốn đặt 1 bình Petrolimex 12kg"),
+        user=None,
+    )
+
+    assert orders.calls == 0
+    assert response.assistant_message is not None
+    assert "Bạn xác nhận đặt đơn này không?" in response.assistant_message.content
+
+
 @pytest.mark.asyncio
 async def test_safety_emergency_escalates_and_keeps_hotline() -> None:
     product_service = FakeProductService()
-    service, _conversations, _messages, rag = make_service(
+    service, _conversations, _messages, rag, _orders = make_service(
         category=IntentCategory.SAFETY_EMERGENCY,
         requires_human=True,
         product_service=product_service,
@@ -366,7 +597,7 @@ async def test_safety_emergency_escalates_and_keeps_hotline() -> None:
 
 @pytest.mark.asyncio
 async def test_human_handoff_skips_rag_for_complaint() -> None:
-    service, _conversations, _messages, rag = make_service(
+    service, _conversations, _messages, rag, _orders = make_service(
         category=IntentCategory.COMPLAINT,
         requires_human=True,
     )
@@ -386,7 +617,7 @@ async def test_human_handoff_skips_rag_for_complaint() -> None:
 
 @pytest.mark.asyncio
 async def test_low_confidence_message_is_flagged() -> None:
-    service, _conversations, messages, _rag = make_service(confidence=0.5)
+    service, _conversations, messages, _rag, _orders = make_service(confidence=0.5)
     conversation = await service.start_conversation(user=None, session_id="abc")
 
     await service.send_message(conversation.id, SendMessageRequest(content="khong ro"), user=None)
@@ -397,7 +628,7 @@ async def test_low_confidence_message_is_flagged() -> None:
 
 @pytest.mark.asyncio
 async def test_negative_feedback_flags_message() -> None:
-    service, _conversations, messages, _rag = make_service()
+    service, _conversations, messages, _rag, _orders = make_service()
     conversation = await service.start_conversation(user=None, session_id="abc")
     sent = await service.send_message(
         conversation.id,
@@ -414,7 +645,7 @@ async def test_negative_feedback_flags_message() -> None:
 
 @pytest.mark.asyncio
 async def test_staff_can_send_and_resolve() -> None:
-    service, _conversations, _messages, _rag = make_service(requires_human=True)
+    service, _conversations, _messages, _rag, _orders = make_service(requires_human=True)
     staff = User(id=uuid.uuid4(), email="staff@example.com", role="staff", is_active=True)
     conversation = await service.start_conversation(user=None, session_id="abc")
 

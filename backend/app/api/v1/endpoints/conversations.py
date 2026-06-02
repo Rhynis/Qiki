@@ -24,6 +24,7 @@ from app.rag.embeddings import EmbeddingService
 from app.rag.pipeline import RAGPipeline
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.message_repository import MessageRepository
+from app.repositories.order_repository import OrderRepository
 from app.repositories.product_repository import ProductRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.conversation import (
@@ -39,6 +40,7 @@ from app.schemas.conversation import (
 )
 from app.schemas.message import MessageListResponse, MessageResponse
 from app.services.conversation_service import ConversationService
+from app.services.order_service import OrderService
 from app.services.product_service import ProductService
 from app.services.routing_service import RoutingService
 
@@ -60,6 +62,7 @@ def get_conversation_service(
     session: Annotated[AsyncSession, Depends(get_db)],
     intent_classifier: Annotated[BaseIntentClassifier, Depends(get_intent_classifier)],
     rag_pipeline: Annotated[RAGPipeline, Depends(get_rag_pipeline)],
+    llm_provider: Annotated[BaseLLMProvider, Depends(get_llm_provider)],
 ) -> ConversationService:
     """Build the request-scoped conversation service."""
     return ConversationService(
@@ -69,6 +72,9 @@ def get_conversation_service(
         routing_service=RoutingService(UserRepository(session)),
         rag_pipeline=rag_pipeline,
         product_service=ProductService(ProductRepository(session)),
+        order_service=OrderService(OrderRepository(session), ProductRepository(session)),
+        llm_provider=llm_provider,
+        session=session,
     )
 
 
