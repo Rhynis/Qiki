@@ -1,61 +1,207 @@
 import Link from 'next/link'
-import { Bot, ShieldCheck, Truck } from 'lucide-react'
+import {
+  Bot,
+  CheckCircle2,
+  Clock,
+  Headphones,
+  MapPin,
+  Phone,
+  ShieldCheck,
+  ShoppingBag,
+  Truck,
+} from 'lucide-react'
+import { ChatOpenButton } from '@/components/shared/chat-open-button'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { SHOP_INFO } from '@/lib/constants'
 
-const features = [
+const trustItems = [
   {
-    title: 'AI hỗ trợ 24/7',
-    description: 'Tư vấn sản phẩm, đặt hàng và giải đáp an toàn sử dụng gas.',
+    title: 'Qiki AI 24/7',
+    description: 'Hỏi giá, chọn bình, kiểm tra khu vực giao và tạo đơn ngay trong chat.',
     icon: Bot,
   },
   {
-    title: 'Giao hàng nhanh',
-    description: 'Giao tận nơi trong khu vực hỗ trợ với quy trình rõ ràng.',
-    icon: Truck,
+    title: 'Giao tận nơi theo giờ',
+    description: SHOP_INFO.hours.summary,
+    icon: Clock,
   },
   {
-    title: 'An toàn ưu tiên',
-    description: 'Nội dung an toàn được kiểm soát, ưu tiên tình huống khẩn cấp.',
+    title: 'An toàn, chính hãng',
+    description: 'Bình còn niêm phong, hỗ trợ lắp van và kiểm tra rò rỉ khi giao.',
     icon: ShieldCheck,
+  },
+  {
+    title: 'Phục vụ đúng khu vực',
+    description: `Ưu tiên tuyến ${SHOP_INFO.deliveryAreaLabel} để giao nhanh và xác nhận rõ ràng.`,
+    icon: MapPin,
+  },
+]
+
+const orderSteps = [
+  {
+    title: 'Chọn sản phẩm hoặc nhắn Qiki',
+    description: 'Xem catalog, hỏi loại bình phù hợp hoặc gửi nhu cầu đổi gas qua chat.',
+    icon: ShoppingBag,
+  },
+  {
+    title: 'Nhân viên gọi xác nhận',
+    description: 'Cửa hàng kiểm tra thương hiệu, địa chỉ, thời gian giao và tổng chi phí.',
+    icon: Headphones,
+  },
+  {
+    title: 'Giao tận nơi, thanh toán COD',
+    description: 'Nhân viên giao bình, lắp đặt nếu cần và thu tiền khi khách nhận hàng.',
+    icon: Truck,
   },
 ]
 
 export default function HomePage() {
   return (
-    <div>
-      <section className="bg-white">
-        <div className="mx-auto grid max-w-6xl gap-10 px-4 py-16 md:grid-cols-[1.1fr_0.9fr] md:items-center">
-          <div className="space-y-6">
-            <h1 className="max-w-3xl text-4xl font-semibold tracking-normal text-slate-950 md:text-6xl">
-              Mua gas LPG dễ dàng với AI hỗ trợ
-            </h1>
-            <p className="max-w-xl text-lg text-slate-600">
-              Giao hàng tận nơi, an toàn, nhanh chóng.
-            </p>
-            <Button asChild size="lg">
-              <Link href="/products">Xem sản phẩm</Link>
+    <div className="bg-slate-50">
+      <section className="bg-slate-950 text-white">
+        <div className="mx-auto max-w-6xl px-4 py-12 md:py-16">
+          <div className="grid gap-10 md:grid-cols-[1.08fr_0.92fr] md:items-center">
+            <div className="space-y-7">
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-sm text-slate-200">
+                <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+                Giao nhanh tận nơi {SHOP_INFO.deliveryAreaLabel}
+              </div>
+              <div className="space-y-4">
+                <h1 className="max-w-3xl text-4xl font-semibold text-white md:text-6xl">
+                  Đặt gas LPG nhanh, rõ giá, có Qiki hỗ trợ từng bước
+                </h1>
+                <p className="max-w-2xl text-lg text-slate-300">
+                  Gas Quốc Cường giao bình gas gia đình và kinh doanh tại Bình Thạnh & Thủ Đức, nhận
+                  đơn qua chat, hotline và Zalo trong giờ mở cửa.
+                </p>
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                <ChatOpenButton className="bg-emerald-500 text-slate-950 hover:bg-emerald-400" />
+                <Button
+                  asChild
+                  className="border-white/20 bg-white text-slate-950 hover:bg-slate-100"
+                  size="lg"
+                  variant="outline"
+                >
+                  <a href={SHOP_INFO.hotline.href}>
+                    <Phone className="h-4 w-4" />
+                    Gọi đặt: {SHOP_INFO.hotline.label}
+                  </a>
+                </Button>
+                <Button
+                  asChild
+                  className="border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white"
+                  size="lg"
+                  variant="outline"
+                >
+                  <Link href="/products">Xem sản phẩm</Link>
+                </Button>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-white/10 bg-white/[0.06] p-5 shadow-2xl shadow-slate-950/40">
+              <div className="rounded-md border border-white/10 bg-slate-900 p-4">
+                <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-4">
+                  <div>
+                    <p className="text-sm text-slate-400">Tuyến giao hôm nay</p>
+                    <p className="text-2xl font-semibold text-white">
+                      {SHOP_INFO.deliveryAreaLabel}
+                    </p>
+                  </div>
+                  <div className="rounded-full bg-emerald-400 px-3 py-1 text-sm font-semibold text-slate-950">
+                    Đang nhận đơn
+                  </div>
+                </div>
+                <div className="mt-5 grid gap-3">
+                  {[
+                    ['Hotline/Zalo', SHOP_INFO.hotline.label],
+                    ['Giờ mở cửa', SHOP_INFO.hours.summary],
+                    ['Thanh toán', 'COD khi nhận bình'],
+                  ].map(([label, value]) => (
+                    <div
+                      className="flex items-center justify-between gap-4 rounded-md bg-white/[0.06] px-4 py-3"
+                      key={label}
+                    >
+                      <span className="text-sm text-slate-400">{label}</span>
+                      <span className="text-right text-sm font-semibold text-white">{value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-4 py-10">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {trustItems.map((item) => (
+            <div className="rounded-lg border bg-white p-5 shadow-sm" key={item.title}>
+              <item.icon className="h-6 w-6 text-slate-800" />
+              <h2 className="mt-4 text-lg font-semibold text-slate-950">{item.title}</h2>
+              <p className="mt-2 text-sm text-slate-600">{item.description}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="border-y bg-white">
+        <div className="mx-auto max-w-6xl px-4 py-12">
+          <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+            <div>
+              <h2 className="text-3xl font-semibold text-slate-950">Cách đặt hàng</h2>
+              <p className="mt-2 max-w-2xl text-slate-600">
+                Quy trình phù hợp cả khách quen gọi đổi bình nhanh và khách mới cần Qiki tư vấn
+                trước khi đặt.
+              </p>
+            </div>
+            <Button asChild variant="outline">
+              <a href={SHOP_INFO.zalo.href} rel="noreferrer" target="_blank">
+                Nhắn Zalo
+              </a>
             </Button>
           </div>
-          <div className="rounded-lg border bg-orange-50 p-8">
-            <div className="aspect-[4/3] rounded-md bg-gradient-to-br from-orange-200 via-white to-red-100" />
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            {orderSteps.map((step, index) => (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-5" key={step.title}>
+                <div className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-950 text-sm font-semibold text-white">
+                    {index + 1}
+                  </span>
+                  <step.icon className="h-5 w-5 text-slate-700" />
+                </div>
+                <h3 className="mt-5 text-lg font-semibold text-slate-950">{step.title}</h3>
+                <p className="mt-2 text-sm text-slate-600">{step.description}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
       <section className="mx-auto max-w-6xl px-4 py-12">
-        <div className="grid gap-4 md:grid-cols-3">
-          {features.map((feature) => (
-            <Card key={feature.title}>
-              <CardHeader>
-                <feature.icon className="h-6 w-6 text-orange-700" />
-                <CardTitle className="text-xl">{feature.title}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-slate-600">{feature.description}</p>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="rounded-lg border bg-slate-950 p-6 text-white md:flex md:items-center md:justify-between md:gap-8">
+          <div>
+            <p className="text-sm font-medium text-emerald-300">Cần đổi gas gấp?</p>
+            <h2 className="mt-2 text-2xl font-semibold">
+              Gọi cửa hàng để kiểm tra tuyến giao gần nhất
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm text-slate-300">
+              Nhân viên sẽ xác nhận sản phẩm còn hàng, địa chỉ thuộc khu vực giao và thời gian đến
+              dự kiến trước khi chốt đơn.
+            </p>
+          </div>
+          <div className="mt-5 flex flex-col gap-3 sm:flex-row md:mt-0">
+            <Button asChild className="bg-white text-slate-950 hover:bg-slate-100">
+              <a href={SHOP_INFO.hotline.href}>Gọi {SHOP_INFO.hotline.label}</a>
+            </Button>
+            <Button
+              asChild
+              className="border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white"
+              variant="outline"
+            >
+              <Link href="/track">Tra cứu đơn</Link>
+            </Button>
+          </div>
         </div>
       </section>
     </div>

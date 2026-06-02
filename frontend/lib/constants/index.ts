@@ -4,6 +4,31 @@ export const APP_NAME = 'Gas Quốc Cường'
 export const APP_DESCRIPTION = 'Mua gas LPG an toàn tại Bình Thạnh và Thủ Đức'
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
+export const SHOP_INFO = {
+  name: APP_NAME,
+  hotline: {
+    label: '090 3026306',
+    value: '0903026306',
+    href: 'tel:0903026306',
+  },
+  zalo: {
+    label: 'Zalo 090 3026306',
+    href: 'https://zalo.me/0903026306',
+  },
+  landline: {
+    label: '(028) 37269435',
+    href: 'tel:02837269435',
+  },
+  hours: {
+    weekdays: 'T2-T6 06:30-20:00',
+    weekends: 'T7-CN 07:30-20:00',
+    summary: 'T2-T6 06:30-20:00 · T7-CN 07:30-20:00',
+  },
+  deliveryAreas: ['Bình Thạnh', 'Thủ Đức'],
+  deliveryAreaLabel: 'Bình Thạnh, Thủ Đức',
+  address: '15 đường số 5, Khu phố 1, Phường Hiệp Bình Chánh, Thủ Đức, TP.HCM',
+} as const
+
 export const ROUTES = {
   HOME: '/',
   PRODUCTS: '/products',
