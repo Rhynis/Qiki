@@ -9,6 +9,7 @@ from decimal import Decimal
 from typing import Any, Literal
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundException
@@ -30,10 +31,10 @@ from app.schemas.conversation import (
     SendMessageResponse,
 )
 from app.schemas.message import MessageResponse
-from app.schemas.order import CheckoutRequest, OrderItemCreate
+from app.schemas.order import CheckoutRequest, OrderItemCreate, OrderResponse
 from app.schemas.product import ProductResponse
 from app.services.address_lookup import resolve_ward_delivery_zone
-from app.services.order_service import OrderService
+from app.services.order_service import OrderService, is_serialization_failure
 from app.services.product_service import ProductService
 from app.services.routing_service import RoutingDecision, RoutingService
 
@@ -379,11 +380,11 @@ class ConversationService:
             referral_conversation_id=conversation.id,
             customer_notes="Đơn được tạo qua chat Qiki; nhân viên cần gọi lại xác nhận.",
         )
-        order = await self.order_service.create_order(
+        await self.session.commit()
+        order = await self._create_chat_order_with_retry(
             checkout,
-            current_user=user,
-            idempotency_key=self._chat_order_idempotency_key(conversation.id, slots),
-            session=self.session,
+            user,
+            self._chat_order_idempotency_key(conversation.id, slots),
         )
         metadata = [
             {
@@ -451,7 +452,7 @@ Tin mới:
             customer_phone=self._optional_str(payload.get("customer_phone")),
             delivery_address=self._optional_str(payload.get("delivery_address")),
             payment_method=self._optional_str(payload.get("payment_method")),
-            confirmed=bool(payload.get("confirmed", False)),
+            confirmed=self._normalize_confirmation(payload.get("confirmed", False)),
         )
 
     async def _create_rag_answer(
@@ -565,6 +566,32 @@ Tin mới:
             }
         )
 
+    async def _create_chat_order_with_retry(
+        self,
+        checkout: CheckoutRequest,
+        user: User | None,
+        idempotency_key: UUID,
+    ) -> OrderResponse:
+        last_error: BaseException | None = None
+        for attempt in range(3):
+            try:
+                return await self.order_service.create_order(
+                    checkout,
+                    current_user=user,
+                    idempotency_key=idempotency_key,
+                    session=self.session,
+                )
+            except DBAPIError as exc:
+                await self.session.rollback()
+                if not is_serialization_failure(exc):
+                    raise
+                last_error = exc
+                if attempt == 2:
+                    raise
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("chat order creation failed without an exception")
+
     @staticmethod
     def _parse_json_object(text: str) -> dict[str, Any]:
         try:
@@ -595,6 +622,15 @@ Tin mới:
         except (TypeError, ValueError):
             return None
         return parsed if parsed > 0 else None
+
+    @classmethod
+    def _normalize_confirmation(cls, value: object) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            normalized = cls._normalize_match_text(value)
+            return normalized in {"true", "yes", "y", "ok", "okay", "dong y", "xac nhan", "dung"}
+        return False
 
     @classmethod
     def _missing_order_slots(

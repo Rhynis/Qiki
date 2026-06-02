@@ -311,6 +311,18 @@ class FakeOrderService:
         return FakeOrderResponse()
 
 
+class FakeSession:
+    def __init__(self) -> None:
+        self.commits = 0
+        self.rollbacks = 0
+
+    async def commit(self) -> None:
+        self.commits += 1
+
+    async def rollback(self) -> None:
+        self.rollbacks += 1
+
+
 def make_service(
     category: IntentCategory = IntentCategory.PRODUCT_INQUIRY,
     confidence: float = 0.9,
@@ -330,6 +342,7 @@ def make_service(
     rag = FakeRAGPipeline()
     product_service = product_service or FakeProductService()
     order_service = order_service or FakeOrderService()
+    session = FakeSession()
     service = ConversationService(
         conversation_repository=conversations,  # type: ignore[arg-type]
         message_repository=messages,  # type: ignore[arg-type]
@@ -339,7 +352,7 @@ def make_service(
         product_service=product_service,  # type: ignore[arg-type]
         order_service=order_service,  # type: ignore[arg-type]
         llm_provider=llm_provider or FakeLLMProvider(),  # type: ignore[arg-type]
-        session=object(),  # type: ignore[arg-type]
+        session=session,  # type: ignore[arg-type]
     )
     return service, conversations, messages, rag, order_service
 
@@ -533,6 +546,27 @@ async def test_chat_order_requires_explicit_confirmation() -> None:
     assert orders.calls == 0
     assert response.assistant_message is not None
     assert "Qiki tóm tắt đơn hàng" in response.assistant_message.content
+    assert "Bạn xác nhận đặt đơn này không?" in response.assistant_message.content
+
+
+@pytest.mark.asyncio
+async def test_chat_order_rejects_string_false_confirmation() -> None:
+    payload = complete_order_payload()
+    payload["confirmed"] = "false"
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([payload]),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Tôi muốn đặt 1 bình Petrolimex 12kg"),
+        user=None,
+    )
+
+    assert orders.calls == 0
+    assert response.assistant_message is not None
     assert "Bạn xác nhận đặt đơn này không?" in response.assistant_message.content
 
 
