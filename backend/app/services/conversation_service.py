@@ -1,13 +1,21 @@
 """Conversation orchestration service for chatbot and staff messages."""
 
+import json
+import re
+import unicodedata
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any
-from uuid import UUID, uuid4
+from typing import Any, Literal
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundException
+from app.core.input_validation import VietnamesePhoneValidator
 from app.intent.base import BaseIntentClassifier
 from app.intent.categories import IntentCategory
+from app.llm.base import BaseLLMProvider
 from app.models.conversation import Conversation
 from app.models.message import Message
 from app.models.user import User
@@ -22,9 +30,28 @@ from app.schemas.conversation import (
     SendMessageResponse,
 )
 from app.schemas.message import MessageResponse
+from app.schemas.order import CheckoutRequest, OrderItemCreate
 from app.schemas.product import ProductResponse
+from app.services.address_lookup import resolve_ward_delivery_zone
+from app.services.order_service import OrderService
 from app.services.product_service import ProductService
 from app.services.routing_service import RoutingDecision, RoutingService
+
+CHAT_ORDER_METADATA_TYPE = "chat_order"
+ORDER_CONFIRMATION_PROMPT = "Bạn xác nhận đặt đơn này không?"
+
+
+@dataclass(frozen=True)
+class ChatOrderSlots:
+    """Order details extracted from chat history."""
+
+    product: str | None = None
+    quantity: int | None = None
+    customer_name: str | None = None
+    customer_phone: str | None = None
+    delivery_address: str | None = None
+    payment_method: str | None = None
+    confirmed: bool = False
 
 
 class ConversationService:
@@ -38,6 +65,9 @@ class ConversationService:
         routing_service: RoutingService,
         rag_pipeline: RAGPipeline,
         product_service: ProductService,
+        order_service: OrderService,
+        llm_provider: BaseLLMProvider,
+        session: AsyncSession,
     ) -> None:
         self.conversation_repository = conversation_repository
         self.message_repository = message_repository
@@ -45,6 +75,9 @@ class ConversationService:
         self.routing_service = routing_service
         self.rag_pipeline = rag_pipeline
         self.product_service = product_service
+        self.order_service = order_service
+        self.llm_provider = llm_provider
+        self.session = session
 
     async def start_conversation(
         self,
@@ -144,6 +177,16 @@ class ConversationService:
             )
         elif routing.requires_human:
             assistant_message = await self._create_handoff_message(conversation, routing)
+        elif intent.category == IntentCategory.PLACE_ORDER:
+            assistant_message = await self._handle_chat_order(
+                conversation,
+                request.content,
+                history,
+                history_payload,
+                user,
+                intent.confidence,
+                catalog_products or [],
+            )
         else:
             assistant_message = await self._create_rag_answer(
                 conversation,
@@ -222,6 +265,193 @@ class ConversationService:
         """Resolve a conversation."""
         return self._conversation_to_response(
             await self.conversation_repository.resolve(conversation_id, satisfaction_rating)
+        )
+
+    async def _handle_chat_order(
+        self,
+        conversation: Conversation,
+        content: str,
+        history: Sequence[Message],
+        history_payload: Sequence[Mapping[str, str]],
+        user: User | None,
+        confidence: float,
+        products: Sequence[ProductResponse],
+    ) -> Message:
+        existing_order = self._find_existing_chat_order(history)
+        if existing_order:
+            order_number = str(existing_order.get("order_number", ""))
+            return await self._create_assistant_message(
+                conversation,
+                (
+                    f"Đơn **{order_number}** đã được ghi nhận trước đó. "
+                    "Nhân viên sẽ sớm gọi điện lại xác nhận với bạn trong giờ làm việc."
+                ),
+                IntentCategory.PLACE_ORDER,
+                confidence,
+                metadata=[existing_order],
+            )
+
+        slots = await self._extract_order_slots(content, history_payload, products)
+        matched_product = self._match_product(slots.product, products)
+        missing = self._missing_order_slots(slots, matched_product)
+        if missing:
+            return await self._create_assistant_message(
+                conversation,
+                self._format_missing_slot_question(missing),
+                IntentCategory.PLACE_ORDER,
+                confidence,
+            )
+
+        assert slots.quantity is not None
+        assert slots.customer_name is not None
+        assert slots.customer_phone is not None
+        assert slots.delivery_address is not None
+        assert slots.payment_method is not None
+        assert matched_product is not None
+
+        delivery_zone_match = resolve_ward_delivery_zone(slots.delivery_address)
+        if delivery_zone_match is None:
+            return await self._create_assistant_message(
+                conversation,
+                (
+                    "Hiện Gas Quốc Cường chỉ giao trong khu vực Bình Thạnh và Thủ Đức. "
+                    "Địa chỉ này chưa thuộc khu vực Qiki có thể nhận đơn qua chat. "
+                    "Bạn có thể gọi 090 3026306 để được nhân viên hỗ trợ thêm."
+                ),
+                IntentCategory.PLACE_ORDER,
+                confidence,
+            )
+
+        normalized_phone = self._validate_phone(slots.customer_phone)
+        if normalized_phone is None:
+            return await self._create_assistant_message(
+                conversation,
+                "Bạn cho Qiki xin số điện thoại hợp lệ để nhân viên gọi xác nhận đơn nhé.",
+                IntentCategory.PLACE_ORDER,
+                confidence,
+            )
+
+        if matched_product.stock_quantity < slots.quantity:
+            return await self._create_assistant_message(
+                conversation,
+                (
+                    f"Sản phẩm **{matched_product.name}** hiện chỉ còn "
+                    f"{matched_product.stock_quantity} bình. Bạn muốn điều chỉnh số lượng không?"
+                ),
+                IntentCategory.PLACE_ORDER,
+                confidence,
+            )
+
+        payment_method = self._normalize_payment_method(slots.payment_method)
+        if payment_method is None:
+            return await self._create_assistant_message(
+                conversation,
+                "Bạn muốn thanh toán khi nhận hàng (COD) hay chuyển khoản?",
+                IntentCategory.PLACE_ORDER,
+                confidence,
+            )
+
+        if not slots.confirmed:
+            return await self._create_assistant_message(
+                conversation,
+                self._format_order_summary(
+                    matched_product,
+                    slots.quantity,
+                    slots.customer_name,
+                    normalized_phone,
+                    slots.delivery_address,
+                    payment_method,
+                ),
+                IntentCategory.PLACE_ORDER,
+                confidence,
+            )
+
+        checkout = CheckoutRequest(
+            items=[OrderItemCreate(product_id=matched_product.id, quantity=slots.quantity)],
+            customer_name=slots.customer_name,
+            customer_phone=normalized_phone,
+            delivery_address=slots.delivery_address,
+            delivery_ward=delivery_zone_match.ward,
+            delivery_district=delivery_zone_match.delivery_zone,
+            delivery_city="TP. Hồ Chí Minh",
+            payment_method=payment_method,
+            source="chatbot",
+            referral_conversation_id=conversation.id,
+            customer_notes="Đơn được tạo qua chat Qiki; nhân viên cần gọi lại xác nhận.",
+        )
+        order = await self.order_service.create_order(
+            checkout,
+            current_user=user,
+            idempotency_key=self._chat_order_idempotency_key(conversation.id, slots),
+            session=self.session,
+        )
+        metadata = [
+            {
+                "type": CHAT_ORDER_METADATA_TYPE,
+                "order_id": str(order.id),
+                "order_number": order.order_number,
+            }
+        ]
+        return await self._create_assistant_message(
+            conversation,
+            (
+                f"Đã ghi nhận đơn **{order.order_number}**. "
+                "**Nhân viên sẽ sớm gọi điện lại xác nhận** với bạn trong giờ làm việc "
+                "(T2-T6 06:30-20:00, T7-CN 07:30-20:00). Cảm ơn bạn!"
+            ),
+            IntentCategory.PLACE_ORDER,
+            confidence,
+            metadata=metadata,
+        )
+
+    async def _extract_order_slots(
+        self,
+        content: str,
+        history: Sequence[Mapping[str, str]],
+        products: Sequence[ProductResponse],
+    ) -> ChatOrderSlots:
+        history_text = "\n".join(
+            f"{item['role']}: {item['content']}" for item in history[-8:] if item.get("content")
+        )
+        product_lines = "\n".join(
+            self._format_product_catalog_line(product) for product in products
+        )
+        prompt = f"""
+Trích thông tin đặt gas từ lịch sử chat và tin mới. Chỉ trả về JSON hợp lệ.
+
+Các trường:
+- product: tên/brand/SKU sản phẩm khách muốn mua, hoặc null
+- quantity: số lượng bình, hoặc null
+- customer_name: tên khách, hoặc null
+- customer_phone: số điện thoại, hoặc null
+- delivery_address: địa chỉ giao hàng đầy đủ, hoặc null
+- payment_method: "cod" hoặc "bank_transfer", hoặc null
+- confirmed: true nếu khách xác nhận rõ đơn Qiki đã tóm tắt ở lượt trước; ngược lại false
+
+Sản phẩm có thể chọn:
+{product_lines}
+
+Lịch sử:
+{history_text}
+
+Tin mới:
+{content}
+""".strip()
+        response = await self.llm_provider.generate(
+            prompt,
+            system_prompt="Bạn là bộ trích xuất JSON cho luồng đặt hàng qua chat.",
+            temperature=0,
+            max_tokens=512,
+        )
+        payload = self._parse_json_object(response.text)
+        return ChatOrderSlots(
+            product=self._optional_str(payload.get("product")),
+            quantity=self._optional_int(payload.get("quantity")),
+            customer_name=self._optional_str(payload.get("customer_name")),
+            customer_phone=self._optional_str(payload.get("customer_phone")),
+            delivery_address=self._optional_str(payload.get("delivery_address")),
+            payment_method=self._optional_str(payload.get("payment_method")),
+            confirmed=bool(payload.get("confirmed", False)),
         )
 
     async def _create_rag_answer(
@@ -313,6 +543,203 @@ class ConversationService:
             sku=product.sku,
             stock_quantity=product.stock_quantity,
         )
+
+    async def _create_assistant_message(
+        self,
+        conversation: Conversation,
+        content: str,
+        intent: IntentCategory,
+        confidence: float,
+        metadata: list[dict[str, Any]] | None = None,
+    ) -> Message:
+        return await self.message_repository.create(
+            {
+                "conversation_id": conversation.id,
+                "role": "assistant",
+                "content": content,
+                "intent": intent.value,
+                "intent_confidence": confidence,
+                "latency_ms": 0,
+                "retrieved_documents": metadata or [],
+                "flagged_for_review": confidence < 0.6,
+            }
+        )
+
+    @staticmethod
+    def _parse_json_object(text: str) -> dict[str, Any]:
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            match = re.search(r"\{.*\}", text, flags=re.DOTALL)
+            if not match:
+                return {}
+            try:
+                parsed = json.loads(match.group(0))
+            except json.JSONDecodeError:
+                return {}
+        return parsed if isinstance(parsed, dict) else {}
+
+    @staticmethod
+    def _optional_str(value: object) -> str | None:
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
+
+    @staticmethod
+    def _optional_int(value: object) -> int | None:
+        if value is None or value == "":
+            return None
+        try:
+            parsed = int(str(value))
+        except (TypeError, ValueError):
+            return None
+        return parsed if parsed > 0 else None
+
+    @classmethod
+    def _missing_order_slots(
+        cls,
+        slots: ChatOrderSlots,
+        matched_product: ProductResponse | None,
+    ) -> list[str]:
+        missing: list[str] = []
+        if matched_product is None:
+            missing.append("sản phẩm")
+        if slots.quantity is None:
+            missing.append("số lượng")
+        if not slots.customer_name:
+            missing.append("tên người nhận")
+        if not slots.customer_phone:
+            missing.append("số điện thoại")
+        if not slots.delivery_address:
+            missing.append("địa chỉ giao hàng")
+        if not slots.payment_method:
+            missing.append("hình thức thanh toán")
+        return missing
+
+    @staticmethod
+    def _format_missing_slot_question(missing: Sequence[str]) -> str:
+        if len(missing) == 1:
+            return f"Bạn cho Qiki xin thêm {missing[0]} để lên đơn nhé."
+        return (
+            "Bạn cho Qiki xin thêm "
+            + ", ".join(missing[:-1])
+            + f" và {missing[-1]} để lên đơn nhé."
+        )
+
+    @classmethod
+    def _match_product(
+        cls,
+        product_query: str | None,
+        products: Sequence[ProductResponse],
+    ) -> ProductResponse | None:
+        if not product_query:
+            return None
+        query = cls._normalize_match_text(product_query)
+        best_product: ProductResponse | None = None
+        best_score = 0
+        for product in products:
+            fields = [
+                product.name,
+                product.brand,
+                product.sku,
+                cls._format_product_display_name(product),
+                f"{cls._format_decimal(product.size_kg)}kg",
+            ]
+            haystack = " ".join(cls._normalize_match_text(field) for field in fields)
+            score = 0
+            if query and query in haystack:
+                score += 4
+            for token in query.split():
+                if token in haystack:
+                    score += 1
+            if score > best_score:
+                best_score = score
+                best_product = product
+        return best_product if best_score > 0 else None
+
+    @staticmethod
+    def _normalize_match_text(value: str) -> str:
+        decomposed = unicodedata.normalize("NFD", value.lower())
+        without_marks = "".join(char for char in decomposed if unicodedata.category(char) != "Mn")
+        return re.sub(r"[^a-z0-9]+", " ", without_marks).strip()
+
+    @staticmethod
+    def _validate_phone(phone: str) -> str | None:
+        try:
+            return VietnamesePhoneValidator.validate(phone)
+        except ValueError:
+            return None
+
+    @classmethod
+    def _normalize_payment_method(
+        cls, payment_method: str
+    ) -> Literal["cod", "bank_transfer"] | None:
+        normalized = cls._normalize_match_text(payment_method)
+        if normalized in {"cod", "cash", "tien mat"} or "nhan hang" in normalized:
+            return "cod"
+        if (
+            normalized in {"bank transfer", "bank_transfer", "chuyen khoan"}
+            or "khoan" in normalized
+        ):
+            return "bank_transfer"
+        return None
+
+    @classmethod
+    def _format_order_summary(
+        cls,
+        product: ProductResponse,
+        quantity: int,
+        customer_name: str,
+        phone: str,
+        address: str,
+        payment_method: Literal["cod", "bank_transfer"],
+    ) -> str:
+        subtotal = product.price * quantity
+        payment_label = "COD" if payment_method == "cod" else "chuyển khoản"
+        return "\n".join(
+            [
+                "Qiki tóm tắt đơn hàng của bạn:",
+                f"- Sản phẩm: **{product.name}** ({product.brand})",
+                f"- Số lượng: **{quantity}** bình",
+                f"- Đơn giá: **{cls._format_vnd(product.price)}**",
+                f"- Thành tiền tạm tính: **{cls._format_vnd(subtotal)}**",
+                f"- Người nhận: **{customer_name}**",
+                f"- Số điện thoại: **{phone}**",
+                f"- Địa chỉ: **{address}**",
+                f"- Thanh toán: **{payment_label}**",
+                "",
+                ORDER_CONFIRMATION_PROMPT,
+            ]
+        )
+
+    @staticmethod
+    def _chat_order_idempotency_key(conversation_id: UUID, slots: ChatOrderSlots) -> UUID:
+        fingerprint = "|".join(
+            [
+                str(conversation_id),
+                slots.product or "",
+                str(slots.quantity or ""),
+                slots.customer_phone or "",
+                slots.delivery_address or "",
+            ]
+        )
+        return uuid5(NAMESPACE_URL, f"chat-order:{fingerprint}")
+
+    @staticmethod
+    def _find_existing_chat_order(history: Sequence[Message]) -> dict[str, Any] | None:
+        for message in reversed(history):
+            documents = message.retrieved_documents or []
+            if not isinstance(documents, list):
+                continue
+            for document in documents:
+                if (
+                    isinstance(document, dict)
+                    and document.get("type") == CHAT_ORDER_METADATA_TYPE
+                    and document.get("order_number")
+                ):
+                    return document
+        return None
 
     async def _create_handoff_message(
         self,
