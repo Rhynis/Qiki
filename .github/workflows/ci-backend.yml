@@ -3,12 +3,18 @@ name: Backend CI
 on:
   push:
     branches: [main]
-    paths: ["backend/**", ".github/workflows/ci-backend.yml"]
   pull_request:
-    paths: ["backend/**"]
 
 jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Secret scan
+        run: scripts/secret-scan.sh --tracked
+
   test:
+    needs: secret-scan
     runs-on: ubuntu-latest
     defaults:
       run:
