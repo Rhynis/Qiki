@@ -279,6 +279,9 @@ async def test_send_message_saves_user_and_assistant_messages() -> None:
     assert response.user_message.role == "user"
     assert response.assistant_message is not None
     assert response.assistant_message.content == "Câu trả lời từ RAG"
+    assert len(response.products) == 1
+    assert response.products[0].name == "Bình gas Petrolimex 12kg"
+    assert response.products[0].price == Decimal("440000")
     assert rag.calls == 1
 
 
@@ -304,6 +307,39 @@ async def test_send_message_adds_product_catalog_context_to_rag() -> None:
 
 
 @pytest.mark.asyncio
+async def test_send_message_adds_product_cards_for_place_order() -> None:
+    service, _conversations, _messages, _rag = make_service(category=IntentCategory.PLACE_ORDER)
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Tôi muốn đặt một bình gas Petrolimex"),
+        user=None,
+    )
+
+    assert len(response.products) == 1
+    product = response.products[0]
+    assert product.sku == "PETROLIMEX-12KG"
+    assert product.brand == "Petrolimex"
+    assert product.size_kg == Decimal("12")
+    assert product.stock_quantity == 20
+
+
+@pytest.mark.asyncio
+async def test_send_message_omits_product_cards_for_general_info() -> None:
+    service, _conversations, _messages, _rag = make_service(category=IntentCategory.GENERAL_INFO)
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Cửa hàng mở cửa mấy giờ?"),
+        user=None,
+    )
+
+    assert response.products == []
+
+
+@pytest.mark.asyncio
 async def test_safety_emergency_escalates_and_keeps_hotline() -> None:
     product_service = FakeProductService()
     service, _conversations, _messages, rag = make_service(
@@ -323,6 +359,7 @@ async def test_safety_emergency_escalates_and_keeps_hotline() -> None:
     assert response.assistant_message is not None
     assert "090 3026306" in response.assistant_message.content
     assert response.assistant_message.is_emergency is True
+    assert response.products == []
     assert product_service.calls == 0
     assert rag.last_kwargs["product_context"] is None
 

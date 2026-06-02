@@ -1,6 +1,17 @@
 export type ConversationStatus = 'active' | 'escalated' | 'resolved' | 'abandoned'
 export type MessageRole = 'user' | 'assistant' | 'staff' | 'system'
 
+export type ProductCard = {
+  id: string
+  name: string
+  brand: string
+  size_kg: number | string
+  price: number | string
+  image_url?: string | null
+  sku: string
+  stock_quantity: number
+}
+
 export type Message = {
   id: string
   conversation_id: string
@@ -16,6 +27,7 @@ export type Message = {
   feedback_score?: -1 | 0 | 1 | null
   flagged_for_review: boolean
   is_emergency: boolean
+  products?: ProductCard[]
   created_at: string
 }
 
@@ -52,6 +64,7 @@ export type SendMessageResponse = {
   user_message: Message
   assistant_message?: Message | null
   conversation: Conversation
+  products: ProductCard[]
 }
 
 export type StartConversationRequest = {

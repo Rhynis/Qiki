@@ -57,11 +57,31 @@ export function useConversation(conversationId?: string) {
 }
 
 export function useMessages(conversationId?: string, enabled = true, paused = false) {
+  const queryClient = useQueryClient()
   const isOpen = useChatStore((state) => state.isOpen)
+  const queryKey = conversationKeys.messages(conversationId ?? '')
 
   return useQuery({
-    queryKey: conversationKeys.messages(conversationId ?? ''),
-    queryFn: () => conversationsApi.listMessages(conversationId ?? ''),
+    queryKey,
+    queryFn: async () => {
+      const incoming = await conversationsApi.listMessages(conversationId ?? '')
+      const previous = queryClient.getQueryData<MessageListResponse>(queryKey)
+      if (!previous) return incoming
+
+      const productsByMessageId = new Map(
+        previous.items
+          .filter((message) => message.products?.length)
+          .map((message) => [message.id, message.products])
+      )
+
+      return {
+        ...incoming,
+        items: incoming.items.map((message) => {
+          const products = productsByMessageId.get(message.id)
+          return products ? { ...message, products } : message
+        }),
+      }
+    },
     enabled: Boolean(conversationId) && enabled,
     // Pause polling while a send is in flight so a refetch doesn't clobber the
     // optimistic user message (the server hasn't committed it until the reply).
@@ -108,14 +128,40 @@ export function useSendMessage() {
         conversationKeys.detail(response.conversation.id),
         response.conversation
       )
+      const assistantMessage = response.assistant_message
+        ? { ...response.assistant_message, products: response.products }
+        : null
+      queryClient.setQueryData<MessageListResponse>(
+        conversationKeys.messages(response.conversation.id),
+        (old) => {
+          const base = old ?? { items: [], total: 0, skip: 0, limit: 50 }
+          const items = base.items.filter(
+            (message) =>
+              !message.id.startsWith('optimistic-') &&
+              message.id !== response.user_message.id &&
+              message.id !== assistantMessage?.id
+          )
+          return {
+            ...base,
+            items: [
+              ...items,
+              response.user_message,
+              ...(assistantMessage ? [assistantMessage] : []),
+            ],
+            total: items.length + 1 + (assistantMessage ? 1 : 0),
+          }
+        }
+      )
       if (response.assistant_message?.is_emergency) {
         toast.error('Khẩn cấp an toàn gas: gọi 114 hoặc 115 ngay')
       }
     },
     onSettled: async (_data, _error, variables) => {
-      await queryClient.invalidateQueries({
-        queryKey: conversationKeys.messages(variables.conversationId),
-      })
+      if (_error) {
+        await queryClient.invalidateQueries({
+          queryKey: conversationKeys.messages(variables.conversationId),
+        })
+      }
     },
   })
 }

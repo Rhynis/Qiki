@@ -1,9 +1,11 @@
-import { Bot, UserRound } from 'lucide-react'
+import Link from 'next/link'
+import { Bot, PackageOpen, UserRound } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { formatPrice } from '@/lib/utils/format'
 import { cn } from '@/lib/utils'
-import type { Message } from '@/types/conversation'
+import type { Message, ProductCard } from '@/types/conversation'
 import { FeedbackButtons } from './feedback-buttons'
 
 type MessageBubbleProps = {
@@ -15,6 +17,7 @@ export function MessageBubble({ conversationId, message }: MessageBubbleProps) {
   const isUser = message.role === 'user'
   const isStaff = message.role === 'staff'
   const shouldRenderMarkdown = message.role === 'assistant'
+  const products = shouldRenderMarkdown ? (message.products ?? []) : []
 
   return (
     <div className={cn('flex gap-2', isUser && 'flex-row-reverse')}>
@@ -65,8 +68,64 @@ export function MessageBubble({ conversationId, message }: MessageBubbleProps) {
             message.content
           )}
         </div>
+        {products.length > 0 ? <ProductCards products={products} /> : null}
         <FeedbackButtons conversationId={conversationId} message={message} />
       </div>
     </div>
   )
+}
+
+type ProductCardsProps = {
+  products: ProductCard[]
+}
+
+function ProductCards({ products }: ProductCardsProps) {
+  return (
+    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+      {products.map((product) => (
+        <article
+          key={product.id}
+          className="overflow-hidden rounded-lg bg-white text-left shadow-sm ring-1 ring-slate-200"
+        >
+          <div className="flex aspect-[4/3] items-center justify-center bg-slate-100">
+            {product.image_url ? (
+              <div
+                aria-label={product.name}
+                className="h-full w-full bg-cover bg-center"
+                style={{ backgroundImage: `url(${product.image_url})` }}
+              />
+            ) : (
+              <PackageOpen className="h-8 w-8 text-slate-400" />
+            )}
+          </div>
+          <div className="space-y-2 p-3">
+            <div className="min-w-0">
+              <p className="truncate text-xs text-slate-500">
+                {product.brand} · {formatSize(product.size_kg)}kg
+              </p>
+              <h3 className="line-clamp-2 text-sm font-semibold leading-5 text-slate-900">
+                {product.name}
+              </h3>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-slate-900">{formatPrice(product.price)}</p>
+              <p className="text-xs text-slate-500">
+                {product.stock_quantity > 0 ? `Còn ${product.stock_quantity} bình` : 'Tạm hết hàng'}
+              </p>
+            </div>
+            <Link
+              href={`/products/${product.id}`}
+              className="block rounded-md bg-slate-900 px-3 py-2 text-center text-xs font-medium text-white transition hover:bg-slate-700"
+            >
+              Xem & Đặt
+            </Link>
+          </div>
+        </article>
+      ))}
+    </div>
+  )
+}
+
+function formatSize(sizeKg: number | string): string {
+  return Number(sizeKg).toLocaleString('vi-VN')
 }

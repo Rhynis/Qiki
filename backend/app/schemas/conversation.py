@@ -1,6 +1,7 @@
 """Schemas for conversation management APIs."""
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
@@ -82,9 +83,23 @@ class ConversationListResponse(BaseModel):
     limit: int
 
 
+class ProductCardResponse(BaseModel):
+    """Structured product card data returned with chat responses."""
+
+    id: UUID
+    name: str
+    brand: str
+    size_kg: Decimal
+    price: Decimal
+    image_url: str | None = None
+    sku: str
+    stock_quantity: int
+
+
 class SendMessageResponse(BaseModel):
     """Response after sending a customer message."""
 
     user_message: MessageResponse
     assistant_message: MessageResponse | None = None
     conversation: ConversationResponse
+    products: list[ProductCardResponse] = Field(default_factory=list)
