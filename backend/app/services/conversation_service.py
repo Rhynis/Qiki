@@ -17,6 +17,7 @@ from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.message_repository import MessageRepository
 from app.schemas.conversation import (
     ConversationResponse,
+    ProductCardResponse,
     SendMessageRequest,
     SendMessageResponse,
 )
@@ -125,6 +126,12 @@ class ConversationService:
                 routing.reason,
             )
 
+        catalog_products: list[ProductResponse] | None = None
+        product_cards: list[ProductCardResponse] = []
+        if intent.category in {IntentCategory.PRODUCT_INQUIRY, IntentCategory.PLACE_ORDER}:
+            catalog_products = await self.product_service.list_active_catalog(limit=50)
+            product_cards = [self._product_to_card(product) for product in catalog_products]
+
         assistant_message: Message | None
         if intent.category == IntentCategory.SAFETY_EMERGENCY:
             assistant_message = await self._create_rag_answer(
@@ -145,6 +152,7 @@ class ConversationService:
                 user,
                 intent.category,
                 intent.confidence,
+                catalog_products=catalog_products,
             )
 
         conversation = await self._require_conversation(conversation.id)
@@ -154,6 +162,7 @@ class ConversationService:
                 self._message_to_response(assistant_message) if assistant_message else None
             ),
             conversation=self._conversation_to_response(conversation),
+            products=product_cards,
         )
 
     async def submit_feedback(self, message_id: UUID, score: int) -> MessageResponse:
@@ -223,12 +232,16 @@ class ConversationService:
         user: User | None,
         intent: IntentCategory,
         confidence: float,
+        catalog_products: Sequence[ProductResponse] | None = None,
     ) -> Message:
-        product_context = (
-            None
-            if intent == IntentCategory.SAFETY_EMERGENCY
-            else await self._build_product_catalog_context()
-        )
+        if intent == IntentCategory.SAFETY_EMERGENCY:
+            product_context = None
+        elif catalog_products is not None:
+            product_context = self._build_product_catalog_context(catalog_products)
+        else:
+            product_context = self._build_product_catalog_context(
+                await self.product_service.list_active_catalog(limit=50)
+            )
         response = await self.rag_pipeline.query(
             content,
             conversation_history=history,
@@ -254,8 +267,7 @@ class ConversationService:
             }
         )
 
-    async def _build_product_catalog_context(self) -> str | None:
-        products = await self.product_service.list_active_catalog(limit=50)
+    def _build_product_catalog_context(self, products: Sequence[ProductResponse]) -> str | None:
         if not products:
             return None
 
@@ -288,6 +300,19 @@ class ConversationService:
     @staticmethod
     def _format_decimal(value: Decimal) -> str:
         return format(value.normalize(), "f").rstrip("0").rstrip(".")
+
+    @staticmethod
+    def _product_to_card(product: ProductResponse) -> ProductCardResponse:
+        return ProductCardResponse(
+            id=product.id,
+            name=product.name,
+            brand=product.brand,
+            size_kg=product.size_kg,
+            price=product.price,
+            image_url=str(product.image_url) if product.image_url else None,
+            sku=product.sku,
+            stock_quantity=product.stock_quantity,
+        )
 
     async def _create_handoff_message(
         self,
