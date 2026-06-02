@@ -445,6 +445,84 @@ async def test_send_message_omits_product_cards_for_general_info() -> None:
     assert response.products == []
 
 
+def _multi_catalog() -> list[ProductResponse]:
+    now = datetime.now(UTC)
+    specs = [
+        ("PETROLIMEX-12KG", "Bình gas Petrolimex 12kg", "Petrolimex", "12", "440000", 40),
+        ("MT-GAS-12KG", "Bình gas MT Gas 12kg", "MT Gas", "12", "420000", 22),
+        ("PETROLIMEX-45KG", "Bình gas Petrolimex 45kg", "Petrolimex", "45", "1650000", 15),
+    ]
+    return [
+        ProductResponse(
+            id=uuid.uuid4(),
+            sku=sku,
+            name=name,
+            brand=brand,
+            size_kg=Decimal(size),
+            price=Decimal(price),
+            stock_quantity=stock,
+            description=None,
+            image_url=None,
+            safety_info=None,
+            is_active=True,
+            created_at=now,
+            updated_at=now,
+        )
+        for sku, name, brand, size, price, stock in specs
+    ]
+
+
+@pytest.mark.asyncio
+async def test_product_cards_filtered_for_specific_product() -> None:
+    service, _conversations, _messages, _rag, _orders = make_service(
+        product_service=FakeProductService(products=_multi_catalog())
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Giá bình MT Gas 12kg bao nhiêu?"),
+        user=None,
+    )
+
+    assert [product.sku for product in response.products] == ["MT-GAS-12KG"]
+
+
+@pytest.mark.asyncio
+async def test_product_cards_filtered_by_brand() -> None:
+    service, _conversations, _messages, _rag, _orders = make_service(
+        product_service=FakeProductService(products=_multi_catalog())
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Cho mình xem gas Petrolimex"),
+        user=None,
+    )
+
+    assert sorted(product.sku for product in response.products) == [
+        "PETROLIMEX-12KG",
+        "PETROLIMEX-45KG",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_product_cards_full_catalog_for_general_query() -> None:
+    service, _conversations, _messages, _rag, _orders = make_service(
+        product_service=FakeProductService(products=_multi_catalog())
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Cửa hàng có những loại gas nào?"),
+        user=None,
+    )
+
+    assert len(response.products) == 3
+
+
 def complete_order_payload(
     confirmed: bool = False, address: str | None = None
 ) -> dict[str, object]:
