@@ -26,6 +26,52 @@ export const conversationKeys = {
     [...conversationKeys.all, 'staff', params] as const,
 }
 
+const DEFAULT_MESSAGE_LIST: MessageListResponse = { items: [], total: 0, skip: 0, limit: 50 }
+
+function messageTimestamp(message: Message) {
+  const timestamp = Date.parse(message.created_at)
+  return Number.isNaN(timestamp) ? 0 : timestamp
+}
+
+export function reconcileMessageList(
+  incoming: MessageListResponse,
+  previous?: MessageListResponse
+): MessageListResponse {
+  if (!previous) return incoming
+
+  const previousById = new Map(previous.items.map((message) => [message.id, message]))
+  const orderById = new Map<string, number>()
+
+  previous.items.forEach((message, index) => {
+    orderById.set(message.id, index)
+  })
+  incoming.items.forEach((message, index) => {
+    if (!orderById.has(message.id)) orderById.set(message.id, previous.items.length + index)
+  })
+
+  const messagesById = new Map<string, Message>()
+  incoming.items.forEach((message) => {
+    const previousMessage = previousById.get(message.id)
+    const products = previousMessage?.products?.length ? previousMessage.products : message.products
+    messagesById.set(message.id, products ? { ...message, products } : message)
+  })
+  previous.items.forEach((message) => {
+    if (!messagesById.has(message.id)) messagesById.set(message.id, message)
+  })
+
+  const items = Array.from(messagesById.values()).sort((left, right) => {
+    const timestampDiff = messageTimestamp(left) - messageTimestamp(right)
+    if (timestampDiff !== 0) return timestampDiff
+    return (orderById.get(left.id) ?? 0) - (orderById.get(right.id) ?? 0)
+  })
+
+  return {
+    ...incoming,
+    items,
+    total: Math.max(incoming.total, items.length),
+  }
+}
+
 export function useStartConversation() {
   const queryClient = useQueryClient()
   const setConversationId = useChatStore((state) => state.setConversationId)
@@ -66,21 +112,7 @@ export function useMessages(conversationId?: string, enabled = true, paused = fa
     queryFn: async () => {
       const incoming = await conversationsApi.listMessages(conversationId ?? '')
       const previous = queryClient.getQueryData<MessageListResponse>(queryKey)
-      if (!previous) return incoming
-
-      const productsByMessageId = new Map(
-        previous.items
-          .filter((message) => message.products?.length)
-          .map((message) => [message.id, message.products])
-      )
-
-      return {
-        ...incoming,
-        items: incoming.items.map((message) => {
-          const products = productsByMessageId.get(message.id)
-          return products ? { ...message, products } : message
-        }),
-      }
+      return reconcileMessageList(incoming, previous)
     },
     enabled: Boolean(conversationId) && enabled,
     // Pause polling while a send is in flight so a refetch doesn't clobber the
@@ -109,7 +141,7 @@ export function useSendMessage() {
         created_at: new Date().toISOString(),
       }
       queryClient.setQueryData<MessageListResponse>(key, (old) => {
-        const base = old ?? { items: [], total: 0, skip: 0, limit: 50 }
+        const base = old ?? DEFAULT_MESSAGE_LIST
         return { ...base, items: [...base.items, optimisticMessage], total: base.total + 1 }
       })
       return { previous, conversationId }
@@ -134,22 +166,25 @@ export function useSendMessage() {
       queryClient.setQueryData<MessageListResponse>(
         conversationKeys.messages(response.conversation.id),
         (old) => {
-          const base = old ?? { items: [], total: 0, skip: 0, limit: 50 }
+          const base = old ?? DEFAULT_MESSAGE_LIST
           const items = base.items.filter(
             (message) =>
               !message.id.startsWith('optimistic-') &&
               message.id !== response.user_message.id &&
               message.id !== assistantMessage?.id
           )
-          return {
-            ...base,
-            items: [
-              ...items,
-              response.user_message,
-              ...(assistantMessage ? [assistantMessage] : []),
-            ],
-            total: items.length + 1 + (assistantMessage ? 1 : 0),
-          }
+          const incomingItems = [
+            response.user_message,
+            ...(assistantMessage ? [assistantMessage] : []),
+          ]
+          return reconcileMessageList(
+            {
+              ...base,
+              items: incomingItems,
+              total: incomingItems.length,
+            },
+            { ...base, items }
+          )
         }
       )
       if (response.assistant_message?.is_emergency) {
@@ -157,11 +192,9 @@ export function useSendMessage() {
       }
     },
     onSettled: async (_data, _error, variables) => {
-      if (_error) {
-        await queryClient.invalidateQueries({
-          queryKey: conversationKeys.messages(variables.conversationId),
-        })
-      }
+      await queryClient.invalidateQueries({
+        queryKey: conversationKeys.messages(variables.conversationId),
+      })
     },
   })
 }

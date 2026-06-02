@@ -69,11 +69,10 @@ export function ChatWindow() {
   const latestConversation = startConversation.data
   const isEscalated = latestConversation?.status === 'escalated'
   const isBusy = sendMessage.isPending || startConversation.isPending
-  const conversationReady = Boolean(conversationId ?? startConversation.data?.id)
+  const conversationReady = Boolean(conversationId)
 
   function handleSend(content: string) {
-    const targetConversationId = conversationId ?? startConversation.data?.id
-    if (!targetConversationId) return false
+    if (!conversationId) return false
 
     const now = Date.now()
     const recentSentAt = sentAtRef.current.filter(
@@ -89,7 +88,7 @@ export function ChatWindow() {
     sentAtRef.current = [...recentSentAt, now]
     setRateLimited(false)
     sendMessage.mutate({
-      conversationId: targetConversationId,
+      conversationId,
       data: { content, session_id: sessionId },
     })
     return true
@@ -135,7 +134,7 @@ export function ChatWindow() {
       ) : null}
       <MessageList
         conversationId={conversationId ?? ''}
-        messages={messages.data?.items ?? latestConversation?.messages ?? []}
+        messages={messages.data?.items ?? []}
         isPending={isBusy}
       />
       <MessageInput
