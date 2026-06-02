@@ -85,7 +85,7 @@ function ProductCards({ products }: ProductCardsProps) {
       {products.map((product) => (
         <article
           key={product.id}
-          className="overflow-hidden rounded-lg bg-white text-left shadow-sm ring-1 ring-slate-200"
+          className="flex h-full flex-col overflow-hidden rounded-lg bg-white text-left shadow-sm ring-1 ring-slate-200"
         >
           <div className="flex aspect-[4/3] items-center justify-center bg-slate-100">
             {product.image_url ? (
@@ -98,12 +98,12 @@ function ProductCards({ products }: ProductCardsProps) {
               <PackageOpen className="h-8 w-8 text-slate-400" />
             )}
           </div>
-          <div className="space-y-2 p-3">
+          <div className="flex flex-1 flex-col gap-2 p-3">
             <div className="min-w-0">
               <p className="truncate text-xs text-slate-500">
                 {product.brand} · {formatSize(product.size_kg)}kg
               </p>
-              <h3 className="line-clamp-2 text-sm font-semibold leading-5 text-slate-900">
+              <h3 className="line-clamp-2 min-h-[2.5rem] text-sm font-semibold leading-5 text-slate-900">
                 {product.name}
               </h3>
             </div>
@@ -115,7 +115,7 @@ function ProductCards({ products }: ProductCardsProps) {
             </div>
             <Link
               href={`/products/${product.id}`}
-              className="block rounded-md bg-slate-900 px-3 py-2 text-center text-xs font-medium text-white transition hover:bg-slate-700"
+              className="mt-auto block rounded-md bg-slate-900 px-3 py-2 text-center text-xs font-medium text-white transition hover:bg-slate-700"
             >
               Xem & Đặt
             </Link>

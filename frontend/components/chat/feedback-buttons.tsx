@@ -22,7 +22,9 @@ export function FeedbackButtons({ conversationId, message }: FeedbackButtonsProp
   const hasFeedback = feedbackScore === 1 || feedbackScore === -1
   const feedbackDisabled = hasFeedback || mutation.isPending
 
-  if (message.role !== 'assistant') return null
+  const isAssistant = message.role === 'assistant'
+  const isUser = message.role === 'user'
+  if (!isAssistant && !isUser) return null
 
   async function handleCopy() {
     try {
@@ -31,6 +33,23 @@ export function FeedbackButtons({ conversationId, message }: FeedbackButtonsProp
     } catch {
       toast.error('Không sao chép được')
     }
+  }
+
+  const copyButton = (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      className="h-7 w-7 text-slate-500 hover:text-slate-900"
+      aria-label="Sao chép tin nhắn"
+      onClick={handleCopy}
+    >
+      <Copy className="h-3.5 w-3.5" />
+    </Button>
+  )
+
+  if (isUser) {
+    return <div className="mt-1 flex justify-end gap-1">{copyButton}</div>
   }
 
   return (
@@ -71,16 +90,7 @@ export function FeedbackButtons({ conversationId, message }: FeedbackButtonsProp
       >
         <ThumbsDown className="h-3.5 w-3.5" />
       </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="h-7 w-7 text-slate-500 hover:text-slate-900"
-        aria-label="Sao chép câu trả lời"
-        onClick={handleCopy}
-      >
-        <Copy className="h-3.5 w-3.5" />
-      </Button>
+      {copyButton}
     </div>
   )
 }

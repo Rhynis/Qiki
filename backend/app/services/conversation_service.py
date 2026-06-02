@@ -164,7 +164,8 @@ class ConversationService:
         product_cards: list[ProductCardResponse] = []
         if intent.category in {IntentCategory.PRODUCT_INQUIRY, IntentCategory.PLACE_ORDER}:
             catalog_products = await self.product_service.list_active_catalog(limit=50)
-            product_cards = [self._product_to_card(product) for product in catalog_products]
+            card_products = self._select_card_products(request.content, catalog_products)
+            product_cards = [self._product_to_card(product) for product in card_products]
 
         assistant_message: Message | None
         if intent.category == IntentCategory.SAFETY_EMERGENCY:
@@ -544,6 +545,42 @@ Tin mới:
             sku=product.sku,
             stock_quantity=product.stock_quantity,
         )
+
+    def _select_card_products(
+        self,
+        query: str,
+        products: Sequence[ProductResponse],
+    ) -> list[ProductResponse]:
+        """Pick which product cards to attach for a query.
+
+        A specific question that names a brand and/or cylinder size returns only
+        the matching products. A broad or advice-style question (no brand or
+        size mentioned) returns the whole catalog so the customer can browse.
+        """
+        normalized_query = self._normalize_match_text(query)
+        if not normalized_query:
+            return list(products)
+        query_tokens = set(normalized_query.split())
+
+        brand_and_size: list[ProductResponse] = []
+        brand_only: list[ProductResponse] = []
+        size_only: list[ProductResponse] = []
+        for product in products:
+            brand_tokens = set(self._normalize_match_text(product.brand).split())
+            brand_hit = bool(brand_tokens) and brand_tokens <= query_tokens
+            size_value = self._normalize_match_text(self._format_decimal(product.size_kg))
+            size_hit = f"{size_value}kg" in normalized_query or size_value in query_tokens
+            if brand_hit and size_hit:
+                brand_and_size.append(product)
+            elif brand_hit:
+                brand_only.append(product)
+            elif size_hit:
+                size_only.append(product)
+
+        for group in (brand_and_size, brand_only, size_only):
+            if group:
+                return group
+        return list(products)
 
     async def _create_assistant_message(
         self,
