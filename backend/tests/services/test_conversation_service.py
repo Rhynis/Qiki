@@ -499,6 +499,33 @@ def _multi_word_brand_catalog() -> list[ProductResponse]:
     ]
 
 
+def _substring_brand_catalog() -> list[ProductResponse]:
+    now = datetime.now(UTC)
+    specs = [
+        ("PETROLIMEX-12KG", "Bình gas Petrolimex 12kg", "Petrolimex", "12", "440000", 40),
+        ("SAIGON-PETRO-12KG", "Bình gas Saigon Petro 12kg", "Saigon Petro", "12", "435000", 18),
+        ("MT-GAS-12KG", "Bình gas MT Gas 12kg", "MT Gas", "12", "420000", 22),
+    ]
+    return [
+        ProductResponse(
+            id=uuid.uuid4(),
+            sku=sku,
+            name=name,
+            brand=brand,
+            size_kg=Decimal(size),
+            price=Decimal(price),
+            stock_quantity=stock,
+            description=None,
+            image_url=None,
+            safety_info=None,
+            is_active=True,
+            created_at=now,
+            updated_at=now,
+        )
+        for sku, name, brand, size, price, stock in specs
+    ]
+
+
 @pytest.mark.asyncio
 async def test_product_cards_filtered_for_specific_product() -> None:
     service, _conversations, _messages, _rag, _orders = make_service(
@@ -529,6 +556,41 @@ async def test_product_cards_brand_match_without_generic_gas_word() -> None:
     )
 
     assert [product.sku for product in response.products] == ["SHELL-GAS-12KG"]
+
+
+@pytest.mark.asyncio
+async def test_product_cards_brand_match_all_substring_brands() -> None:
+    service, _conversations, _messages, _rag, _orders = make_service(
+        product_service=FakeProductService(products=_substring_brand_catalog())
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="bình petro 12kg"),
+        user=None,
+    )
+
+    assert sorted(product.sku for product in response.products) == [
+        "PETROLIMEX-12KG",
+        "SAIGON-PETRO-12KG",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_product_cards_full_brand_name_does_not_match_shorter_substring_brand() -> None:
+    service, _conversations, _messages, _rag, _orders = make_service(
+        product_service=FakeProductService(products=_substring_brand_catalog())
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="bình petrolimex 12kg"),
+        user=None,
+    )
+
+    assert [product.sku for product in response.products] == ["PETROLIMEX-12KG"]
 
 
 @pytest.mark.asyncio
