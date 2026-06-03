@@ -30,6 +30,16 @@ export const SHOP_INFO = {
   },
   deliveryAreas: ['Bình Thạnh', 'Thủ Đức'],
   deliveryAreaLabel: 'Bình Thạnh, Thủ Đức',
+  deliveryWards: [
+    'Hiệp Bình',
+    'Thủ Đức',
+    'Tam Bình',
+    'Bình Quới',
+    'Bình Thạnh',
+    'Thạnh Mỹ Tây',
+    'Gia Định',
+    'Bình Lợi Trung',
+  ],
   address: '15 đường số 5, Khu phố 36, Phường Hiệp Bình, Thành phố Hồ Chí Minh',
   addressOld: '15 đường số 5, Khu phố 1, Phường Hiệp Bình Chánh, Thủ Đức, Thành phố Hồ Chí Minh',
   map: {

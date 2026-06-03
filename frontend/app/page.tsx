@@ -11,6 +11,7 @@ import {
   Truck,
 } from 'lucide-react'
 import { ChatOpenButton } from '@/components/shared/chat-open-button'
+import { DeliveryAreaPopover } from '@/components/shared/delivery-area-popover'
 import { Button } from '@/components/ui/button'
 import { SHOP_INFO } from '@/lib/constants'
 
@@ -108,10 +109,11 @@ export default function HomePage() {
               <div className="rounded-md border border-white/10 bg-slate-900 p-4">
                 <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-4">
                   <div>
-                    <p className="text-sm text-slate-400">Tuyến giao hôm nay</p>
-                    <p className="text-2xl font-semibold text-white">
-                      {SHOP_INFO.deliveryAreaLabel}
-                    </p>
+                    <p className="text-sm text-slate-400">Khu vực giao hàng</p>
+                    <div className="mt-1 flex items-center gap-2">
+                      <p className="text-2xl font-semibold text-white">Bình Thạnh & Thủ Đức</p>
+                      <DeliveryAreaPopover />
+                    </div>
                   </div>
                   <div className="rounded-full bg-primary px-3 py-1 text-sm font-semibold text-primary-foreground">
                     Đang nhận đơn
