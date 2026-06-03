@@ -3,16 +3,17 @@ import { Clock, ExternalLink, MapPin, MessageCircle, Phone } from 'lucide-react'
 import { StoreMap } from '@/components/shared/store-map'
 import { StoreStatusBadge } from '@/components/shared/store-status-badge'
 import { SHOP_INFO } from '@/lib/constants'
+import { protectVi } from '@/lib/utils'
 
 export function Footer() {
   return (
     <footer className="border-t bg-white">
       <div className="mx-auto grid max-w-6xl gap-7 px-4 py-8 text-sm text-slate-600 md:grid-cols-2 lg:grid-cols-[1fr_0.9fr_1.15fr_1.25fr]">
         <div>
-          <p className="text-base font-semibold text-slate-950">{SHOP_INFO.name}</p>
+          <p className="text-base font-semibold text-slate-950">{protectVi(SHOP_INFO.name)}</p>
           <p className="mt-2 max-w-sm">
-            Giao gas LPG tận nơi tại {SHOP_INFO.deliveryAreaLabel}, hỗ trợ đặt hàng qua trợ lý ảo,
-            hotline và Zalo.
+            Giao gas LPG tận nơi tại {protectVi(SHOP_INFO.deliveryAreaLabel)}, hỗ trợ đặt hàng qua
+            trợ lý ảo, hotline và Zalo.
           </p>
           <Link
             className="mt-4 inline-block font-medium text-primary hover:underline"
@@ -71,8 +72,10 @@ export function Footer() {
           <div className="flex gap-2">
             <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
             <div>
-              <p className="text-slate-900">{SHOP_INFO.address}</p>
-              <p className="mt-1 text-xs text-slate-500">Địa chỉ cũ: {SHOP_INFO.addressOld}</p>
+              <p className="text-slate-900">{protectVi(SHOP_INFO.address)}</p>
+              <p className="mt-1 text-xs text-slate-500">
+                Địa chỉ cũ: {protectVi(SHOP_INFO.addressOld)}
+              </p>
             </div>
           </div>
         </div>

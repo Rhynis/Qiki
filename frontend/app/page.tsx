@@ -15,6 +15,7 @@ import { DeliveryAreaPopover } from '@/components/shared/delivery-area-popover'
 import { StoreStatusBadge } from '@/components/shared/store-status-badge'
 import { Button } from '@/components/ui/button'
 import { SHOP_INFO } from '@/lib/constants'
+import { protectVi } from '@/lib/utils'
 
 const trustItems = [
   {
@@ -71,38 +72,41 @@ export default function HomePage() {
             <div className="space-y-7">
               <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-sm text-slate-200">
                 <CheckCircle2 className="h-4 w-4 text-primary" />
-                Giao nhanh tận nơi {SHOP_INFO.deliveryAreaLabel}
+                Giao nhanh tận nơi {protectVi(SHOP_INFO.deliveryAreaLabel)}
               </div>
               <div className="space-y-4">
                 <h1 className="max-w-3xl text-4xl font-semibold text-white md:text-6xl">
-                  Đặt gas LPG nhanh, rõ giá, có trợ lý ảo Qiki hỗ trợ từng bước
+                  {protectVi('Đặt gas LPG nhanh, rõ giá, có trợ lý ảo Qiki hỗ trợ từng bước')}
                 </h1>
                 <p className="max-w-2xl text-lg text-slate-300">
-                  Gas Quốc Cường giao bình gas gia đình và kinh doanh tại Bình Thạnh & Thủ Đức, nhận
-                  đơn qua chat, hotline và Zalo trong giờ mở cửa.
+                  {protectVi(
+                    'Gas Quốc Cường giao bình gas gia đình và kinh doanh tại Bình Thạnh & Thủ Đức, nhận đơn qua chat, hotline và Zalo trong giờ mở cửa.'
+                  )}
                 </p>
               </div>
-              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                <ChatOpenButton className="w-full bg-primary text-primary-foreground hover:bg-primary/90 sm:w-auto" />
-                <Button
-                  asChild
-                  className="w-full border-transparent bg-white text-slate-950 hover:bg-slate-100 sm:w-auto"
-                  size="lg"
-                  variant="outline"
-                >
-                  <a href={SHOP_INFO.hotline.href}>
-                    <Phone className="h-4 w-4" />
-                    Gọi đặt: {SHOP_INFO.hotline.label}
-                  </a>
-                </Button>
-                <Button
-                  asChild
-                  className="w-full border-white/30 bg-white/5 text-white hover:bg-white/10 hover:text-white sm:w-auto"
-                  size="lg"
-                  variant="outline"
-                >
-                  <Link href="/products">Xem sản phẩm</Link>
-                </Button>
+              <div className="space-y-3">
+                <ChatOpenButton className="w-full bg-primary text-primary-foreground hover:bg-primary/90" />
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Button
+                    asChild
+                    className="w-full border-transparent bg-white text-slate-950 hover:bg-slate-100"
+                    size="lg"
+                    variant="outline"
+                  >
+                    <a href={SHOP_INFO.hotline.href}>
+                      <Phone className="h-4 w-4" />
+                      Gọi đặt: {SHOP_INFO.hotline.label}
+                    </a>
+                  </Button>
+                  <Button
+                    asChild
+                    className="w-full border-white/30 bg-white/5 text-white hover:bg-white/10 hover:text-white"
+                    size="lg"
+                    variant="outline"
+                  >
+                    <Link href="/products">Xem sản phẩm</Link>
+                  </Button>
+                </div>
               </div>
             </div>
 
@@ -111,11 +115,11 @@ export default function HomePage() {
                 <div className="border-b border-white/10 pb-4">
                   <div className="flex items-start justify-between gap-3">
                     <p className="text-sm text-slate-400">Khu vực giao hàng</p>
-                    <StoreStatusBadge className="shrink-0" variant="dark" />
+                    <StoreStatusBadge className="shrink-0 px-3 py-1 text-sm" variant="dark" />
                   </div>
                   <div className="mt-1.5 flex items-center gap-2">
                     <p className="text-xl font-semibold leading-tight text-white">
-                      Bình Thạnh &amp; Thủ Đức
+                      {protectVi('Bình Thạnh & Thủ Đức')}
                     </p>
                     <DeliveryAreaPopover />
                   </div>
@@ -150,11 +154,11 @@ export default function HomePage() {
               {Array.isArray(item.description) ? (
                 <div className="mt-2 space-y-1 text-sm text-slate-600">
                   {item.description.map((line) => (
-                    <p key={line}>{line}</p>
+                    <p key={line}>{protectVi(line)}</p>
                   ))}
                 </div>
               ) : (
-                <p className="mt-2 text-sm text-slate-600">{item.description}</p>
+                <p className="mt-2 text-sm text-slate-600">{protectVi(item.description)}</p>
               )}
             </div>
           ))}
@@ -167,8 +171,9 @@ export default function HomePage() {
             <div>
               <h2 className="text-3xl font-semibold text-slate-950">Cách đặt hàng</h2>
               <p className="mt-2 max-w-2xl text-slate-600">
-                Quy trình phù hợp cả khách quen gọi đổi bình nhanh và khách mới cần Qiki tư vấn
-                trước khi đặt.
+                {protectVi(
+                  'Quy trình phù hợp cả khách quen gọi đổi bình nhanh và khách mới cần Qiki tư vấn trước khi đặt.'
+                )}
               </p>
             </div>
             <Button asChild variant="outline">
@@ -189,8 +194,12 @@ export default function HomePage() {
                   </span>
                   <step.icon className="h-5 w-5 text-slate-400" />
                 </div>
-                <h3 className="mt-4 text-lg font-semibold text-slate-950">{step.title}</h3>
-                <p className="mt-2 text-sm leading-6 text-slate-600">{step.description}</p>
+                <h3 className="mt-4 text-lg font-semibold text-slate-950">
+                  {protectVi(step.title)}
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  {protectVi(step.description)}
+                </p>
               </div>
             ))}
           </div>
