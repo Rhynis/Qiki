@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import { Toaster } from 'sonner'
 import { ChatWidget } from '@/components/chat/chat-widget'
 import { Providers } from '@/components/providers'
+import { FloatingContact } from '@/components/shared/floating-contact'
+import { Footer } from '@/components/shared/footer'
 import { Header } from '@/components/shared/header'
 import './globals.css'
 
@@ -24,6 +26,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="min-h-screen bg-slate-50">
             <Header />
             <main>{children}</main>
+            <Footer />
+            <FloatingContact />
             <ChatWidget />
           </div>
           <Toaster richColors position="top-right" />
