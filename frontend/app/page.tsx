@@ -22,7 +22,10 @@ const trustItems = [
   },
   {
     title: 'Giao tận nơi theo giờ',
-    description: SHOP_INFO.hours.summary,
+    description: [
+      `${SHOP_INFO.hours.weekdaysLabel}: ${SHOP_INFO.hours.weekdaysTime}`,
+      `${SHOP_INFO.hours.weekendsLabel}: ${SHOP_INFO.hours.weekendsTime}`,
+    ],
     icon: Clock,
   },
   {
@@ -40,7 +43,8 @@ const trustItems = [
 const orderSteps = [
   {
     title: 'Chọn sản phẩm hoặc nhắn Qiki',
-    description: 'Xem catalog, hỏi loại bình phù hợp hoặc gửi nhu cầu đổi gas qua chat.',
+    description:
+      'Tự xem ở trang sản phẩm, thêm vào giỏ rồi thanh toán; hoặc nhờ trợ lý ảo Qiki tư vấn và chốt đơn ngay trong chat.',
     icon: ShoppingBag,
   },
   {
@@ -49,8 +53,9 @@ const orderSteps = [
     icon: Headphones,
   },
   {
-    title: 'Giao tận nơi, thanh toán COD',
-    description: 'Nhân viên giao bình, lắp đặt nếu cần và thu tiền khi khách nhận hàng.',
+    title: 'Giao tận nơi, thu tiền khi nhận',
+    description:
+      'Nhân viên giao bình, lắp đặt nếu cần, lấy vỏ bình cũ và thu tiền mặt hoặc chuyển khoản khi nhận.',
     icon: Truck,
   },
 ]
@@ -68,7 +73,7 @@ export default function HomePage() {
               </div>
               <div className="space-y-4">
                 <h1 className="max-w-3xl text-4xl font-semibold text-white md:text-6xl">
-                  Đặt gas LPG nhanh, rõ giá, có Qiki hỗ trợ từng bước
+                  Đặt gas LPG nhanh, rõ giá, có trợ lý ảo Qiki hỗ trợ từng bước
                 </h1>
                 <p className="max-w-2xl text-lg text-slate-300">
                   Gas Quốc Cường giao bình gas gia đình và kinh doanh tại Bình Thạnh & Thủ Đức, nhận
@@ -116,7 +121,7 @@ export default function HomePage() {
                   {[
                     ['Hotline/Zalo', SHOP_INFO.hotline.label],
                     ['Giờ mở cửa', SHOP_INFO.hours.summary],
-                    ['Thanh toán', 'COD khi nhận bình'],
+                    ['Thanh toán', 'Tiền mặt khi nhận hoặc chuyển khoản'],
                   ].map(([label, value]) => (
                     <div
                       className="flex items-center justify-between gap-4 rounded-md bg-white/[0.06] px-4 py-3"
@@ -139,7 +144,15 @@ export default function HomePage() {
             <div className="rounded-lg border bg-white p-5 shadow-sm" key={item.title}>
               <item.icon className="h-6 w-6 text-primary" />
               <h2 className="mt-4 text-lg font-semibold text-slate-950">{item.title}</h2>
-              <p className="mt-2 text-sm text-slate-600">{item.description}</p>
+              {Array.isArray(item.description) ? (
+                <div className="mt-2 space-y-1 text-sm text-slate-600">
+                  {item.description.map((line) => (
+                    <p key={line}>{line}</p>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-slate-600">{item.description}</p>
+              )}
             </div>
           ))}
         </div>

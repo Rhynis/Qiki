@@ -22,11 +22,21 @@ export const SHOP_INFO = {
   hours: {
     weekdays: 'T2-T6 06:30-20:00',
     weekends: 'T7-CN 07:30-20:00',
+    weekdaysLabel: 'Thứ 2 - Thứ 6',
+    weekdaysTime: '06:30 - 20:00',
+    weekendsLabel: 'Thứ 7 - Chủ nhật',
+    weekendsTime: '07:30 - 20:00',
     summary: 'T2-T6 06:30-20:00 · T7-CN 07:30-20:00',
   },
   deliveryAreas: ['Bình Thạnh', 'Thủ Đức'],
   deliveryAreaLabel: 'Bình Thạnh, Thủ Đức',
-  address: '15 đường số 5, Khu phố 1, Phường Hiệp Bình Chánh, Thủ Đức, TP.HCM',
+  address: '15 đường số 5, Khu phố 36, Phường Hiệp Bình, Thành phố Hồ Chí Minh',
+  addressOld: '15 đường số 5, Khu phố 1, Phường Hiệp Bình Chánh, Thủ Đức, Thành phố Hồ Chí Minh',
+  map: {
+    embedSrc:
+      'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3918.7643965987318!2d106.71049211181263!3d10.829333789278088!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x31752887b578d34b%3A0x5dcf1fcbd8f8eb28!2zQ-G7rWEgaMOgbmcgZ2FzIFF14buRYyBDxrDhu51uZw!5e0!3m2!1svi!2s!4v1780486193049!5m2!1svi!2s',
+    link: 'https://maps.app.goo.gl/3kwGY46Pzpbp7v6t8',
+  },
 } as const
 
 export const ROUTES = {
