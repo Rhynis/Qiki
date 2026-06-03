@@ -63,7 +63,7 @@ export default function HomePage() {
           <div className="grid gap-10 md:grid-cols-[1.08fr_0.92fr] md:items-center">
             <div className="space-y-7">
               <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-sm text-slate-200">
-                <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+                <CheckCircle2 className="h-4 w-4 text-primary" />
                 Giao nhanh tận nơi {SHOP_INFO.deliveryAreaLabel}
               </div>
               <div className="space-y-4">
@@ -76,7 +76,7 @@ export default function HomePage() {
                 </p>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                <ChatOpenButton className="bg-emerald-500 text-slate-950 hover:bg-emerald-400" />
+                <ChatOpenButton className="bg-primary text-primary-foreground hover:bg-primary/90" />
                 <Button
                   asChild
                   className="border-white/20 bg-white text-slate-950 hover:bg-slate-100"
@@ -108,7 +108,7 @@ export default function HomePage() {
                       {SHOP_INFO.deliveryAreaLabel}
                     </p>
                   </div>
-                  <div className="rounded-full bg-emerald-400 px-3 py-1 text-sm font-semibold text-slate-950">
+                  <div className="rounded-full bg-primary px-3 py-1 text-sm font-semibold text-primary-foreground">
                     Đang nhận đơn
                   </div>
                 </div>
@@ -137,7 +137,7 @@ export default function HomePage() {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {trustItems.map((item) => (
             <div className="rounded-lg border bg-white p-5 shadow-sm" key={item.title}>
-              <item.icon className="h-6 w-6 text-slate-800" />
+              <item.icon className="h-6 w-6 text-primary" />
               <h2 className="mt-4 text-lg font-semibold text-slate-950">{item.title}</h2>
               <p className="mt-2 text-sm text-slate-600">{item.description}</p>
             </div>
@@ -165,7 +165,7 @@ export default function HomePage() {
             {orderSteps.map((step, index) => (
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-5" key={step.title}>
                 <div className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-950 text-sm font-semibold text-white">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
                     {index + 1}
                   </span>
                   <step.icon className="h-5 w-5 text-slate-700" />
@@ -181,7 +181,7 @@ export default function HomePage() {
       <section className="mx-auto max-w-6xl px-4 py-12">
         <div className="rounded-lg border bg-slate-950 p-6 text-white md:flex md:items-center md:justify-between md:gap-8">
           <div>
-            <p className="text-sm font-medium text-emerald-300">Cần đổi gas gấp?</p>
+            <p className="text-sm font-medium text-primary">Cần đổi gas gấp?</p>
             <h2 className="mt-2 text-2xl font-semibold">
               Gọi cửa hàng để kiểm tra tuyến giao gần nhất
             </h2>
@@ -191,7 +191,7 @@ export default function HomePage() {
             </p>
           </div>
           <div className="mt-5 flex flex-col gap-3 sm:flex-row md:mt-0">
-            <Button asChild className="bg-white text-slate-950 hover:bg-slate-100">
+            <Button asChild className="bg-primary text-primary-foreground hover:bg-primary/90">
               <a href={SHOP_INFO.hotline.href}>Gọi {SHOP_INFO.hotline.label}</a>
             </Button>
             <Button
