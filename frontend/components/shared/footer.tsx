@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Clock, ExternalLink, MapPin, MessageCircle, Phone } from 'lucide-react'
-import { OpeningHoursBadge } from '@/components/shared/opening-hours-badge'
+import { StoreMap } from '@/components/shared/store-map'
+import { StoreStatusBadge } from '@/components/shared/store-status-badge'
 import { SHOP_INFO } from '@/lib/constants'
 
 export function Footer() {
@@ -50,7 +51,7 @@ export function Footer() {
           <div className="flex items-start gap-2">
             <Clock className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
             <div className="space-y-2">
-              <OpeningHoursBadge />
+              <StoreStatusBadge variant="light" />
               <div className="space-y-1">
                 <p>
                   <span className="font-medium text-slate-900">
@@ -77,14 +78,7 @@ export function Footer() {
         </div>
         <div className="space-y-3">
           <p className="font-semibold text-slate-950">Bản đồ cửa hàng</p>
-          <iframe
-            allowFullScreen
-            className="h-[260px] w-full rounded-md border"
-            loading="lazy"
-            referrerPolicy="no-referrer-when-downgrade"
-            src={SHOP_INFO.map.embedSrc}
-            title="Bản đồ cửa hàng Gas Quốc Cường"
-          />
+          <StoreMap />
           <a
             className="inline-flex items-center gap-2 font-medium text-primary hover:underline"
             href={SHOP_INFO.map.link}

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { ChatOpenButton } from '@/components/shared/chat-open-button'
 import { DeliveryAreaPopover } from '@/components/shared/delivery-area-popover'
+import { StoreStatusBadge } from '@/components/shared/store-status-badge'
 import { Button } from '@/components/ui/button'
 import { SHOP_INFO } from '@/lib/constants'
 
@@ -82,10 +83,10 @@ export default function HomePage() {
                 </p>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                <ChatOpenButton className="bg-primary text-primary-foreground hover:bg-primary/90" />
+                <ChatOpenButton className="w-full bg-primary text-primary-foreground hover:bg-primary/90 sm:w-auto" />
                 <Button
                   asChild
-                  className="border-white/20 bg-white text-slate-950 hover:bg-slate-100"
+                  className="w-full border-transparent bg-white text-slate-950 hover:bg-slate-100 sm:w-auto"
                   size="lg"
                   variant="outline"
                 >
@@ -96,7 +97,7 @@ export default function HomePage() {
                 </Button>
                 <Button
                   asChild
-                  className="border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white"
+                  className="w-full border-white/30 bg-white/5 text-white hover:bg-white/10 hover:text-white sm:w-auto"
                   size="lg"
                   variant="outline"
                 >
@@ -107,16 +108,16 @@ export default function HomePage() {
 
             <div className="rounded-lg border border-white/10 bg-white/[0.06] p-5 shadow-2xl shadow-slate-950/40">
               <div className="rounded-md border border-white/10 bg-slate-900 p-4">
-                <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-4">
-                  <div>
+                <div className="border-b border-white/10 pb-4">
+                  <div className="flex items-start justify-between gap-3">
                     <p className="text-sm text-slate-400">Khu vực giao hàng</p>
-                    <div className="mt-1 flex items-center gap-2">
-                      <p className="text-2xl font-semibold text-white">Bình Thạnh & Thủ Đức</p>
-                      <DeliveryAreaPopover />
-                    </div>
+                    <StoreStatusBadge className="shrink-0" variant="dark" />
                   </div>
-                  <div className="rounded-full bg-primary px-3 py-1 text-sm font-semibold text-primary-foreground">
-                    Đang nhận đơn
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <p className="text-xl font-semibold leading-tight text-white">
+                      Bình Thạnh &amp; Thủ Đức
+                    </p>
+                    <DeliveryAreaPopover />
                   </div>
                 </div>
                 <div className="mt-5 grid gap-3">
@@ -162,7 +163,7 @@ export default function HomePage() {
 
       <section className="border-y bg-white">
         <div className="mx-auto max-w-6xl px-4 py-12">
-          <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+          <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
             <div>
               <h2 className="text-3xl font-semibold text-slate-950">Cách đặt hàng</h2>
               <p className="mt-2 max-w-2xl text-slate-600">
@@ -178,15 +179,18 @@ export default function HomePage() {
           </div>
           <div className="mt-8 grid gap-4 md:grid-cols-3">
             {orderSteps.map((step, index) => (
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-5" key={step.title}>
-                <div className="flex items-center gap-3">
+              <div
+                className="flex h-full flex-col rounded-lg border border-slate-200 bg-slate-50 p-5"
+                key={step.title}
+              >
+                <div className="flex items-center justify-between">
                   <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
                     {index + 1}
                   </span>
-                  <step.icon className="h-5 w-5 text-slate-700" />
+                  <step.icon className="h-5 w-5 text-slate-400" />
                 </div>
-                <h3 className="mt-5 text-lg font-semibold text-slate-950">{step.title}</h3>
-                <p className="mt-2 text-sm text-slate-600">{step.description}</p>
+                <h3 className="mt-4 text-lg font-semibold text-slate-950">{step.title}</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-600">{step.description}</p>
               </div>
             ))}
           </div>
@@ -211,7 +215,7 @@ export default function HomePage() {
             </Button>
             <Button
               asChild
-              className="border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white"
+              className="border-white/30 bg-white/5 text-white hover:bg-white/10 hover:text-white"
               variant="outline"
             >
               <Link href="/track">Tra cứu đơn</Link>
