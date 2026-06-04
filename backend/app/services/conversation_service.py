@@ -566,12 +566,12 @@ Tin mới:
         brand_only: list[ProductResponse] = []
         size_only: list[ProductResponse] = []
         for product in products:
-            brand_tokens = set(self._normalize_match_text(product.brand).split())
+            normalized_brand = self._normalize_match_text(product.brand)
+            brand_tokens = set(normalized_brand.split())
             distinctive_brand_tokens = brand_tokens - {"gas"}
-            brand_hit = bool(distinctive_brand_tokens) and any(
-                brand_token == query_token or (len(query_token) >= 3 and query_token in brand_token)
-                for brand_token in distinctive_brand_tokens
-                for query_token in query_tokens
+            brand_hit = bool(distinctive_brand_tokens) and (
+                bool(distinctive_brand_tokens & query_tokens)
+                or normalized_brand in normalized_query
             )
             size_value = self._normalize_match_text(self._format_decimal(product.size_kg))
             size_hit = f"{size_value}kg" in normalized_query or size_value in query_tokens

@@ -504,6 +504,7 @@ def _substring_brand_catalog() -> list[ProductResponse]:
     specs = [
         ("PETROLIMEX-12KG", "Bình gas Petrolimex 12kg", "Petrolimex", "12", "440000", 40),
         ("SAIGON-PETRO-12KG", "Bình gas Saigon Petro 12kg", "Saigon Petro", "12", "435000", 18),
+        ("SAIGON-PETRO-6KG", "Bình gas Saigon Petro 6kg", "Saigon Petro", "6", "260000", 12),
         ("MT-GAS-12KG", "Bình gas MT Gas 12kg", "MT Gas", "12", "420000", 22),
     ]
     return [
@@ -559,7 +560,7 @@ async def test_product_cards_brand_match_without_generic_gas_word() -> None:
 
 
 @pytest.mark.asyncio
-async def test_product_cards_brand_match_all_substring_brands() -> None:
+async def test_product_cards_brand_match_exact_token_without_substring_bleed() -> None:
     service, _conversations, _messages, _rag, _orders = make_service(
         product_service=FakeProductService(products=_substring_brand_catalog())
     )
@@ -571,9 +572,25 @@ async def test_product_cards_brand_match_all_substring_brands() -> None:
         user=None,
     )
 
-    assert sorted(product.sku for product in response.products) == [
-        "PETROLIMEX-12KG",
+    assert [product.sku for product in response.products] == ["SAIGON-PETRO-12KG"]
+
+
+@pytest.mark.asyncio
+async def test_product_cards_saigon_petro_query_excludes_petrolimex() -> None:
+    service, _conversations, _messages, _rag, _orders = make_service(
+        product_service=FakeProductService(products=_substring_brand_catalog())
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="bình saigon petro"),
+        user=None,
+    )
+
+    assert [product.sku for product in response.products] == [
         "SAIGON-PETRO-12KG",
+        "SAIGON-PETRO-6KG",
     ]
 
 
