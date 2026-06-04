@@ -28,6 +28,23 @@ describe('productSchema', () => {
 
     expect(result.success).toBe(false)
   })
+
+  it('accepts water products with 20 liter size', () => {
+    const result = productSchema.parse({
+      sku: 'vihawa-20l',
+      name: 'Nuoc Vihawa 20 lit',
+      brand: 'Vihawa',
+      category: 'nuoc_uong',
+      unit: 'lít',
+      size_kg: '20',
+      price: '50000',
+      stock_quantity: 50,
+      pricing_note: 'Giao hang tinh them phi.',
+    })
+
+    expect(result.sku).toBe('VIHAWA-20L')
+    expect(result.size_kg).toBe('20')
+  })
 })
 
 describe('productFiltersSchema', () => {

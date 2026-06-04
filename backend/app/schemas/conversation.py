@@ -90,6 +90,7 @@ class ProductCardResponse(BaseModel):
     name: str
     brand: str
     size_kg: Decimal
+    unit: str = "kg"
     price: Decimal
     image_url: str | None = None
     sku: str

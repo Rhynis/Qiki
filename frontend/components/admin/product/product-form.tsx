@@ -15,18 +15,27 @@ import {
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { productSchema } from '@/lib/validations/product'
-import type { Product, ProductCreateInput, ProductUpdateInput } from '@/types/product'
+import type {
+  Product,
+  ProductCategory,
+  ProductCreateInput,
+  ProductUnit,
+  ProductUpdateInput,
+} from '@/types/product'
 
 type ProductFormState = {
   sku: string
   name: string
   brand: string
+  category: ProductCategory
+  unit: ProductUnit
   size_kg: string
   price: string
   stock_quantity: string
   description: string
   image_url: string
   safety_info: string
+  pricing_note: string
   is_active: boolean
 }
 
@@ -40,12 +49,15 @@ const emptyState: ProductFormState = {
   sku: '',
   name: '',
   brand: '',
+  category: 'gas',
+  unit: 'kg',
   size_kg: '12',
   price: '',
   stock_quantity: '0',
   description: '',
   image_url: '',
   safety_info: '',
+  pricing_note: '',
   is_active: true,
 }
 
@@ -55,12 +67,15 @@ function initialState(product?: Product): ProductFormState {
     sku: product.sku,
     name: product.name,
     brand: product.brand,
+    category: product.category,
+    unit: product.unit,
     size_kg: Number(product.size_kg).toString(),
     price: Number(product.price).toString(),
     stock_quantity: product.stock_quantity.toString(),
     description: product.description ?? '',
     image_url: product.image_url ?? '',
     safety_info: product.safety_info ?? '',
+    pricing_note: product.pricing_note ?? '',
     is_active: product.is_active,
   }
 }
@@ -75,7 +90,20 @@ export function ProductForm({ product, isSubmitting = false, onSubmit }: Product
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   function updateField(field: keyof ProductFormState, value: string | boolean) {
-    setForm((current) => ({ ...current, [field]: value }))
+    setForm((current) => {
+      if (field === 'category' && value === 'nuoc_uong') {
+        return {
+          ...current,
+          category: value,
+          unit: 'lít',
+          size_kg: current.category === 'nuoc_uong' ? current.size_kg || '20' : '20',
+        }
+      }
+      if (field === 'category' && value === 'gas') {
+        return { ...current, category: value, unit: 'kg', size_kg: '12', pricing_note: '' }
+      }
+      return { ...current, [field]: value }
+    })
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -100,6 +128,7 @@ export function ProductForm({ product, isSubmitting = false, onSubmit }: Product
       description: normalizeText(form.description),
       image_url: normalizeText(form.image_url),
       safety_info: normalizeText(form.safety_info),
+      pricing_note: form.category === 'nuoc_uong' ? normalizeText(form.pricing_note) : null,
       ...(product ? { is_active: form.is_active } : {}),
     })
   }
@@ -119,17 +148,53 @@ export function ProductForm({ product, isSubmitting = false, onSubmit }: Product
             onChange={(event) => updateField('brand', event.target.value)}
           />
         </FieldError>
-        <FieldError label="Kích thước" error={errors.size_kg}>
-          <Select value={form.size_kg} onValueChange={(value) => updateField('size_kg', value)}>
+        <FieldError label="Danh mục" error={errors.category}>
+          <Select
+            value={form.category}
+            onValueChange={(value) => updateField('category', value as ProductCategory)}
+          >
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="6">6kg</SelectItem>
-              <SelectItem value="12">12kg</SelectItem>
-              <SelectItem value="45">45kg</SelectItem>
+              <SelectItem value="gas">Gas</SelectItem>
+              <SelectItem value="nuoc_uong">Nước Uống</SelectItem>
             </SelectContent>
           </Select>
+        </FieldError>
+        <FieldError label="Đơn vị" error={errors.unit}>
+          <Select
+            value={form.unit}
+            onValueChange={(value) => updateField('unit', value as ProductUnit)}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="kg">kg</SelectItem>
+              <SelectItem value="lít">lít</SelectItem>
+            </SelectContent>
+          </Select>
+        </FieldError>
+        <FieldError label="Kích thước" error={errors.size_kg}>
+          {form.category === 'gas' ? (
+            <Select value={form.size_kg} onValueChange={(value) => updateField('size_kg', value)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="6">6 kg</SelectItem>
+                <SelectItem value="12">12 kg</SelectItem>
+                <SelectItem value="45">45 kg</SelectItem>
+              </SelectContent>
+            </Select>
+          ) : (
+            <Input
+              inputMode="decimal"
+              value={form.size_kg}
+              onChange={(event) => updateField('size_kg', event.target.value)}
+            />
+          )}
         </FieldError>
         <FieldError label="Giá" error={errors.price}>
           <Input
@@ -166,6 +231,14 @@ export function ProductForm({ product, isSubmitting = false, onSubmit }: Product
           onChange={(event) => updateField('safety_info', event.target.value)}
         />
       </FieldError>
+      {form.category === 'nuoc_uong' ? (
+        <FieldError label="Ghi chú phụ phí" error={errors.pricing_note}>
+          <Textarea
+            value={form.pricing_note}
+            onChange={(event) => updateField('pricing_note', event.target.value)}
+          />
+        </FieldError>
+      ) : null}
 
       {product ? (
         <label className="flex items-center justify-between rounded-lg border p-3 text-sm">

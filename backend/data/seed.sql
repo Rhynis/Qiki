@@ -12,18 +12,32 @@ VALUES
   ('staff5@gasbot.vn', 'Hoàng Ngọc Mai', '+84901234508', 'staff')
 ON CONFLICT (email) DO NOTHING;
 
-INSERT INTO products (sku, name, brand, size_kg, price, stock_quantity, description, safety_info)
+INSERT INTO products (
+  sku,
+  name,
+  brand,
+  size_kg,
+  category,
+  unit,
+  price,
+  stock_quantity,
+  description,
+  safety_info,
+  pricing_note
+)
 VALUES
-  ('PETROLIMEX-12KG', 'Bình gas Petrolimex 12kg', 'Petrolimex', 12, 440000, 40, 'Bình gas gia đình phổ biến, phù hợp nấu ăn hằng ngày.', 'Đặt bình nơi thoáng khí, khóa van sau khi sử dụng.'),
-  ('PETROLIMEX-45KG', 'Bình gas Petrolimex 45kg', 'Petrolimex', 45, 1650000, 15, 'Bình gas dung tích lớn cho nhà hàng và bếp công nghiệp.', 'Cần kỹ thuật viên kiểm tra van và dây dẫn định kỳ.'),
-  ('SAIGONPETRO-6KG', 'Bình gas Saigon Petro 6kg', 'Saigon Petro', 6, 220000, 30, 'Bình nhỏ gọn cho hộ gia đình ít sử dụng.', 'Không đặt gần nguồn nhiệt hoặc ổ điện.'),
-  ('SAIGONPETRO-12KG', 'Bình gas Saigon Petro 12kg', 'Saigon Petro', 12, 430000, 35, 'Bình gas gia đình giá tốt, dễ đổi bình.', 'Kiểm tra mùi gas trước và sau khi thay bình.'),
-  ('TOTAL-12KG', 'Bình gas Total 12kg', 'Total Gas', 12, 445000, 25, 'Sản phẩm gas chất lượng cao cho gia đình.', 'Dùng van điều áp chính hãng và dây dẫn còn hạn.'),
-  ('TOTAL-45KG', 'Bình gas Total 45kg', 'Total Gas', 45, 1680000, 10, 'Bình dung tích lớn cho nhu cầu sử dụng cao.', 'Lắp đặt tại khu vực thông thoáng, có biển cảnh báo.'),
-  ('ELF-12KG', 'Bình gas Elf 12kg', 'Elf Gas', 12, 435000, 28, 'Gas gia đình ổn định, dễ sử dụng.', 'Không tự ý sửa van hoặc thay dây dẫn khi có nghi ngờ rò rỉ.'),
-  ('VTGAS-12KG', 'Bình gas VT Gas 12kg', 'VT Gas', 12, 425000, 26, 'Lựa chọn tiết kiệm cho gia đình.', 'Luôn khóa van bình khi không sử dụng.'),
-  ('SHELL-12KG', 'Bình gas Shell 12kg', 'Shell Gas', 12, 450000, 20, 'Thương hiệu quen thuộc, chất lượng ổn định.', 'Nếu ngửi thấy mùi gas, mở cửa và gọi hotline ngay.'),
-  ('MTGAS-12KG', 'Bình gas MT Gas 12kg', 'MT Gas', 12, 420000, 22, 'Sản phẩm phù hợp nhu cầu nấu ăn hằng ngày.', 'Không để bình gas trong phòng kín.')
+  ('PETROLIMEX-12KG', 'Bình gas Petrolimex 12kg', 'Petrolimex', 12, 'gas', 'kg', 440000, 40, 'Bình gas gia đình phổ biến, phù hợp nấu ăn hằng ngày.', 'Đặt bình nơi thoáng khí, khóa van sau khi sử dụng.', NULL),
+  ('PETROLIMEX-45KG', 'Bình gas Petrolimex 45kg', 'Petrolimex', 45, 'gas', 'kg', 1650000, 15, 'Bình gas dung tích lớn cho nhà hàng và bếp công nghiệp.', 'Cần kỹ thuật viên kiểm tra van và dây dẫn định kỳ.', NULL),
+  ('SAIGONPETRO-6KG', 'Bình gas Saigon Petro 6kg', 'Saigon Petro', 6, 'gas', 'kg', 220000, 30, 'Bình nhỏ gọn cho hộ gia đình ít sử dụng.', 'Không đặt gần nguồn nhiệt hoặc ổ điện.', NULL),
+  ('SAIGONPETRO-12KG', 'Bình gas Saigon Petro 12kg', 'Saigon Petro', 12, 'gas', 'kg', 430000, 35, 'Bình gas gia đình giá tốt, dễ đổi bình.', 'Kiểm tra mùi gas trước và sau khi thay bình.', NULL),
+  ('TOTAL-12KG', 'Bình gas Total 12kg', 'Total Gas', 12, 'gas', 'kg', 445000, 25, 'Sản phẩm gas chất lượng cao cho gia đình.', 'Dùng van điều áp chính hãng và dây dẫn còn hạn.', NULL),
+  ('TOTAL-45KG', 'Bình gas Total 45kg', 'Total Gas', 45, 'gas', 'kg', 1680000, 10, 'Bình dung tích lớn cho nhu cầu sử dụng cao.', 'Lắp đặt tại khu vực thông thoáng, có biển cảnh báo.', NULL),
+  ('ELF-12KG', 'Bình gas Elf 12kg', 'Elf Gas', 12, 'gas', 'kg', 435000, 28, 'Gas gia đình ổn định, dễ sử dụng.', 'Không tự ý sửa van hoặc thay dây dẫn khi có nghi ngờ rò rỉ.', NULL),
+  ('VTGAS-12KG', 'Bình gas VT Gas 12kg', 'VT Gas', 12, 'gas', 'kg', 425000, 26, 'Lựa chọn tiết kiệm cho gia đình.', 'Luôn khóa van bình khi không sử dụng.', NULL),
+  ('SHELL-12KG', 'Bình gas Shell 12kg', 'Shell Gas', 12, 'gas', 'kg', 450000, 20, 'Thương hiệu quen thuộc, chất lượng ổn định.', 'Nếu ngửi thấy mùi gas, mở cửa và gọi hotline ngay.', NULL),
+  ('MTGAS-12KG', 'Bình gas MT Gas 12kg', 'MT Gas', 12, 'gas', 'kg', 420000, 22, 'Sản phẩm phù hợp nhu cầu nấu ăn hằng ngày.', 'Không để bình gas trong phòng kín.', NULL),
+  ('VIHAWA-20L', 'Nước Vihawa 20 lít', 'Vihawa', 20, 'nuoc_uong', 'lít', 50000, 50, 'Bình nước uống Vihawa 20 lít dùng cho gia đình và văn phòng.', NULL, 'Giá niêm yết là giá mua tại cửa hàng. Giao hàng tận nơi +5.000đ; lên lầu +5.000đ mỗi lầu.'),
+  ('HOANHAO-20L', 'Nước Hoàn Hảo 20 lít', 'Hoàn Hảo', 20, 'nuoc_uong', 'lít', 15000, 50, 'Bình nước uống Hoàn Hảo 20 lít tiện đổi bình định kỳ.', NULL, 'Giá niêm yết là giá mua tại cửa hàng. Giao hàng tận nơi +5.000đ; lên lầu +5.000đ mỗi lầu.')
 ON CONFLICT (sku) DO NOTHING;
 
 INSERT INTO knowledge_base (title, content, category, source, embedding)

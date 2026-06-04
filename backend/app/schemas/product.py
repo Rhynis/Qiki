@@ -10,11 +10,13 @@ from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, mod
 
 ALLOWED_SIZES = {Decimal("6"), Decimal("12"), Decimal("45")}
 SKU_PATTERN = re.compile(r"^[A-Z0-9-]+$")
+ProductCategory = Literal["gas", "nuoc_uong"]
+ProductUnit = Literal["kg", "lít"]
 
 
-def validate_size(value: Decimal | None) -> Decimal | None:
-    """Validate supported LPG cylinder sizes."""
-    if value is not None and value not in ALLOWED_SIZES:
+def validate_gas_size(value: Decimal | None, category: str | None) -> Decimal | None:
+    """Validate supported LPG cylinder sizes for gas products."""
+    if category == "gas" and value is not None and value not in ALLOWED_SIZES:
         raise ValueError("size_kg must be one of 6, 12, or 45")
     return value
 
@@ -25,15 +27,21 @@ class ProductBase(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     brand: str = Field(min_length=1, max_length=100)
     size_kg: Decimal
+    category: ProductCategory = "gas"
+    unit: ProductUnit = "kg"
     price: Decimal = Field(gt=0)
     description: str | None = None
     image_url: HttpUrl | None = None
     safety_info: str | None = None
+    pricing_note: str | None = None
 
-    @field_validator("size_kg")
-    @classmethod
-    def validate_size_kg(cls, value: Decimal) -> Decimal:
-        return validate_size(value) or value
+    @model_validator(mode="after")
+    def validate_product_category(self) -> "ProductBase":
+        """Validate category-dependent product fields."""
+        validate_gas_size(self.size_kg, self.category)
+        if self.category == "gas" and self.pricing_note:
+            raise ValueError("pricing_note is only supported for nuoc_uong products")
+        return self
 
 
 class ProductCreate(ProductBase):
@@ -58,17 +66,24 @@ class ProductUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     brand: str | None = Field(default=None, min_length=1, max_length=100)
     size_kg: Decimal | None = None
+    category: ProductCategory | None = None
+    unit: ProductUnit | None = None
     price: Decimal | None = Field(default=None, gt=0)
     description: str | None = None
     image_url: HttpUrl | None = None
     safety_info: str | None = None
+    pricing_note: str | None = None
     stock_quantity: int | None = Field(default=None, ge=0)
     is_active: bool | None = None
 
-    @field_validator("size_kg")
-    @classmethod
-    def validate_size_kg(cls, value: Decimal | None) -> Decimal | None:
-        return validate_size(value)
+    @model_validator(mode="after")
+    def validate_product_category(self) -> "ProductUpdate":
+        """Validate category-dependent product fields."""
+        category = self.category or "gas"
+        validate_gas_size(self.size_kg, category)
+        if category == "gas" and self.pricing_note:
+            raise ValueError("pricing_note is only supported for nuoc_uong products")
+        return self
 
     @field_validator("sku")
     @classmethod
@@ -107,6 +122,7 @@ class ProductSearchParams(BaseModel):
 
     search: str | None = Field(default=None, max_length=255)
     brand: str | None = None
+    category: ProductCategory | None = None
     min_price: Decimal | None = None
     max_price: Decimal | None = None
     size_kg: Decimal | None = None
@@ -116,14 +132,10 @@ class ProductSearchParams(BaseModel):
     skip: int = Field(default=0, ge=0)
     limit: int = Field(default=20, ge=1, le=100)
 
-    @field_validator("size_kg")
-    @classmethod
-    def validate_size_kg(cls, value: Decimal | None) -> Decimal | None:
-        return validate_size(value)
-
     @model_validator(mode="after")
-    def validate_price_range(self) -> "ProductSearchParams":
-        """Validate min/max price relationship."""
+    def validate_search_params(self) -> "ProductSearchParams":
+        """Validate search filters."""
+        validate_gas_size(self.size_kg, self.category or "gas")
         if (
             self.min_price is not None
             and self.max_price is not None

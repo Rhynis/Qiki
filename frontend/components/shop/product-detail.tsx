@@ -3,13 +3,13 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { ArrowLeft, Flame, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, Flame, Info, ShieldCheck } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { StockBadge } from '@/components/shop/stock-badge'
 import { useCartStore } from '@/lib/stores/cart-store'
-import { formatPrice } from '@/lib/utils/format'
+import { formatPrice, formatProductSize } from '@/lib/utils/format'
 import type { Product } from '@/types/product'
 
 type ProductDetailProps = {
@@ -52,7 +52,7 @@ export function ProductDetail({ product }: ProductDetailProps) {
             <div className="flex flex-wrap gap-2">
               <StockBadge stockQuantity={product.stock_quantity} />
               <Badge variant="outline">{product.brand}</Badge>
-              <Badge variant="outline">{Number(product.size_kg).toLocaleString('vi-VN')}kg</Badge>
+              <Badge variant="outline">{formatProductSize(product.size_kg, product.unit)}</Badge>
             </div>
             <h1 className="text-3xl font-semibold tracking-normal text-slate-950 md:text-4xl">
               {product.name}
@@ -60,6 +60,18 @@ export function ProductDetail({ product }: ProductDetailProps) {
             <p className="text-3xl font-semibold text-primary">{formatPrice(product.price)}</p>
             <p className="text-sm text-slate-600">SKU {product.sku}</p>
           </div>
+
+          {product.pricing_note ? (
+            <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm text-slate-700">
+              <div className="flex gap-3">
+                <Info className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                <div>
+                  <p className="font-semibold text-slate-950">Lưu ý phụ phí</p>
+                  <p className="mt-1 leading-6">{product.pricing_note}</p>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           {product.description ? (
             <Card>

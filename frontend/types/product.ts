@@ -4,15 +4,21 @@ export interface Product {
   name: string
   brand: string
   size_kg: string
+  category: ProductCategory
+  unit: ProductUnit
   price: string
   stock_quantity: number
   description: string | null
   image_url: string | null
   safety_info: string | null
+  pricing_note: string | null
   is_active: boolean
   created_at: string
   updated_at: string
 }
+
+export type ProductCategory = 'gas' | 'nuoc_uong'
+export type ProductUnit = 'kg' | 'lít'
 
 export interface ProductListResponse {
   items: Product[]
@@ -25,6 +31,7 @@ export interface ProductListResponse {
 export interface ProductSearchParams {
   search?: string
   brand?: string
+  category?: ProductCategory
   min_price?: string
   max_price?: string
   size_kg?: string
@@ -40,11 +47,14 @@ export interface ProductCreateInput {
   name: string
   brand: string
   size_kg: string
+  category?: ProductCategory
+  unit?: ProductUnit
   price: string
   stock_quantity: number
   description?: string | null
   image_url?: string | null
   safety_info?: string | null
+  pricing_note?: string | null
 }
 
 export type ProductUpdateInput = Partial<ProductCreateInput> & {

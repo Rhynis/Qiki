@@ -9,7 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { formatPrice } from '@/lib/utils/format'
+import { formatPrice, formatProductSize } from '@/lib/utils/format'
 import type { Product } from '@/types/product'
 
 type ProductTableProps = {
@@ -37,7 +37,7 @@ export function ProductTable({ products, onEdit, onDelete }: ProductTableProps) 
             <TableCell>
               <div className="font-medium">{product.name}</div>
               <div className="text-sm text-slate-600">
-                {product.brand} · {Number(product.size_kg).toLocaleString('vi-VN')}kg
+                {product.brand} · {formatProductSize(product.size_kg, product.unit)}
               </div>
             </TableCell>
             <TableCell>{product.sku}</TableCell>
