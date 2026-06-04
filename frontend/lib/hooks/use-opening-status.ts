@@ -26,8 +26,13 @@ export function useOpeningStatus(): OpeningStatus {
   const [status, setStatus] = useState<OpeningStatus>(getOpeningStatus)
 
   useEffect(() => {
-    const intervalId = window.setInterval(() => setStatus(getOpeningStatus()), 60_000)
-    return () => window.clearInterval(intervalId)
+    const updateStatus = () => setStatus(getOpeningStatus())
+    const mountUpdateId = window.setTimeout(updateStatus, 0)
+    const intervalId = window.setInterval(updateStatus, 60_000)
+    return () => {
+      window.clearTimeout(mountUpdateId)
+      window.clearInterval(intervalId)
+    }
   }, [])
 
   return status
