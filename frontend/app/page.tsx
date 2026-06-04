@@ -84,29 +84,27 @@ export default function HomePage() {
                   )}
                 </p>
               </div>
-              <div className="space-y-3">
+              <div className="flex max-w-md flex-col gap-3">
                 <ChatOpenButton className="w-full bg-primary text-primary-foreground hover:bg-primary/90" />
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <Button
-                    asChild
-                    className="w-full border-transparent bg-white text-slate-950 hover:bg-slate-100"
-                    size="lg"
-                    variant="outline"
-                  >
-                    <a href={SHOP_INFO.hotline.href}>
-                      <Phone className="h-4 w-4" />
-                      Gọi đặt: {SHOP_INFO.hotline.label}
-                    </a>
-                  </Button>
-                  <Button
-                    asChild
-                    className="w-full border-white/30 bg-white/5 text-white hover:bg-white/10 hover:text-white"
-                    size="lg"
-                    variant="outline"
-                  >
-                    <Link href="/products">Xem sản phẩm</Link>
-                  </Button>
-                </div>
+                <Button
+                  asChild
+                  className="w-full border-transparent bg-white text-slate-950 hover:bg-slate-100"
+                  size="lg"
+                  variant="outline"
+                >
+                  <a href={SHOP_INFO.hotline.href}>
+                    <Phone className="h-4 w-4" />
+                    Gọi đặt: {SHOP_INFO.hotline.label}
+                  </a>
+                </Button>
+                <Button
+                  asChild
+                  className="w-full border-white/40 bg-white/5 text-white hover:bg-white/10 hover:text-white"
+                  size="lg"
+                  variant="outline"
+                >
+                  <Link href="/products">Xem sản phẩm</Link>
+                </Button>
               </div>
             </div>
 
@@ -224,7 +222,7 @@ export default function HomePage() {
             </Button>
             <Button
               asChild
-              className="border-white/30 bg-white/5 text-white hover:bg-white/10 hover:text-white"
+              className="border-white/40 bg-white/5 text-white hover:bg-white/10 hover:text-white"
               variant="outline"
             >
               <Link href="/track">Tra cứu đơn</Link>
