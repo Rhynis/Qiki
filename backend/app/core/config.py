@@ -75,6 +75,7 @@ class Settings(BaseSettings):
     BCRYPT_ROUNDS: int = 12
 
     CORS_ORIGINS: str = "http://localhost:3000"
+    CORS_ORIGIN_REGEX: str | None = None
 
     RATE_LIMIT_PER_MINUTE: int = 60
     RATE_LIMIT_AUTH_PER_MINUTE: int = 5

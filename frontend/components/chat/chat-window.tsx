@@ -18,6 +18,7 @@ export function ChatWindow() {
   const conversationId = useChatStore((state) => state.conversationId)
   const setConversationId = useChatStore((state) => state.setConversationId)
   const sentAtRef = useRef<number[]>([])
+  const startAttemptedRef = useRef(false)
   const rateLimitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [rateLimited, setRateLimited] = useState(false)
   const startConversation = useStartConversation()
@@ -50,7 +51,8 @@ export function ChatWindow() {
   }
 
   useEffect(() => {
-    if (!conversationId && !startConversation.isPending) {
+    if (!conversationId && !startAttemptedRef.current) {
+      startAttemptedRef.current = true
       startConversation.mutate({ session_id: sessionId })
     }
   }, [conversationId, sessionId, startConversation])
@@ -68,8 +70,14 @@ export function ChatWindow() {
 
   const latestConversation = startConversation.data
   const isEscalated = latestConversation?.status === 'escalated'
-  const isBusy = sendMessage.isPending || startConversation.isPending
+  const startFailed = startConversation.isError && !conversationId
+  const isBusy = sendMessage.isPending || (startConversation.isPending && !startFailed)
   const conversationReady = Boolean(conversationId)
+
+  function handleRetryStart() {
+    startAttemptedRef.current = false
+    startConversation.reset()
+  }
 
   function handleSend(content: string) {
     if (!conversationId) return false
@@ -137,8 +145,25 @@ export function ChatWindow() {
         messages={messages.data?.items ?? []}
         isPending={isBusy}
       />
+      {startFailed ? (
+        <div className="border-t bg-white px-4 py-3">
+          <div className="rounded-md border border-primary/20 bg-primary/5 p-3">
+            <p className="text-sm font-medium text-slate-950">
+              Không kết nối được với Qiki, vui lòng thử lại.
+            </p>
+            <Button
+              className="mt-3 bg-primary text-primary-foreground hover:bg-primary/90"
+              size="sm"
+              type="button"
+              onClick={handleRetryStart}
+            >
+              Thử lại
+            </Button>
+          </div>
+        </div>
+      ) : null}
       <MessageInput
-        disabled={!conversationReady || startConversation.isPending}
+        disabled={!conversationReady || startConversation.isPending || startFailed}
         rateLimited={rateLimited}
         sending={sendMessage.isPending}
         onSend={handleSend}
