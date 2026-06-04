@@ -58,8 +58,17 @@ const orderSteps = [
   {
     title: 'Giao tận nơi, thu tiền khi nhận',
     description:
-      'Nhân viên giao bình, lắp đặt nếu cần, lấy vỏ bình cũ và thu tiền mặt hoặc chuyển khoản khi nhận.',
+      'Nhân viên giao bình, lắp đặt nếu cần, lấy vỏ bình cũ và nhận thanh toán: tiền mặt khi giao hoặc chuyển khoản ngân hàng.',
     icon: Truck,
+  },
+]
+
+const heroDetails: Array<{ label: string; value: string }> = [
+  { label: 'Hotline/Zalo', value: SHOP_INFO.hotline.label },
+  { label: 'Giờ mở cửa', value: SHOP_INFO.hours.summary },
+  {
+    label: 'Thanh toán',
+    value: 'Tiền mặt khi nhận hàng (COD) hoặc chuyển khoản ngân hàng',
   },
 ]
 
@@ -84,11 +93,21 @@ export default function HomePage() {
                   )}
                 </p>
               </div>
-              <div className="flex max-w-md flex-col gap-3">
-                <ChatOpenButton className="w-full bg-primary text-primary-foreground hover:bg-primary/90" />
+              <div className="flex w-full max-w-md flex-col gap-3 sm:max-w-none sm:flex-row sm:flex-wrap sm:items-start">
+                <div className="flex w-full flex-col gap-3 sm:w-auto">
+                  <ChatOpenButton className="w-full bg-primary text-primary-foreground hover:bg-primary/90" />
+                  <Button
+                    asChild
+                    className="w-full border-white/40 bg-white/5 text-white hover:bg-white/10 hover:text-white"
+                    size="lg"
+                    variant="outline"
+                  >
+                    <Link href="/products">Xem sản phẩm</Link>
+                  </Button>
+                </div>
                 <Button
                   asChild
-                  className="w-full border-transparent bg-white text-slate-950 hover:bg-slate-100"
+                  className="w-full border-transparent bg-white text-slate-950 hover:bg-slate-100 sm:w-auto"
                   size="lg"
                   variant="outline"
                 >
@@ -96,14 +115,6 @@ export default function HomePage() {
                     <Phone className="h-4 w-4" />
                     Gọi đặt: {SHOP_INFO.hotline.label}
                   </a>
-                </Button>
-                <Button
-                  asChild
-                  className="w-full border-white/40 bg-white/5 text-white hover:bg-white/10 hover:text-white"
-                  size="lg"
-                  variant="outline"
-                >
-                  <Link href="/products">Xem sản phẩm</Link>
                 </Button>
               </div>
             </div>
@@ -123,17 +134,15 @@ export default function HomePage() {
                   </div>
                 </div>
                 <div className="mt-5 grid gap-3">
-                  {[
-                    ['Hotline/Zalo', SHOP_INFO.hotline.label],
-                    ['Giờ mở cửa', SHOP_INFO.hours.summary],
-                    ['Thanh toán', 'Tiền mặt khi nhận hoặc chuyển khoản'],
-                  ].map(([label, value]) => (
+                  {heroDetails.map(({ label, value }) => (
                     <div
                       className="flex items-center justify-between gap-4 rounded-md bg-white/[0.06] px-4 py-3"
                       key={label}
                     >
                       <span className="text-sm text-slate-400">{label}</span>
-                      <span className="text-right text-sm font-semibold text-white">{value}</span>
+                      <span className="text-right text-sm font-semibold text-white">
+                        {protectVi(value)}
+                      </span>
                     </div>
                   ))}
                 </div>

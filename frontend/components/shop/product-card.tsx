@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Flame, ShieldCheck } from 'lucide-react'
+import { Flame } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -27,9 +27,11 @@ export function ProductCard({ product }: ProductCardProps) {
       </div>
       <CardHeader className="space-y-3">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="text-sm text-slate-600">{product.brand}</p>
-            <CardTitle className="line-clamp-2 text-xl">{product.name}</CardTitle>
+            <CardTitle className="line-clamp-2 min-h-[3.5rem] text-xl leading-7">
+              {product.name}
+            </CardTitle>
           </div>
           <StockBadge stockQuantity={product.stock_quantity} />
         </div>
@@ -42,12 +44,6 @@ export function ProductCard({ product }: ProductCardProps) {
         <p className="text-2xl font-semibold text-primary">{formatPrice(product.price)}</p>
         {product.description ? (
           <p className="line-clamp-2 text-sm text-slate-600">{product.description}</p>
-        ) : null}
-        {product.safety_info ? (
-          <div className="flex gap-2 text-sm text-slate-600">
-            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-            <span className="line-clamp-2">{product.safety_info}</span>
-          </div>
         ) : null}
       </CardContent>
       <div className="p-6 pt-0">
