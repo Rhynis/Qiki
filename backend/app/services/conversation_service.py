@@ -55,6 +55,14 @@ class ChatOrderSlots:
     confirmed: bool = False
 
 
+@dataclass(frozen=True)
+class ChatOrderResult:
+    """Assistant reply plus contextual product cards for an order turn."""
+
+    message: Message
+    card_products: list[ProductResponse]
+
+
 class ConversationService:
     """Coordinate intent classification, RAG answers, and staff handoff."""
 
@@ -164,6 +172,8 @@ class ConversationService:
         product_cards: list[ProductCardResponse] = []
         if intent.category in {IntentCategory.PRODUCT_INQUIRY, IntentCategory.PLACE_ORDER}:
             catalog_products = await self.product_service.list_active_catalog(limit=50)
+        if intent.category == IntentCategory.PRODUCT_INQUIRY:
+            assert catalog_products is not None
             card_products = self._select_card_products(request.content, catalog_products)
             product_cards = [self._product_to_card(product) for product in card_products]
 
@@ -180,7 +190,7 @@ class ConversationService:
         elif routing.requires_human:
             assistant_message = await self._create_handoff_message(conversation, routing)
         elif intent.category == IntentCategory.PLACE_ORDER:
-            assistant_message = await self._handle_chat_order(
+            order_result = await self._handle_chat_order(
                 conversation,
                 request.content,
                 history,
@@ -189,6 +199,10 @@ class ConversationService:
                 intent.confidence,
                 catalog_products or [],
             )
+            assistant_message = order_result.message
+            product_cards = [
+                self._product_to_card(product) for product in order_result.card_products
+            ]
         else:
             assistant_message = await self._create_rag_answer(
                 conversation,
@@ -278,38 +292,62 @@ class ConversationService:
         user: User | None,
         confidence: float,
         products: Sequence[ProductResponse],
-    ) -> Message:
+    ) -> ChatOrderResult:
         existing_order = self._find_existing_chat_order(history)
         if existing_order:
             order_number = str(existing_order.get("order_number", ""))
-            return await self._create_assistant_message(
-                conversation,
-                (
-                    f"Đơn **{order_number}** đã được ghi nhận trước đó. "
-                    "Nhân viên sẽ sớm gọi điện lại xác nhận với bạn trong giờ làm việc."
+            return ChatOrderResult(
+                message=await self._create_assistant_message(
+                    conversation,
+                    (
+                        f"Đơn **{order_number}** đã được ghi nhận trước đó. "
+                        "Nhân viên sẽ sớm gọi điện lại xác nhận với bạn trong giờ làm việc."
+                    ),
+                    IntentCategory.PLACE_ORDER,
+                    confidence,
+                    metadata=[existing_order],
                 ),
-                IntentCategory.PLACE_ORDER,
-                confidence,
-                metadata=[existing_order],
+                card_products=[],
             )
+
+        def contextual_cards(product: ProductResponse | None) -> list[ProductResponse]:
+            return [product] if product is not None else []
+
+        def category_cards(query: str | None) -> list[ProductResponse]:
+            category = self._category_filter_from_query(self._normalize_match_text(query or ""))
+            if category is None:
+                return []
+            return [product for product in products if product.category == category]
+
+        def result(
+            message: Message,
+            card_products: Sequence[ProductResponse] | None = None,
+        ) -> ChatOrderResult:
+            return ChatOrderResult(message=message, card_products=list(card_products or []))
 
         slots = await self._extract_order_slots(content, history_payload, products)
         if self._is_bare_category_query(slots.product):
-            return await self._create_assistant_message(
-                conversation,
-                self._format_category_product_question(slots.product or ""),
-                IntentCategory.PLACE_ORDER,
-                confidence,
+            return result(
+                await self._create_assistant_message(
+                    conversation,
+                    self._format_category_product_question(slots.product or ""),
+                    IntentCategory.PLACE_ORDER,
+                    confidence,
+                ),
+                category_cards(slots.product),
             )
 
         matched_product = self._match_product(slots.product, products)
         missing = self._missing_order_slots(slots, matched_product)
         if missing:
-            return await self._create_assistant_message(
-                conversation,
-                self._format_missing_slot_question(missing),
-                IntentCategory.PLACE_ORDER,
-                confidence,
+            return result(
+                await self._create_assistant_message(
+                    conversation,
+                    self._format_missing_slot_question(missing),
+                    IntentCategory.PLACE_ORDER,
+                    confidence,
+                ),
+                contextual_cards(matched_product),
             )
 
         assert slots.quantity is not None
@@ -321,59 +359,75 @@ class ConversationService:
 
         delivery_zone_match = resolve_ward_delivery_zone(slots.delivery_address)
         if delivery_zone_match is None:
-            return await self._create_assistant_message(
-                conversation,
-                (
-                    "Hiện Gas Quốc Cường chỉ giao trong khu vực Bình Thạnh và Thủ Đức. "
-                    "Địa chỉ này chưa thuộc khu vực Qiki có thể nhận đơn qua chat. "
-                    "Bạn có thể gọi 090 3026306 để được nhân viên hỗ trợ thêm."
+            return result(
+                await self._create_assistant_message(
+                    conversation,
+                    (
+                        "Hiện Gas Quốc Cường chỉ giao trong khu vực Bình Thạnh và Thủ Đức. "
+                        "Địa chỉ này chưa thuộc khu vực Qiki có thể nhận đơn qua chat. "
+                        "Bạn có thể gọi 090 3026306 để được nhân viên hỗ trợ thêm."
+                    ),
+                    IntentCategory.PLACE_ORDER,
+                    confidence,
                 ),
-                IntentCategory.PLACE_ORDER,
-                confidence,
+                contextual_cards(matched_product),
             )
 
         normalized_phone = self._validate_phone(slots.customer_phone)
         if normalized_phone is None:
-            return await self._create_assistant_message(
-                conversation,
-                "Bạn cho Qiki xin số điện thoại hợp lệ để nhân viên gọi xác nhận đơn nhé.",
-                IntentCategory.PLACE_ORDER,
-                confidence,
+            return result(
+                await self._create_assistant_message(
+                    conversation,
+                    "Bạn cho Qiki xin số điện thoại hợp lệ để nhân viên gọi xác nhận đơn nhé.",
+                    IntentCategory.PLACE_ORDER,
+                    confidence,
+                ),
+                contextual_cards(matched_product),
             )
 
         if matched_product.stock_quantity < slots.quantity:
-            return await self._create_assistant_message(
-                conversation,
-                (
-                    f"Sản phẩm **{matched_product.name}** hiện chỉ còn "
-                    f"{matched_product.stock_quantity} bình. Bạn muốn điều chỉnh số lượng không?"
+            return result(
+                await self._create_assistant_message(
+                    conversation,
+                    (
+                        f"Sản phẩm **{matched_product.name}** hiện chỉ còn "
+                        f"{matched_product.stock_quantity} bình. "
+                        "Bạn muốn điều chỉnh số lượng không?"
+                    ),
+                    IntentCategory.PLACE_ORDER,
+                    confidence,
                 ),
-                IntentCategory.PLACE_ORDER,
-                confidence,
+                contextual_cards(matched_product),
             )
 
         payment_method = self._normalize_payment_method(slots.payment_method)
         if payment_method is None:
-            return await self._create_assistant_message(
-                conversation,
-                "Bạn muốn thanh toán khi nhận hàng (COD) hay chuyển khoản?",
-                IntentCategory.PLACE_ORDER,
-                confidence,
+            return result(
+                await self._create_assistant_message(
+                    conversation,
+                    "Bạn muốn thanh toán khi nhận hàng (COD) hay chuyển khoản?",
+                    IntentCategory.PLACE_ORDER,
+                    confidence,
+                ),
+                contextual_cards(matched_product),
             )
 
         if not slots.confirmed:
-            return await self._create_assistant_message(
-                conversation,
-                self._format_order_summary(
-                    matched_product,
-                    slots.quantity,
-                    slots.customer_name,
-                    normalized_phone,
-                    slots.delivery_address,
-                    payment_method,
+            return result(
+                await self._create_assistant_message(
+                    conversation,
+                    self._format_order_summary(
+                        matched_product,
+                        slots.quantity,
+                        slots.customer_name,
+                        normalized_phone,
+                        slots.delivery_address,
+                        payment_method,
+                    ),
+                    IntentCategory.PLACE_ORDER,
+                    confidence,
                 ),
-                IntentCategory.PLACE_ORDER,
-                confidence,
+                contextual_cards(matched_product),
             )
 
         checkout = CheckoutRequest(
@@ -402,16 +456,19 @@ class ConversationService:
                 "order_number": order.order_number,
             }
         ]
-        return await self._create_assistant_message(
-            conversation,
-            (
-                f"Đã ghi nhận đơn **{order.order_number}**. "
-                "**Nhân viên sẽ sớm gọi điện lại xác nhận** với bạn trong giờ làm việc "
-                "(T2-T6 06:30-20:00, T7-CN 07:30-20:00). Cảm ơn bạn!"
+        return result(
+            await self._create_assistant_message(
+                conversation,
+                (
+                    f"Đã ghi nhận đơn **{order.order_number}**. "
+                    "**Nhân viên sẽ sớm gọi điện lại xác nhận** với bạn trong giờ làm việc "
+                    "(T2-T6 06:30-20:00, T7-CN 07:30-20:00). Cảm ơn bạn!"
+                ),
+                IntentCategory.PLACE_ORDER,
+                confidence,
+                metadata=metadata,
             ),
-            IntentCategory.PLACE_ORDER,
-            confidence,
-            metadata=metadata,
+            contextual_cards(matched_product),
         )
 
     async def _extract_order_slots(
@@ -434,7 +491,8 @@ Các trường:
 - quantity: số lượng sản phẩm/bình, hoặc null
 - customer_name: tên khách, hoặc null
 - customer_phone: số điện thoại, hoặc null
-- delivery_address: địa chỉ giao hàng đầy đủ, hoặc null
+- delivery_address: địa chỉ giao hàng đầy đủ gồm số nhà, tên/số đường, khu phố,
+  phường, TP.HCM; với Hiệp Bình cần khu phố và mốc gần nhà; hoặc null
 - payment_method: "cod" hoặc "bank_transfer", hoặc null
 - confirmed: true nếu khách xác nhận rõ đơn Qiki đã tóm tắt ở lượt trước; ngược lại false
 
@@ -740,7 +798,10 @@ Tin mới:
         if not slots.customer_phone:
             missing.append("số điện thoại")
         if not slots.delivery_address:
-            missing.append("địa chỉ giao hàng")
+            missing.append(
+                "địa chỉ giao hàng chi tiết (số nhà, tên/số đường, khu phố, phường, "
+                "TP.HCM; với Hiệp Bình cần thêm mốc gần nhà)"
+            )
         if not slots.payment_method:
             missing.append("hình thức thanh toán")
         return missing
