@@ -410,8 +410,11 @@ async def test_send_message_adds_product_catalog_context_to_rag() -> None:
 
 @pytest.mark.asyncio
 async def test_send_message_adds_product_cards_for_place_order() -> None:
+    payload = complete_order_payload()
+    payload["customer_phone"] = None
     service, _conversations, _messages, _rag, _orders = make_service(
-        category=IntentCategory.PLACE_ORDER
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([payload]),
     )
     conversation = await service.start_conversation(user=None, session_id="abc")
 
@@ -841,6 +844,53 @@ async def test_chat_order_missing_slot_asks_again() -> None:
     assert orders.calls == 0
     assert response.assistant_message is not None
     assert "số điện thoại" in response.assistant_message.content
+
+
+@pytest.mark.asyncio
+async def test_chat_order_missing_address_mentions_khu_pho() -> None:
+    payload = complete_order_payload()
+    payload["delivery_address"] = None
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([payload]),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Tôi muốn đặt 1 bình Petrolimex 12kg"),
+        user=None,
+    )
+
+    assert orders.calls == 0
+    assert response.assistant_message is not None
+    assert "khu phố" in response.assistant_message.content
+    assert "mốc gần nhà" in response.assistant_message.content
+
+
+@pytest.mark.asyncio
+async def test_chat_order_address_slot_fill_does_not_return_full_catalog() -> None:
+    payload = complete_order_payload()
+    payload["product"] = "Vihawa 20 lít"
+    payload["customer_phone"] = None
+    payload["delivery_address"] = "15 đường số 5, Khu phố 36, Phường Hiệp Bình, TP.HCM"
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([payload]),
+        product_service=FakeProductService(products=_category_catalog()),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="15 đường số 5, khu phố 36, phường hiệp bình"),
+        user=None,
+    )
+
+    assert orders.calls == 0
+    assert response.assistant_message is not None
+    assert "số điện thoại" in response.assistant_message.content
+    assert [product.sku for product in response.products] == ["VIHAWA-20L"]
 
 
 @pytest.mark.asyncio
