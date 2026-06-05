@@ -41,6 +41,34 @@ def result(category: IntentCategory, confidence: float, classifier: str) -> Inte
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("query", ["nước", "gas"])
+async def test_bare_product_category_is_product_inquiry(query: str) -> None:
+    embedding = StaticClassifier(result(IntentCategory.PLACE_ORDER, 0.92, "embedding"))
+    llm = StaticClassifier(result(IntentCategory.PLACE_ORDER, 0.9, "llm"))
+    classifier = HybridIntentClassifier(embedding, llm, confidence_threshold=0.7)
+
+    classified = await classifier.classify(query)
+
+    assert classified.category == IntentCategory.PRODUCT_INQUIRY
+    assert classified.classifier == "hybrid_category_keyword"
+    assert embedding.calls == 0
+    assert llm.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_explicit_water_order_still_uses_place_order() -> None:
+    embedding = StaticClassifier(result(IntentCategory.PRODUCT_INQUIRY, 0.5, "embedding"))
+    llm = StaticClassifier(result(IntentCategory.PLACE_ORDER, 0.86, "llm"))
+    classifier = HybridIntentClassifier(embedding, llm, confidence_threshold=0.7)
+
+    classified = await classifier.classify("tôi muốn đặt nước Hoàn Hảo")
+
+    assert classified.category == IntentCategory.PLACE_ORDER
+    assert classified.classifier == "hybrid_llm"
+    assert llm.calls == 1
+
+
+@pytest.mark.asyncio
 async def test_high_confidence_embedding_short_circuits_llm() -> None:
     embedding = StaticClassifier(result(IntentCategory.PRODUCT_INQUIRY, 0.91, "embedding"))
     llm = StaticClassifier(result(IntentCategory.GENERAL_INFO, 0.9, "llm"))

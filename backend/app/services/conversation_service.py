@@ -294,6 +294,14 @@ class ConversationService:
             )
 
         slots = await self._extract_order_slots(content, history_payload, products)
+        if self._is_bare_category_query(slots.product):
+            return await self._create_assistant_message(
+                conversation,
+                self._format_category_product_question(slots.product or ""),
+                IntentCategory.PLACE_ORDER,
+                confidence,
+            )
+
         matched_product = self._match_product(slots.product, products)
         missing = self._missing_order_slots(slots, matched_product)
         if missing:
@@ -563,11 +571,19 @@ Tin mới:
         if not normalized_query:
             return list(products)
         query_tokens = set(normalized_query.split())
+        category_filter = self._category_filter_from_query(normalized_query)
+        candidate_products = (
+            [product for product in products if product.category == category_filter]
+            if category_filter
+            else list(products)
+        )
+        if not candidate_products:
+            return []
 
         brand_and_size: list[ProductResponse] = []
         brand_only: list[ProductResponse] = []
         size_only: list[ProductResponse] = []
-        for product in products:
+        for product in candidate_products:
             normalized_brand = self._normalize_match_text(product.brand)
             brand_tokens = set(normalized_brand.split())
             distinctive_brand_tokens = brand_tokens - {"gas"}
@@ -592,7 +608,34 @@ Tin mới:
         for group in (brand_and_size, brand_only, size_only):
             if group:
                 return group
-        return list(products)
+        return candidate_products
+
+    @staticmethod
+    def _category_filter_from_query(normalized_query: str) -> str | None:
+        tokens = set(normalized_query.split())
+        wants_water = "nuoc" in tokens
+        wants_gas = "gas" in tokens
+        if wants_water and not wants_gas:
+            return "nuoc_uong"
+        if wants_gas and not wants_water:
+            return "gas"
+        return None
+
+    @classmethod
+    def _is_bare_category_query(cls, query: str | None) -> bool:
+        if not query:
+            return False
+        normalized = cls._normalize_match_text(query)
+        return normalized in {"nuoc", "nuoc uong", "gas", "binh gas"}
+
+    @classmethod
+    def _format_category_product_question(cls, query: str) -> str:
+        category = cls._category_filter_from_query(cls._normalize_match_text(query))
+        if category == "nuoc_uong":
+            return "Bạn muốn đặt loại nước uống nào? Qiki gửi các lựa chọn bên dưới nhé."
+        if category == "gas":
+            return "Bạn muốn đặt loại gas nào? Qiki gửi các lựa chọn bên dưới nhé."
+        return "Bạn muốn đặt sản phẩm nào? Qiki gửi các lựa chọn bên dưới nhé."
 
     async def _create_assistant_message(
         self,

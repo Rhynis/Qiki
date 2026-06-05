@@ -1,5 +1,7 @@
 """Hybrid intent classifier combining embedding and LLM results."""
 
+import re
+import unicodedata
 from collections.abc import Mapping, Sequence
 
 import sentry_sdk
@@ -29,6 +31,14 @@ class HybridIntentClassifier(BaseIntentClassifier):
         conversation_history: Sequence[Mapping[str, str]] | None = None,
     ) -> IntentResult:
         """Classify with embedding, then double-check when required."""
+        if self._is_bare_product_category(text):
+            return IntentResult(
+                category=IntentCategory.PRODUCT_INQUIRY,
+                confidence=0.95,
+                reasoning="Bare product category should show catalog cards, not start checkout",
+                classifier="hybrid_category_keyword",
+            )
+
         try:
             embedding_result = await self.embedding_classifier.classify(
                 text,
@@ -76,3 +86,14 @@ class HybridIntentClassifier(BaseIntentClassifier):
             reasoning=llm_result.reasoning,
             classifier="hybrid_llm",
         )
+
+    @classmethod
+    def _is_bare_product_category(cls, text: str) -> bool:
+        normalized = cls._normalize_text(text)
+        return normalized in {"gas", "binh gas", "nuoc", "nuoc uong"}
+
+    @staticmethod
+    def _normalize_text(text: str) -> str:
+        decomposed = unicodedata.normalize("NFD", text.lower())
+        without_marks = "".join(char for char in decomposed if unicodedata.category(char) != "Mn")
+        return re.sub(r"[^a-z0-9]+", " ", without_marks).strip()
