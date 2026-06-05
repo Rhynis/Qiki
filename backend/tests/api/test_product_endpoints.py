@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Literal
 from uuid import uuid4
 
 import pytest
@@ -40,6 +41,8 @@ def product_payload(sku: str = "GAS-12-SAIGON") -> dict[str, object]:
         "name": "Binh gas 12kg",
         "brand": "Saigon Petro",
         "size_kg": "12",
+        "category": "gas",
+        "unit": "kg",
         "price": "350000",
         "stock_quantity": 20,
         "description": "Binh gas gia dinh",
@@ -53,16 +56,23 @@ async def create_db_product(
     *,
     sku: str = "GAS-12-SAIGON",
     brand: str = "Saigon Petro",
+    name: str = "Binh gas 12kg",
+    size_kg: Decimal = Decimal("12"),
+    category: Literal["gas", "nuoc_uong"] = "gas",
+    unit: Literal["kg", "lít"] = "kg",
+    price: Decimal = Decimal("350000"),
     stock_quantity: int = 20,
     is_active: bool = True,
 ) -> Product:
     product = await ProductRepository(session).create(
         ProductCreate(
             sku=sku,
-            name="Binh gas 12kg",
+            name=name,
             brand=brand,
-            size_kg=Decimal("12"),
-            price=Decimal("350000"),
+            size_kg=size_kg,
+            category=category,
+            unit=unit,
+            price=price,
             stock_quantity=stock_quantity,
             description="Binh gas gia dinh",
             image_url="https://example.com/gas-12kg.jpg",
@@ -121,6 +131,31 @@ async def test_list_products_filters_by_brand(
     assert data["items"][0]["brand"] == "Shell"
 
 
+async def test_list_products_filters_by_category(
+    test_client: AsyncClient,
+    product_session: AsyncSession,
+) -> None:
+    await create_db_product(product_session, sku="GAS-12", category="gas", unit="kg")
+    await create_db_product(
+        product_session,
+        sku="VIHAWA-20L",
+        name="Nuoc Vihawa 20 lit",
+        brand="Vihawa",
+        size_kg=Decimal("20"),
+        category="nuoc_uong",
+        unit="lít",
+        price=Decimal("50000"),
+    )
+
+    response = await test_client.get("/api/v1/products", params={"category": "nuoc_uong"})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 1
+    assert data["items"][0]["sku"] == "VIHAWA-20L"
+    assert data["items"][0]["unit"] == "lít"
+
+
 async def test_get_product_by_id(
     test_client: AsyncClient,
     product_session: AsyncSession,
@@ -163,6 +198,7 @@ async def test_create_product_as_admin(
 
     assert response.status_code == 201
     assert response.json()["sku"] == "GAS-12-SAIGON"
+    assert response.json()["category"] == "gas"
     assert await ProductRepository(product_session).get_by_sku("GAS-12-SAIGON") is not None
 
 

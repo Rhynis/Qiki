@@ -3,7 +3,7 @@ import { Bot, PackageOpen, UserRound } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { formatPrice } from '@/lib/utils/format'
+import { formatPrice, formatProductSize } from '@/lib/utils/format'
 import { cn } from '@/lib/utils'
 import type { Message, ProductCard } from '@/types/conversation'
 import { FeedbackButtons } from './feedback-buttons'
@@ -101,7 +101,7 @@ function ProductCards({ products }: ProductCardsProps) {
           <div className="flex flex-1 flex-col gap-2 p-3">
             <div className="min-w-0">
               <p className="truncate text-xs text-slate-500">
-                {product.brand} · {formatSize(product.size_kg)}kg
+                {product.brand} · {formatProductSize(product.size_kg, product.unit ?? 'kg')}
               </p>
               <h3 className="line-clamp-2 min-h-[2.5rem] text-sm font-semibold leading-5 text-slate-900">
                 {product.name}
@@ -124,8 +124,4 @@ function ProductCards({ products }: ProductCardsProps) {
       ))}
     </div>
   )
-}
-
-function formatSize(sizeKg: number | string): string {
-  return Number(sizeKg).toLocaleString('vi-VN')
 }

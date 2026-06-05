@@ -2,6 +2,8 @@ import { z } from 'zod'
 
 const sizeValues = ['6', '12', '45'] as const
 const skuRegex = /^[A-Z0-9-]+$/
+const categoryValues = ['gas', 'nuoc_uong'] as const
+const unitValues = ['kg', 'lít'] as const
 const optionalUrl = z
   .string()
   .trim()
@@ -10,7 +12,7 @@ const optionalUrl = z
   .optional()
   .transform((value) => (value ? value : undefined))
 
-export const productSchema = z.object({
+const productBaseSchema = z.object({
   sku: z
     .string()
     .trim()
@@ -20,22 +22,48 @@ export const productSchema = z.object({
     .refine((value) => skuRegex.test(value), 'SKU chỉ gồm chữ in hoa, số và dấu gạch ngang'),
   name: z.string().trim().min(1, 'Tên sản phẩm không được để trống').max(255, 'Tên quá dài'),
   brand: z.string().trim().min(1, 'Thương hiệu không được để trống').max(100, 'Tên quá dài'),
-  size_kg: z.enum(sizeValues, { errorMap: () => ({ message: 'Chọn kích thước bình gas' }) }),
+  category: z.enum(categoryValues).default('gas'),
+  unit: z.enum(unitValues).default('kg'),
+  size_kg: z
+    .string()
+    .trim()
+    .min(1, 'Kích thước không được để trống')
+    .regex(/^\d+(\.\d+)?$/, 'Kích thước phải là số'),
   price: z.string().trim().min(1, 'Giá không được để trống').regex(/^\d+$/, 'Giá phải là số'),
   stock_quantity: z.coerce.number().int('Tồn kho phải là số nguyên').min(0, 'Tồn kho không âm'),
   description: z.string().trim().optional(),
   image_url: optionalUrl,
   safety_info: z.string().trim().optional(),
+  pricing_note: z.string().trim().optional(),
 })
 
-export const productUpdateSchema = productSchema.partial().extend({
-  is_active: z.boolean().optional(),
-})
+function validateGasSize(value: { category?: string; size_kg?: string }, context: z.RefinementCtx) {
+  if (
+    value.category === 'gas' &&
+    !sizeValues.includes(value.size_kg as (typeof sizeValues)[number])
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Chọn kích thước bình gas',
+      path: ['size_kg'],
+    })
+  }
+}
+
+export const productSchema = productBaseSchema.superRefine(validateGasSize)
+
+export const productUpdateSchema = productBaseSchema
+  .partial()
+  .extend({
+    is_active: z.boolean().optional(),
+  })
+  .superRefine(validateGasSize)
 
 export const productFiltersSchema = z
   .object({
     search: z.string().trim().optional(),
     brand: z.string().trim().optional(),
+    category: z.enum(categoryValues).optional(),
     min_price: z.string().trim().optional(),
     max_price: z.string().trim().optional(),
     size_kg: z.enum(sizeValues).optional(),

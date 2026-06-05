@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { Minus, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useCartStore } from '@/lib/stores/cart-store'
-import { formatPrice } from '@/lib/utils/format'
+import { formatPrice, formatProductSize } from '@/lib/utils/format'
 
 export function CartReviewStep({ onNext }: { onNext: () => void }) {
   const items = useCartStore((state) => state.items)
@@ -35,7 +35,7 @@ export function CartReviewStep({ onNext }: { onNext: () => void }) {
                   style={{ backgroundImage: `url(${item.imageUrl})` }}
                 />
               ) : (
-                `${item.sizeKg}kg`
+                formatProductSize(item.sizeKg, item.unit ?? 'kg')
               )}
             </div>
             <div className="min-w-0 flex-1 space-y-2">

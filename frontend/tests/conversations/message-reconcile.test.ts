@@ -51,6 +51,7 @@ describe('reconcileMessageList', () => {
           name: 'Gas 12kg',
           brand: 'Petrolimex',
           size_kg: 12,
+          unit: 'kg',
           price: 450000,
           sku: 'GAS-12KG',
           stock_quantity: 5,

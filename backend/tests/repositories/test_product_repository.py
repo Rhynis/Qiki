@@ -2,6 +2,7 @@
 
 import asyncio
 from decimal import Decimal
+from typing import Literal
 from uuid import uuid4
 
 import pytest
@@ -20,20 +21,27 @@ def product_data(
     sku: str = "GAS-12-SAIGON",
     name: str = "Binh gas 12kg",
     brand: str = "Saigon Petro",
+    size_kg: Decimal = Decimal("12"),
+    category: Literal["gas", "nuoc_uong"] = "gas",
+    unit: Literal["kg", "lít"] = "kg",
     price: Decimal = Decimal("350000"),
     stock_quantity: int = 20,
+    pricing_note: str | None = None,
 ) -> ProductCreate:
     """Return valid product creation data."""
     return ProductCreate(
         sku=sku,
         name=name,
         brand=brand,
-        size_kg=Decimal("12"),
+        size_kg=size_kg,
+        category=category,
+        unit=unit,
         price=price,
         stock_quantity=stock_quantity,
         description="Binh gas gia dinh",
         image_url="https://example.com/gas-12kg.jpg",
         safety_info="Dat binh noi thoang khi.",
+        pricing_note=pricing_note,
     )
 
 
@@ -52,7 +60,33 @@ async def test_create_product_with_valid_data(product_session: AsyncSession) -> 
     product = await ProductRepository(product_session).create(product_data())
 
     assert product.sku == "GAS-12-SAIGON"
+    assert product.category == "gas"
+    assert product.unit == "kg"
     assert product.is_in_stock()
+
+
+async def test_create_water_product_allows_20_liters(product_session: AsyncSession) -> None:
+    product = await ProductRepository(product_session).create(
+        product_data(
+            sku="VIHAWA-20L",
+            name="Nuoc Vihawa 20 lit",
+            brand="Vihawa",
+            size_kg=Decimal("20"),
+            category="nuoc_uong",
+            unit="lít",
+            price=Decimal("50000"),
+            pricing_note="Gia tai cua hang; giao them phi.",
+        )
+    )
+
+    assert product.category == "nuoc_uong"
+    assert product.unit == "lít"
+    assert product.size_kg == Decimal("20")
+
+
+async def test_create_gas_product_rejects_unsupported_size() -> None:
+    with pytest.raises(ValueError, match="size_kg must be one of 6, 12, or 45"):
+        product_data(size_kg=Decimal("20"))
 
 
 async def test_create_product_duplicate_sku_raises(product_session: AsyncSession) -> None:
@@ -94,6 +128,27 @@ async def test_list_products_with_brand_filter(product_session: AsyncSession) ->
 
     assert total == 1
     assert products[0].brand == "Shell"
+
+
+async def test_list_products_with_category_filter(product_session: AsyncSession) -> None:
+    await create_product(product_session, sku="GAS-12", category="gas", unit="kg")
+    await create_product(
+        product_session,
+        sku="VIHAWA-20L",
+        name="Nuoc Vihawa 20 lit",
+        brand="Vihawa",
+        size_kg=Decimal("20"),
+        category="nuoc_uong",
+        unit="lít",
+        price=Decimal("50000"),
+    )
+
+    products, total = await ProductRepository(product_session).list_products(
+        ProductSearchParams(category="nuoc_uong")
+    )
+
+    assert total == 1
+    assert products[0].sku == "VIHAWA-20L"
 
 
 async def test_list_products_with_price_range(product_session: AsyncSession) -> None:

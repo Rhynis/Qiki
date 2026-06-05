@@ -92,6 +92,8 @@ class ProductRepository:
             )
         if params.brand:
             conditions.append(Product.brand.ilike(f"%{params.brand.strip()}%"))
+        if params.category:
+            conditions.append(Product.category == params.category)
         if params.min_price is not None:
             conditions.append(Product.price >= params.min_price)
         if params.max_price is not None:

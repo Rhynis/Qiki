@@ -14,10 +14,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import type { ProductCategory } from '@/types/product'
 
 const sizes = ['6', '12', '45']
 
-export function ProductFilters() {
+type ProductFiltersProps = {
+  category?: ProductCategory
+}
+
+export function ProductFilters({ category }: ProductFiltersProps) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -31,9 +36,10 @@ export function ProductFilters() {
 
   function applyFilters() {
     const next = new URLSearchParams()
+    if (category) next.set('category', category)
     if (search.trim()) next.set('search', search.trim())
     if (brand.trim()) next.set('brand', brand.trim())
-    if (size !== 'all') next.set('size_kg', size)
+    if (category !== 'nuoc_uong' && size !== 'all') next.set('size_kg', size)
     if (inStockOnly) next.set('in_stock_only', 'true')
     const [sortBy, sortOrder] = sort.split(':')
     if (sortBy) next.set('sort_by', sortBy)
@@ -47,12 +53,20 @@ export function ProductFilters() {
     setSize('all')
     setInStockOnly(false)
     setSort('created_at:desc')
-    router.replace(pathname)
+    router.replace(category ? `${pathname}?category=${category}` : pathname)
   }
+
+  const showSizeFilter = category !== 'nuoc_uong'
 
   return (
     <div className="rounded-lg border bg-white p-4">
-      <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr_160px_180px]">
+      <div
+        className={
+          showSizeFilter
+            ? 'grid gap-4 lg:grid-cols-[1.2fr_1fr_160px_180px]'
+            : 'grid gap-4 lg:grid-cols-[1.2fr_1fr_180px]'
+        }
+      >
         <div className="space-y-2">
           <Label htmlFor="search">Tìm kiếm</Label>
           <div className="relative">
@@ -72,22 +86,24 @@ export function ProductFilters() {
           <Label htmlFor="brand">Thương hiệu</Label>
           <Input id="brand" value={brand} onChange={(event) => setBrand(event.target.value)} />
         </div>
-        <div className="space-y-2">
-          <Label>Kích thước</Label>
-          <Select value={size} onValueChange={setSize}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tất cả</SelectItem>
-              {sizes.map((item) => (
-                <SelectItem key={item} value={item}>
-                  {item}kg
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {showSizeFilter ? (
+          <div className="space-y-2">
+            <Label>Kích thước</Label>
+            <Select value={size} onValueChange={setSize}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tất cả</SelectItem>
+                {sizes.map((item) => (
+                  <SelectItem key={item} value={item}>
+                    {item} kg
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
         <div className="space-y-2">
           <Label>Sắp xếp</Label>
           <Select value={sort} onValueChange={setSort}>

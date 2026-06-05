@@ -519,9 +519,9 @@ Tin mới:
 
     @classmethod
     def _format_product_display_name(cls, product: ProductResponse) -> str:
-        size = f"{cls._format_decimal(product.size_kg)}kg"
+        size = f"{cls._format_decimal(product.size_kg)} {product.unit}"
         normalized_name = product.name.lower().replace(" ", "")
-        if size.lower() in normalized_name:
+        if size.lower().replace(" ", "") in normalized_name:
             return product.name
         return f"{product.name} {size}"
 
@@ -540,6 +540,7 @@ Tin mới:
             name=product.name,
             brand=product.brand,
             size_kg=product.size_kg,
+            unit=product.unit,
             price=product.price,
             image_url=str(product.image_url) if product.image_url else None,
             sku=product.sku,

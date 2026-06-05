@@ -3,7 +3,7 @@ import { Flame } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { formatPrice } from '@/lib/utils/format'
+import { formatPrice, formatProductSize } from '@/lib/utils/format'
 import { StockBadge } from '@/components/shop/stock-badge'
 import type { Product } from '@/types/product'
 
@@ -36,7 +36,7 @@ export function ProductCard({ product }: ProductCardProps) {
           <StockBadge stockQuantity={product.stock_quantity} />
         </div>
         <div className="flex flex-wrap gap-2 text-sm">
-          <Badge variant="outline">{Number(product.size_kg).toLocaleString('vi-VN')}kg</Badge>
+          <Badge variant="outline">{formatProductSize(product.size_kg, product.unit)}</Badge>
           <Badge variant="outline">SKU {product.sku}</Badge>
         </div>
       </CardHeader>

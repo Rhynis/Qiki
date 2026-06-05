@@ -9,6 +9,7 @@ export interface CartItem {
   name: string
   brand: string
   sizeKg: number
+  unit: string
   price: number
   quantity: number
   imageUrl?: string | null
@@ -47,6 +48,7 @@ export const useCartStore = create<CartState>()(
               name: product.name,
               brand: product.brand,
               sizeKg: Number(product.size_kg),
+              unit: product.unit,
               price: Number(product.price),
               quantity,
               imageUrl: product.image_url,

@@ -6,6 +6,7 @@ export type ProductCard = {
   name: string
   brand: string
   size_kg: number | string
+  unit?: string
   price: number | string
   image_url?: string | null
   sku: string

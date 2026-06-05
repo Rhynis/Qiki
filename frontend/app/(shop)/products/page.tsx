@@ -2,7 +2,7 @@ import { PageHeader } from '@/components/shared/page-header'
 import { ProductFilters } from '@/components/shop/product-filters'
 import { ProductGrid } from '@/components/shop/product-grid'
 import { ProductPagination } from '@/components/shop/product-pagination'
-import type { ProductListResponse, ProductSearchParams } from '@/types/product'
+import type { ProductCategory, ProductListResponse, ProductSearchParams } from '@/types/product'
 
 type ProductsPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>
@@ -25,10 +25,12 @@ function parseProductParams(
 ): ProductSearchParams {
   const sortBy = firstValue(params.sort_by)
   const sortOrder = firstValue(params.sort_order)
+  const category = firstValue(params.category)
 
   return {
     search: firstValue(params.search),
     brand: firstValue(params.brand),
+    category: category === 'gas' || category === 'nuoc_uong' ? category : undefined,
     min_price: firstValue(params.min_price),
     max_price: firstValue(params.max_price),
     size_kg: firstValue(params.size_kg),
@@ -62,14 +64,27 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
   const resolvedSearchParams = await searchParams
   const params = parseProductParams(resolvedSearchParams)
   const products = await getInitialProducts(params)
+  const category = params.category
+  const pageCopy: Record<ProductCategory | 'all', { title: string; description: string }> = {
+    all: {
+      title: 'Sản phẩm',
+      description: 'Chọn gas LPG hoặc nước uống phù hợp cho gia đình và nhu cầu kinh doanh.',
+    },
+    gas: {
+      title: 'Sản phẩm gas LPG',
+      description: 'Chọn bình gas phù hợp cho gia đình hoặc nhu cầu kinh doanh.',
+    },
+    nuoc_uong: {
+      title: 'Nước Uống',
+      description: 'Đặt nước uống bình 20 lít, rõ giá tại cửa hàng và phụ phí giao tận nơi.',
+    },
+  }
+  const copy = pageCopy[category ?? 'all']
 
   return (
     <section className="mx-auto max-w-6xl space-y-6 px-4 py-8">
-      <PageHeader
-        title="Sản phẩm gas LPG"
-        description="Chọn bình gas phù hợp cho gia đình hoặc nhu cầu kinh doanh."
-      />
-      <ProductFilters />
+      <PageHeader title={copy.title} description={copy.description} />
+      <ProductFilters category={category} />
       <div className="flex items-center justify-between text-sm text-slate-600">
         <span>{products.total.toLocaleString('vi-VN')} sản phẩm</span>
         <span>Trang {products.page.toLocaleString('vi-VN')}</span>

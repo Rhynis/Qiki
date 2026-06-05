@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { ProductDetail } from '@/components/shop/product-detail'
+import { formatProductSize } from '@/lib/utils/format'
 import type { Product } from '@/types/product'
 
 type ProductDetailPageProps = {
@@ -30,7 +31,8 @@ export async function generateMetadata({ params }: ProductDetailPageProps): Prom
 
   return {
     title: `${product.name} | Gas Quốc Cường`,
-    description: product.description ?? `${product.brand} ${product.size_kg}kg`,
+    description:
+      product.description ?? `${product.brand} ${formatProductSize(product.size_kg, product.unit)}`,
   }
 }
 

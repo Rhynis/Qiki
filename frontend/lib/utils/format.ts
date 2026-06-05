@@ -17,6 +17,13 @@ export function formatNumber(num: number): string {
   return new Intl.NumberFormat('vi-VN').format(num)
 }
 
+/** Format product size with its display unit. */
+export function formatProductSize(size: number | string, unit = 'kg'): string {
+  const num = typeof size === 'string' ? Number.parseFloat(size) : size
+  const formatted = Number.isNaN(num) ? String(size) : new Intl.NumberFormat('vi-VN').format(num)
+  return `${formatted} ${unit}`
+}
+
 /** Format a date in Vietnamese format. */
 export function formatDate(date: Date | string, includeTime = true): string {
   const d = typeof date === 'string' ? new Date(date) : date
