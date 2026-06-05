@@ -47,7 +47,7 @@ export function Header() {
             onMouseEnter={openProductMenu}
             onMouseLeave={scheduleProductMenuClose}
           >
-            <DropdownMenu open={productMenuOpen} onOpenChange={setProductMenuOpen}>
+            <DropdownMenu modal={false} open={productMenuOpen} onOpenChange={setProductMenuOpen}>
               <DropdownMenuTrigger asChild>
                 <button
                   className="inline-flex h-9 items-center gap-1 rounded-md px-2 font-medium text-slate-700 transition hover:bg-slate-100 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
