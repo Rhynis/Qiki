@@ -12,6 +12,7 @@ from app.db.session import get_db
 from app.models.user import User
 from app.repositories.product_repository import ProductRepository
 from app.schemas.product import (
+    ProductCategory,
     ProductCreate,
     ProductListResponse,
     ProductResponse,
@@ -41,6 +42,21 @@ async def list_products(
 ) -> ProductListResponse:
     """Return active products with search, filters, sorting, and pagination."""
     return await service.search_products(params)
+
+
+@router.get(
+    "/products/brands",
+    response_model=list[str],
+    summary="List product brands",
+)
+@limiter.limit("60/minute")
+async def list_product_brands(
+    request: Request,
+    service: Annotated[ProductService, Depends(get_product_service)],
+    category: Annotated[ProductCategory | None, Query()] = None,
+) -> list[str]:
+    """Return distinct active product brands, optionally filtered by category."""
+    return await service.list_brands(category)
 
 
 @router.get(

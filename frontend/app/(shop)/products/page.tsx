@@ -84,7 +84,7 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
   return (
     <section className="mx-auto max-w-6xl space-y-6 px-4 py-8">
       <PageHeader title={copy.title} description={copy.description} />
-      <ProductFilters category={category} />
+      <ProductFilters key={`${category ?? 'all'}:${params.brand ?? 'all'}`} category={category} />
       <div className="flex items-center justify-between text-sm text-slate-600">
         <span>{products.total.toLocaleString('vi-VN')} sản phẩm</span>
         <span>Trang {products.page.toLocaleString('vi-VN')}</span>

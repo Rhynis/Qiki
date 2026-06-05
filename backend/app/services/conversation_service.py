@@ -419,11 +419,11 @@ class ConversationService:
             self._format_product_catalog_line(product) for product in products
         )
         prompt = f"""
-Trích thông tin đặt gas từ lịch sử chat và tin mới. Chỉ trả về JSON hợp lệ.
+Trích thông tin đặt sản phẩm từ lịch sử chat và tin mới. Chỉ trả về JSON hợp lệ.
 
 Các trường:
 - product: tên/brand/SKU sản phẩm khách muốn mua, hoặc null
-- quantity: số lượng bình, hoặc null
+- quantity: số lượng sản phẩm/bình, hoặc null
 - customer_name: tên khách, hoặc null
 - customer_phone: số điện thoại, hoặc null
 - delivery_address: địa chỉ giao hàng đầy đủ, hoặc null
@@ -515,7 +515,8 @@ Tin mới:
         stock = (
             f"còn {product.stock_quantity} bình" if product.stock_quantity > 0 else "tạm hết hàng"
         )
-        return f"- {display_name} ({product.brand}): {price}, {stock}"
+        category = "nước uống" if product.category == "nuoc_uong" else "gas"
+        return f"- {display_name} ({product.brand}, {category}): {price}, {stock}"
 
     @classmethod
     def _format_product_display_name(cls, product: ProductResponse) -> str:
@@ -575,7 +576,12 @@ Tin mới:
                 or normalized_brand in normalized_query
             )
             size_value = self._normalize_match_text(self._format_decimal(product.size_kg))
-            size_hit = f"{size_value}kg" in normalized_query or size_value in query_tokens
+            unit_value = self._normalize_match_text(product.unit)
+            size_hit = (
+                f"{size_value}kg" in normalized_query
+                or f"{size_value}{unit_value}" in normalized_query.replace(" ", "")
+                or (size_value in query_tokens and unit_value in query_tokens)
+            )
             if brand_hit and size_hit:
                 brand_and_size.append(product)
             elif brand_hit:
@@ -724,6 +730,8 @@ Tin mới:
                 product.sku,
                 cls._format_product_display_name(product),
                 f"{cls._format_decimal(product.size_kg)}kg",
+                f"{cls._format_decimal(product.size_kg)} {product.unit}",
+                f"{cls._format_decimal(product.size_kg)}{product.unit}",
             ]
             haystack = " ".join(cls._normalize_match_text(field) for field in fields)
             score = 0

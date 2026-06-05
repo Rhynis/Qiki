@@ -46,6 +46,21 @@ class ProductRepository:
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
+    async def list_brands(
+        self,
+        *,
+        category: str | None = None,
+        active_only: bool = True,
+    ) -> list[str]:
+        """Return distinct product brands sorted alphabetically."""
+        query = select(Product.brand).distinct().order_by(Product.brand.asc())
+        if active_only:
+            query = query.where(Product.is_active.is_(True))
+        if category:
+            query = query.where(Product.category == category)
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
+
     async def update(self, product_id: UUID, data: dict[str, object]) -> Product:
         """Update a product."""
         product = await self.get_by_id(product_id)

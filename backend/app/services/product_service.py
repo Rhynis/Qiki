@@ -66,6 +66,10 @@ class ProductService:
         )
         return result.items
 
+    async def list_brands(self, category: str | None = None) -> list[str]:
+        """Return active product brands for filter controls."""
+        return await self.repository.list_brands(category=category, active_only=True)
+
     async def update_product(
         self,
         product_id: UUID,

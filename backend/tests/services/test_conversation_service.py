@@ -527,6 +527,30 @@ def _substring_brand_catalog() -> list[ProductResponse]:
     ]
 
 
+def _water_catalog() -> list[ProductResponse]:
+    now = datetime.now(UTC)
+    return [
+        ProductResponse(
+            id=uuid.uuid4(),
+            sku="HOANHAO-20L",
+            name="Nước Hoàn Hảo 20 lít",
+            brand="Hoàn Hảo",
+            size_kg=Decimal("20"),
+            category="nuoc_uong",
+            unit="lít",
+            price=Decimal("15000"),
+            stock_quantity=30,
+            description=None,
+            image_url=None,
+            safety_info=None,
+            pricing_note="Giá tại cửa hàng; giao +5.000đ.",
+            is_active=True,
+            created_at=now,
+            updated_at=now,
+        )
+    ]
+
+
 @pytest.mark.asyncio
 async def test_product_cards_filtered_for_specific_product() -> None:
     service, _conversations, _messages, _rag, _orders = make_service(
@@ -685,6 +709,34 @@ async def test_chat_order_creates_order_on_confirmation() -> None:
     assert orders.last_checkout.items[0].quantity == 1
     assert orders.last_user is None
     assert response.assistant_message.retrieved_documents[0]["order_number"] == "QC-000123"
+
+
+@pytest.mark.asyncio
+async def test_chat_order_creates_water_order_without_escalation() -> None:
+    products = _water_catalog()
+    payload = complete_order_payload(confirmed=True)
+    payload["product"] = "Hoàn Hảo 20 lít"
+    order_service = FakeOrderService()
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([payload]),
+        product_service=FakeProductService(products=products),
+        order_service=order_service,
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Đúng rồi, xác nhận đặt nước Hoàn Hảo"),
+        user=None,
+    )
+
+    assert orders.calls == 1
+    assert response.conversation.status == "active"
+    assert response.assistant_message is not None
+    assert "QC-000123" in response.assistant_message.content
+    assert orders.last_checkout.items[0].product_id == products[0].id
+    assert orders.last_checkout.items[0].quantity == 1
 
 
 @pytest.mark.asyncio
