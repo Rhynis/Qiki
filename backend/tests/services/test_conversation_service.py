@@ -547,8 +547,30 @@ def _water_catalog() -> list[ProductResponse]:
             is_active=True,
             created_at=now,
             updated_at=now,
-        )
+        ),
+        ProductResponse(
+            id=uuid.uuid4(),
+            sku="VIHAWA-20L",
+            name="Nước Vihawa 20 lít",
+            brand="Vihawa",
+            size_kg=Decimal("20"),
+            category="nuoc_uong",
+            unit="lít",
+            price=Decimal("50000"),
+            stock_quantity=20,
+            description=None,
+            image_url=None,
+            safety_info=None,
+            pricing_note="Giá tại cửa hàng; giao +5.000đ.",
+            is_active=True,
+            created_at=now,
+            updated_at=now,
+        ),
     ]
+
+
+def _category_catalog() -> list[ProductResponse]:
+    return _water_catalog() + _multi_catalog()
 
 
 @pytest.mark.asyncio
@@ -669,6 +691,44 @@ async def test_product_cards_full_catalog_for_general_query() -> None:
     assert len(response.products) == 3
 
 
+@pytest.mark.asyncio
+async def test_product_cards_water_category_query_returns_only_water() -> None:
+    service, _conversations, _messages, _rag, _orders = make_service(
+        product_service=FakeProductService(products=_category_catalog())
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="nước"),
+        user=None,
+    )
+
+    assert response.user_message.intent == IntentCategory.PRODUCT_INQUIRY.value
+    assert [product.sku for product in response.products] == ["HOANHAO-20L", "VIHAWA-20L"]
+
+
+@pytest.mark.asyncio
+async def test_product_cards_gas_category_query_returns_only_gas() -> None:
+    service, _conversations, _messages, _rag, _orders = make_service(
+        product_service=FakeProductService(products=_category_catalog())
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="gas"),
+        user=None,
+    )
+
+    assert response.user_message.intent == IntentCategory.PRODUCT_INQUIRY.value
+    assert [product.sku for product in response.products] == [
+        "PETROLIMEX-12KG",
+        "MT-GAS-12KG",
+        "PETROLIMEX-45KG",
+    ]
+
+
 def complete_order_payload(
     confirmed: bool = False, address: str | None = None
 ) -> dict[str, object]:
@@ -737,6 +797,29 @@ async def test_chat_order_creates_water_order_without_escalation() -> None:
     assert "QC-000123" in response.assistant_message.content
     assert orders.last_checkout.items[0].product_id == products[0].id
     assert orders.last_checkout.items[0].quantity == 1
+
+
+@pytest.mark.asyncio
+async def test_chat_order_bare_water_category_asks_for_product_choice() -> None:
+    payload = complete_order_payload(confirmed=True)
+    payload["product"] = "nước"
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([payload]),
+        product_service=FakeProductService(products=_category_catalog()),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="đặt nước"),
+        user=None,
+    )
+
+    assert orders.calls == 0
+    assert response.assistant_message is not None
+    assert "loại nước uống nào" in response.assistant_message.content
+    assert [product.sku for product in response.products] == ["HOANHAO-20L", "VIHAWA-20L"]
 
 
 @pytest.mark.asyncio

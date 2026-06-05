@@ -34,6 +34,8 @@ INTENT_EXAMPLES: dict[IntentCategory, list[str]] = {
         "Binh gas nao tiet kiem nhat?",
         "Co ban nuoc Hoan Hao khong?",
         "Nuoc Vihawa 20 lit gia bao nhieu?",
+        "Nuoc",
+        "Gas",
     ],
     IntentCategory.PLACE_ORDER: [
         "Toi muon dat mot binh gas",
@@ -41,8 +43,6 @@ INTENT_EXAMPLES: dict[IntentCategory, list[str]] = {
         "Mua gas giup toi",
         "Cho toi dat hang ngay bay gio",
         "Can giao mot binh gas chieu nay",
-        "Toi muon dat nuoc Hoan Hao",
-        "Giao cho toi 1 binh nuoc Vihawa 20 lit",
     ],
     IntentCategory.DELIVERY_STATUS: [
         "Don hang cua toi den dau roi?",
