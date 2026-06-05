@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { ChevronDown, Flame, Phone, ShoppingCart, Droplets } from 'lucide-react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -17,6 +17,23 @@ import { useCartStore } from '@/lib/stores/cart-store'
 export function Header() {
   const itemCount = useCartStore((state) => state.getItemCount())
   const [productMenuOpen, setProductMenuOpen] = useState(false)
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function openProductMenu() {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current)
+      closeTimerRef.current = null
+    }
+    setProductMenuOpen(true)
+  }
+
+  function scheduleProductMenuClose() {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current)
+    closeTimerRef.current = setTimeout(() => {
+      setProductMenuOpen(false)
+      closeTimerRef.current = null
+    }, 150)
+  }
 
   return (
     <header className="border-b bg-white">
@@ -25,32 +42,37 @@ export function Header() {
           Gas Quốc Cường
         </Link>
         <nav className="flex items-center gap-3 text-sm">
-          <div className="flex items-center" onMouseEnter={() => setProductMenuOpen(true)}>
-            <Link
-              href="/products"
-              className="rounded-md px-2 py-2 font-medium text-slate-700 transition hover:text-primary"
-            >
-              Sản phẩm
-            </Link>
+          <div
+            className="flex items-center"
+            onMouseEnter={openProductMenu}
+            onMouseLeave={scheduleProductMenuClose}
+          >
             <DropdownMenu open={productMenuOpen} onOpenChange={setProductMenuOpen}>
               <DropdownMenuTrigger asChild>
                 <button
-                  aria-label="Mở danh mục sản phẩm"
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-600 transition hover:bg-slate-100 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="inline-flex h-9 items-center gap-1 rounded-md px-2 font-medium text-slate-700 transition hover:bg-slate-100 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   type="button"
                 >
+                  Sản phẩm
                   <ChevronDown className="h-4 w-4" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
+              <DropdownMenuContent
+                align="start"
+                onMouseEnter={openProductMenu}
+                onMouseLeave={scheduleProductMenuClose}
+              >
                 <DropdownMenuItem asChild>
-                  <Link href="/products?category=gas">
+                  <Link href="/products?category=gas" onClick={() => setProductMenuOpen(false)}>
                     <Flame className="h-4 w-4 text-primary" />
                     Gas
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/products?category=nuoc_uong">
+                  <Link
+                    href="/products?category=nuoc_uong"
+                    onClick={() => setProductMenuOpen(false)}
+                  >
                     <Droplets className="h-4 w-4 text-primary" />
                     Nước Uống
                   </Link>

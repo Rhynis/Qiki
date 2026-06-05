@@ -3,12 +3,19 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import * as productsApi from '@/lib/api/products'
-import type { ProductCreateInput, ProductSearchParams, ProductUpdateInput } from '@/types/product'
+import type {
+  ProductCategory,
+  ProductCreateInput,
+  ProductSearchParams,
+  ProductUpdateInput,
+} from '@/types/product'
 
 export const productKeys = {
   all: ['products'] as const,
   lists: () => [...productKeys.all, 'list'] as const,
   list: (params: ProductSearchParams) => [...productKeys.lists(), params] as const,
+  brands: (category?: ProductCategory) =>
+    [...productKeys.all, 'brands', category ?? 'all'] as const,
   details: () => [...productKeys.all, 'detail'] as const,
   detail: (productId: string) => [...productKeys.details(), productId] as const,
   lowStock: (threshold: number) => [...productKeys.all, 'low-stock', threshold] as const,
@@ -41,6 +48,13 @@ export function useProduct(productId: string) {
     queryKey: productKeys.detail(productId),
     queryFn: () => productsApi.getProduct(productId),
     enabled: Boolean(productId),
+  })
+}
+
+export function useProductBrands(category?: ProductCategory) {
+  return useQuery({
+    queryKey: productKeys.brands(category),
+    queryFn: () => productsApi.getProductBrands(category),
   })
 }
 

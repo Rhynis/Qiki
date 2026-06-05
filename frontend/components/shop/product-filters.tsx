@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { useProductBrands } from '@/lib/hooks/use-products'
 import type { ProductCategory } from '@/types/product'
 
 const sizes = ['6', '12', '45']
@@ -27,18 +28,19 @@ export function ProductFilters({ category }: ProductFiltersProps) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const [search, setSearch] = useState(searchParams.get('search') ?? '')
-  const [brand, setBrand] = useState(searchParams.get('brand') ?? '')
+  const [brand, setBrand] = useState(searchParams.get('brand') ?? 'all')
   const [size, setSize] = useState(searchParams.get('size_kg') ?? 'all')
   const [inStockOnly, setInStockOnly] = useState(searchParams.get('in_stock_only') === 'true')
   const [sort, setSort] = useState(
     `${searchParams.get('sort_by') ?? 'created_at'}:${searchParams.get('sort_order') ?? 'desc'}`
   )
+  const { data: brands = [] } = useProductBrands(category)
 
   function applyFilters() {
     const next = new URLSearchParams()
     if (category) next.set('category', category)
     if (search.trim()) next.set('search', search.trim())
-    if (brand.trim()) next.set('brand', brand.trim())
+    if (brand !== 'all') next.set('brand', brand)
     if (category !== 'nuoc_uong' && size !== 'all') next.set('size_kg', size)
     if (inStockOnly) next.set('in_stock_only', 'true')
     const [sortBy, sortOrder] = sort.split(':')
@@ -49,7 +51,7 @@ export function ProductFilters({ category }: ProductFiltersProps) {
 
   function clearFilters() {
     setSearch('')
-    setBrand('')
+    setBrand('all')
     setSize('all')
     setInStockOnly(false)
     setSort('created_at:desc')
@@ -57,6 +59,7 @@ export function ProductFilters({ category }: ProductFiltersProps) {
   }
 
   const showSizeFilter = category !== 'nuoc_uong'
+  const brandOptions = brand !== 'all' && !brands.includes(brand) ? [brand, ...brands] : brands
 
   return (
     <div className="rounded-lg border bg-white p-4">
@@ -83,8 +86,20 @@ export function ProductFilters({ category }: ProductFiltersProps) {
           </div>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="brand">Thương hiệu</Label>
-          <Input id="brand" value={brand} onChange={(event) => setBrand(event.target.value)} />
+          <Label>Thương hiệu</Label>
+          <Select value={brand} onValueChange={setBrand}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tất cả</SelectItem>
+              {brandOptions.map((item) => (
+                <SelectItem key={item} value={item}>
+                  {item}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         {showSizeFilter ? (
           <div className="space-y-2">

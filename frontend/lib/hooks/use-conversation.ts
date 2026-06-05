@@ -188,7 +188,9 @@ export function useSendMessage() {
         }
       )
       if (response.assistant_message?.is_emergency) {
-        toast.error('Khẩn cấp an toàn gas: gọi 114 hoặc 115 ngay')
+        toast.error('Khẩn cấp an toàn gas: gọi 114 hoặc 115 ngay', {
+          className: 'w-auto max-w-[calc(100vw-2rem)] whitespace-nowrap',
+        })
       }
     },
     onSettled: async (_data, _error, variables) => {

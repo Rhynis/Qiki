@@ -156,6 +156,44 @@ async def test_list_products_filters_by_category(
     assert data["items"][0]["unit"] == "lít"
 
 
+async def test_list_product_brands_filters_active_brands_by_category(
+    test_client: AsyncClient,
+    product_session: AsyncSession,
+) -> None:
+    await create_db_product(product_session, sku="PETROLIMEX-12", brand="Petrolimex")
+    await create_db_product(product_session, sku="SHELL-12", brand="Shell Gas", is_active=False)
+    await create_db_product(
+        product_session,
+        sku="VIHAWA-20L",
+        name="Nuoc Vihawa 20 lit",
+        brand="Vihawa",
+        size_kg=Decimal("20"),
+        category="nuoc_uong",
+        unit="lít",
+        price=Decimal("50000"),
+    )
+    await create_db_product(
+        product_session,
+        sku="HOANHAO-20L",
+        name="Nuoc Hoan Hao 20 lit",
+        brand="Hoàn Hảo",
+        size_kg=Decimal("20"),
+        category="nuoc_uong",
+        unit="lít",
+        price=Decimal("15000"),
+    )
+
+    all_response = await test_client.get("/api/v1/products/brands")
+    water_response = await test_client.get(
+        "/api/v1/products/brands", params={"category": "nuoc_uong"}
+    )
+
+    assert all_response.status_code == 200
+    assert all_response.json() == ["Hoàn Hảo", "Petrolimex", "Vihawa"]
+    assert water_response.status_code == 200
+    assert water_response.json() == ["Hoàn Hảo", "Vihawa"]
+
+
 async def test_get_product_by_id(
     test_client: AsyncClient,
     product_session: AsyncSession,

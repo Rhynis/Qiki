@@ -1,6 +1,7 @@
 import { apiClient } from '@/lib/api/client'
 import type {
   Product,
+  ProductCategory,
   ProductCreateInput,
   ProductListResponse,
   ProductSearchParams,
@@ -19,6 +20,13 @@ export async function getProduct(productId: string): Promise<Product> {
 
 export async function getProductBySku(sku: string): Promise<Product> {
   const response = await apiClient.get<Product>(`/api/v1/products/sku/${sku}`)
+  return response.data
+}
+
+export async function getProductBrands(category?: ProductCategory): Promise<string[]> {
+  const response = await apiClient.get<string[]>('/api/v1/products/brands', {
+    params: category ? { category } : undefined,
+  })
   return response.data
 }
 
