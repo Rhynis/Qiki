@@ -25,7 +25,7 @@ def test_vietnamese_phone_normalizes_to_plus84() -> None:
     assert VietnamesePhoneValidator.validate("0901 234 567") == "+84901234567"
 
 
-@pytest.mark.parametrize("phone", ["123", "+84123", "abc", "0012345678"])
+@pytest.mark.parametrize("phone", ["123", "19002929", "+84123", "abc", "0012345678"])
 def test_vietnamese_phone_rejects_invalid_formats(phone: str) -> None:
     """Invalid phone numbers should be rejected."""
     with pytest.raises(ValueError):

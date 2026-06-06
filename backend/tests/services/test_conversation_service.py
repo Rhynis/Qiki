@@ -409,7 +409,7 @@ async def test_send_message_adds_product_catalog_context_to_rag() -> None:
 
 
 @pytest.mark.asyncio
-async def test_send_message_adds_product_cards_for_place_order() -> None:
+async def test_send_message_omits_product_cards_for_place_order_slot_fill() -> None:
     payload = complete_order_payload()
     payload["customer_phone"] = None
     service, _conversations, _messages, _rag, _orders = make_service(
@@ -424,12 +424,7 @@ async def test_send_message_adds_product_cards_for_place_order() -> None:
         user=None,
     )
 
-    assert len(response.products) == 1
-    product = response.products[0]
-    assert product.sku == "PETROLIMEX-12KG"
-    assert product.brand == "Petrolimex"
-    assert product.size_kg == Decimal("12")
-    assert product.stock_quantity == 20
+    assert response.products == []
 
 
 @pytest.mark.asyncio
@@ -746,6 +741,33 @@ def complete_order_payload(
     }
 
 
+async def add_order_state_history(
+    messages: FakeMessageRepository,
+    conversation_id: uuid.UUID,
+    status: str = "awaiting_missing_slots",
+) -> None:
+    await messages.create(
+        {
+            "conversation_id": conversation_id,
+            "role": "user",
+            "content": "Mình muốn đặt nước Vihawa 20 lít giao Hiệp Bình",
+            "intent": IntentCategory.PLACE_ORDER.value,
+            "intent_confidence": 0.9,
+        }
+    )
+    await messages.create(
+        {
+            "conversation_id": conversation_id,
+            "role": "assistant",
+            "content": "Bạn cho Qiki xin thêm tên, số điện thoại và thanh toán nhé.",
+            "intent": IntentCategory.PLACE_ORDER.value,
+            "intent_confidence": 0.9,
+            "latency_ms": 0,
+            "retrieved_documents": [{"type": "chat_order_state", "status": status}],
+        }
+    )
+
+
 @pytest.mark.asyncio
 async def test_chat_order_creates_order_on_confirmation() -> None:
     order_service = FakeOrderService()
@@ -766,6 +788,7 @@ async def test_chat_order_creates_order_on_confirmation() -> None:
     assert response.assistant_message is not None
     assert "QC-000123" in response.assistant_message.content
     assert "Nhân viên sẽ sớm gọi điện lại xác nhận" in response.assistant_message.content
+    assert response.products == []
     assert orders.last_checkout.source == "chatbot"
     assert orders.last_checkout.referral_conversation_id == conversation.id
     assert orders.last_checkout.delivery_district == "Thủ Đức"
@@ -798,6 +821,7 @@ async def test_chat_order_creates_water_order_without_escalation() -> None:
     assert response.conversation.status == "active"
     assert response.assistant_message is not None
     assert "QC-000123" in response.assistant_message.content
+    assert response.products == []
     assert orders.last_checkout.items[0].product_id == products[0].id
     assert orders.last_checkout.items[0].quantity == 1
 
@@ -844,6 +868,7 @@ async def test_chat_order_missing_slot_asks_again() -> None:
     assert orders.calls == 0
     assert response.assistant_message is not None
     assert "số điện thoại" in response.assistant_message.content
+    assert response.products == []
 
 
 @pytest.mark.asyncio
@@ -866,6 +891,7 @@ async def test_chat_order_missing_address_mentions_khu_pho() -> None:
     assert response.assistant_message is not None
     assert "khu phố" in response.assistant_message.content
     assert "mốc gần nhà" in response.assistant_message.content
+    assert response.products == []
 
 
 @pytest.mark.asyncio
@@ -890,7 +916,89 @@ async def test_chat_order_address_slot_fill_does_not_return_full_catalog() -> No
     assert orders.calls == 0
     assert response.assistant_message is not None
     assert "số điện thoại" in response.assistant_message.content
-    assert [product.sku for product in response.products] == ["VIHAWA-20L"]
+    assert response.products == []
+
+
+@pytest.mark.asyncio
+async def test_order_in_progress_keeps_order_route_for_ambiguous_phone_message() -> None:
+    payload = complete_order_payload()
+    payload["product"] = "Vihawa 20 lít"
+    payload["customer_name"] = "Vân"
+    payload["customer_phone"] = "19002929"
+    payload["delivery_address"] = "15 đường số 5, Khu phố 36, Phường Hiệp Bình, TP.HCM"
+    payload["payment_method"] = "cod"
+    service, _conversations, messages, rag, orders = make_service(
+        category=IntentCategory.PRODUCT_INQUIRY,
+        llm_provider=FakeLLMProvider([payload]),
+        product_service=FakeProductService(products=_category_catalog()),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_order_state_history(messages, conversation.id)
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Van 19002929 cod"),
+        user=None,
+    )
+
+    assert response.user_message.intent == IntentCategory.PLACE_ORDER.value
+    assert rag.calls == 0
+    assert orders.calls == 0
+    assert response.assistant_message is not None
+    assert "van điều áp" not in response.assistant_message.content.lower()
+    assert "19002929" in response.assistant_message.content
+    assert "SĐT Việt Nam" in response.assistant_message.content
+    assert response.products == []
+
+
+@pytest.mark.asyncio
+async def test_order_in_progress_unknown_product_stays_catalog_only() -> None:
+    payload = complete_order_payload()
+    payload["product"] = "van điều áp mã 19002929"
+    service, _conversations, messages, rag, orders = make_service(
+        category=IntentCategory.PRODUCT_INQUIRY,
+        llm_provider=FakeLLMProvider([payload]),
+        product_service=FakeProductService(products=_category_catalog()),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_order_state_history(messages, conversation.id)
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Van 0903026306 cod"),
+        user=None,
+    )
+
+    assert response.user_message.intent == IntentCategory.PLACE_ORDER.value
+    assert rag.calls == 0
+    assert orders.calls == 0
+    assert response.assistant_message is not None
+    assert "sản phẩm nào trong cửa hàng" in response.assistant_message.content
+    assert response.products == []
+
+
+@pytest.mark.parametrize("phone", ["19002929", "123"])
+@pytest.mark.asyncio
+async def test_chat_order_rejects_invalid_phone_and_does_not_create_order(phone: str) -> None:
+    payload = complete_order_payload(confirmed=True)
+    payload["customer_phone"] = phone
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([payload]),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content=f"Vân {phone} cod"),
+        user=None,
+    )
+
+    assert orders.calls == 0
+    assert response.assistant_message is not None
+    assert phone in response.assistant_message.content
+    assert "10 số, đầu 03/05/07/08/09" in response.assistant_message.content
+    assert response.products == []
 
 
 @pytest.mark.asyncio
@@ -912,6 +1020,7 @@ async def test_chat_order_outside_zone_declined() -> None:
     assert orders.calls == 0
     assert response.assistant_message is not None
     assert "chỉ giao trong khu vực Bình Thạnh và Thủ Đức" in response.assistant_message.content
+    assert response.products == []
 
 
 @pytest.mark.asyncio
@@ -932,6 +1041,7 @@ async def test_chat_order_requires_explicit_confirmation() -> None:
     assert response.assistant_message is not None
     assert "Qiki tóm tắt đơn hàng" in response.assistant_message.content
     assert "Bạn xác nhận đặt đơn này không?" in response.assistant_message.content
+    assert response.products == []
 
 
 @pytest.mark.asyncio
@@ -953,6 +1063,7 @@ async def test_chat_order_rejects_string_false_confirmation() -> None:
     assert orders.calls == 0
     assert response.assistant_message is not None
     assert "Bạn xác nhận đặt đơn này không?" in response.assistant_message.content
+    assert response.products == []
 
 
 @pytest.mark.asyncio
@@ -978,6 +1089,32 @@ async def test_safety_emergency_escalates_and_keeps_hotline() -> None:
     assert response.products == []
     assert product_service.calls == 0
     assert rag.last_kwargs["product_context"] is None
+
+
+@pytest.mark.asyncio
+async def test_order_in_progress_does_not_override_safety_emergency() -> None:
+    product_service = FakeProductService()
+    service, _conversations, messages, rag, _orders = make_service(
+        category=IntentCategory.SAFETY_EMERGENCY,
+        requires_human=True,
+        product_service=product_service,
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_order_state_history(messages, conversation.id)
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Tôi ngửi thấy mùi gas"),
+        user=None,
+    )
+
+    assert response.user_message.intent == IntentCategory.SAFETY_EMERGENCY.value
+    assert response.conversation.status == "escalated"
+    assert response.assistant_message is not None
+    assert response.assistant_message.is_emergency is True
+    assert response.products == []
+    assert product_service.calls == 0
+    assert rag.calls == 1
 
 
 @pytest.mark.asyncio
