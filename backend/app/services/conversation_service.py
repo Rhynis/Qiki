@@ -4,7 +4,7 @@ import json
 import re
 import unicodedata
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from typing import Any, Literal
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
@@ -16,6 +16,7 @@ from app.core.exceptions import NotFoundException
 from app.core.input_validation import VietnamesePhoneValidator
 from app.intent.base import BaseIntentClassifier
 from app.intent.categories import IntentCategory
+from app.intent.schemas import IntentResult
 from app.llm.base import BaseLLMProvider
 from app.models.conversation import Conversation
 from app.models.message import Message
@@ -39,6 +40,7 @@ from app.services.product_service import ProductService
 from app.services.routing_service import RoutingDecision, RoutingService
 
 CHAT_ORDER_METADATA_TYPE = "chat_order"
+CHAT_ORDER_STATE_METADATA_TYPE = "chat_order_state"
 ORDER_CONFIRMATION_PROMPT = "Bạn xác nhận đặt đơn này không?"
 
 
@@ -149,6 +151,7 @@ class ConversationService:
         history = await self.message_repository.get_recent(conversation_id, limit=10)
         history_payload = self._history_to_payload(history)
         intent = await self.intent_classifier.classify(request.content, history_payload)
+        intent = self._apply_order_context_intent(intent, history)
 
         user_message = await self.message_repository.create(
             {
@@ -310,9 +313,6 @@ class ConversationService:
                 card_products=[],
             )
 
-        def contextual_cards(product: ProductResponse | None) -> list[ProductResponse]:
-            return [product] if product is not None else []
-
         def category_cards(query: str | None) -> list[ProductResponse]:
             category = self._category_filter_from_query(self._normalize_match_text(query or ""))
             if category is None:
@@ -325,29 +325,54 @@ class ConversationService:
         ) -> ChatOrderResult:
             return ChatOrderResult(message=message, card_products=list(card_products or []))
 
+        async def order_state_message(content: str, status: str) -> Message:
+            return await self._create_assistant_message(
+                conversation,
+                content,
+                IntentCategory.PLACE_ORDER,
+                confidence,
+                metadata=[self._order_state_metadata(status)],
+            )
+
         slots = await self._extract_order_slots(content, history_payload, products)
+        slots = self._with_phone_candidate(slots, content)
         if self._is_bare_category_query(slots.product):
             return result(
-                await self._create_assistant_message(
-                    conversation,
+                await order_state_message(
                     self._format_category_product_question(slots.product or ""),
-                    IntentCategory.PLACE_ORDER,
-                    confidence,
+                    "awaiting_product_choice",
                 ),
                 category_cards(slots.product),
             )
 
         matched_product = self._match_product(slots.product, products)
+        normalized_phone = (
+            self._validate_phone(slots.customer_phone) if slots.customer_phone else None
+        )
+        if slots.customer_phone and normalized_phone is None:
+            return result(
+                await order_state_message(
+                    self._format_invalid_phone_question(slots.customer_phone),
+                    "awaiting_missing_slots",
+                )
+            )
+        if matched_product is None and slots.product:
+            return result(
+                await order_state_message(
+                    (
+                        "Qiki chưa tìm thấy sản phẩm này trong catalog. "
+                        "Bạn muốn đặt sản phẩm nào trong cửa hàng (gas hoặc nước uống hiện có)?"
+                    ),
+                    "awaiting_product_choice",
+                )
+            )
         missing = self._missing_order_slots(slots, matched_product)
         if missing:
             return result(
-                await self._create_assistant_message(
-                    conversation,
+                await order_state_message(
                     self._format_missing_slot_question(missing),
-                    IntentCategory.PLACE_ORDER,
-                    confidence,
-                ),
-                contextual_cards(matched_product),
+                    "awaiting_missing_slots",
+                )
             )
 
         assert slots.quantity is not None
@@ -356,66 +381,45 @@ class ConversationService:
         assert slots.delivery_address is not None
         assert slots.payment_method is not None
         assert matched_product is not None
+        assert normalized_phone is not None
 
         delivery_zone_match = resolve_ward_delivery_zone(slots.delivery_address)
         if delivery_zone_match is None:
             return result(
-                await self._create_assistant_message(
-                    conversation,
+                await order_state_message(
                     (
                         "Hiện Gas Quốc Cường chỉ giao trong khu vực Bình Thạnh và Thủ Đức. "
                         "Địa chỉ này chưa thuộc khu vực Qiki có thể nhận đơn qua chat. "
                         "Bạn có thể gọi 090 3026306 để được nhân viên hỗ trợ thêm."
                     ),
-                    IntentCategory.PLACE_ORDER,
-                    confidence,
+                    "awaiting_missing_slots",
                 ),
-                contextual_cards(matched_product),
-            )
-
-        normalized_phone = self._validate_phone(slots.customer_phone)
-        if normalized_phone is None:
-            return result(
-                await self._create_assistant_message(
-                    conversation,
-                    "Bạn cho Qiki xin số điện thoại hợp lệ để nhân viên gọi xác nhận đơn nhé.",
-                    IntentCategory.PLACE_ORDER,
-                    confidence,
-                ),
-                contextual_cards(matched_product),
             )
 
         if matched_product.stock_quantity < slots.quantity:
             return result(
-                await self._create_assistant_message(
-                    conversation,
+                await order_state_message(
                     (
                         f"Sản phẩm **{matched_product.name}** hiện chỉ còn "
                         f"{matched_product.stock_quantity} bình. "
                         "Bạn muốn điều chỉnh số lượng không?"
                     ),
-                    IntentCategory.PLACE_ORDER,
-                    confidence,
-                ),
-                contextual_cards(matched_product),
+                    "awaiting_missing_slots",
+                )
             )
 
         payment_method = self._normalize_payment_method(slots.payment_method)
         if payment_method is None:
             return result(
-                await self._create_assistant_message(
-                    conversation,
+                await order_state_message(
                     "Bạn muốn thanh toán khi nhận hàng (COD) hay chuyển khoản?",
-                    IntentCategory.PLACE_ORDER,
-                    confidence,
-                ),
-                contextual_cards(matched_product),
+                    "awaiting_missing_slots",
+                )
             )
 
         if not slots.confirmed:
             return result(
-                await self._create_assistant_message(
-                    conversation,
+                await order_state_message(
                     self._format_order_summary(
                         matched_product,
                         slots.quantity,
@@ -424,10 +428,8 @@ class ConversationService:
                         slots.delivery_address,
                         payment_method,
                     ),
-                    IntentCategory.PLACE_ORDER,
-                    confidence,
+                    "awaiting_confirmation",
                 ),
-                contextual_cards(matched_product),
             )
 
         checkout = CheckoutRequest(
@@ -461,14 +463,13 @@ class ConversationService:
                 conversation,
                 (
                     f"Đã ghi nhận đơn **{order.order_number}**. "
-                    "**Nhân viên sẽ sớm gọi điện lại xác nhận** với bạn trong giờ làm việc "
+                    "**Nhân viên sẽ sớm gọi điện lại xác nhận** đơn trong giờ làm việc "
                     "(T2-T6 06:30-20:00, T7-CN 07:30-20:00). Cảm ơn bạn!"
                 ),
                 IntentCategory.PLACE_ORDER,
                 confidence,
                 metadata=metadata,
             ),
-            contextual_cards(matched_product),
         )
 
     async def _extract_order_slots(
@@ -495,6 +496,10 @@ Các trường:
   phường, TP.HCM; với Hiệp Bình cần khu phố và mốc gần nhà; hoặc null
 - payment_method: "cod" hoặc "bank_transfer", hoặc null
 - confirmed: true nếu khách xác nhận rõ đơn Qiki đã tóm tắt ở lượt trước; ngược lại false
+
+Không tự suy đoán hoặc tự điền số điện thoại. Nếu tin mới có dãy số khách đưa
+nhưng không chắc hợp lệ, vẫn trả nguyên dãy số đó trong customer_phone để hệ thống kiểm tra.
+Chỉ chọn product từ danh sách sản phẩm có thể chọn; không dùng kiến thức ngoài catalog.
 
 Sản phẩm có thể chọn:
 {product_lines}
@@ -783,6 +788,22 @@ Tin mới:
         return False
 
     @classmethod
+    def _with_phone_candidate(cls, slots: ChatOrderSlots, content: str) -> ChatOrderSlots:
+        if slots.customer_phone:
+            return slots
+        candidate = cls._extract_phone_candidate(content)
+        return replace(slots, customer_phone=candidate) if candidate else slots
+
+    @staticmethod
+    def _extract_phone_candidate(content: str) -> str | None:
+        for match in re.finditer(r"\+?\d[\d\s.-]{1,}\d", content):
+            candidate = match.group(0).strip()
+            digits = re.sub(r"\D", "", candidate)
+            if len(digits) >= 3:
+                return "+" + digits if candidate.startswith("+") else digits
+        return None
+
+    @classmethod
     def _missing_order_slots(
         cls,
         slots: ChatOrderSlots,
@@ -814,6 +835,13 @@ Tin mới:
             "Bạn cho Qiki xin thêm "
             + ", ".join(missing[:-1])
             + f" và {missing[-1]} để lên đơn nhé."
+        )
+
+    @staticmethod
+    def _format_invalid_phone_question(phone: str) -> str:
+        return (
+            f"Số **{phone}** có vẻ chưa đúng định dạng SĐT Việt Nam "
+            "(10 số, đầu 03/05/07/08/09). Bạn cho Qiki xin lại SĐT nhé."
         )
 
     @classmethod
@@ -931,6 +959,45 @@ Tin mới:
                 ):
                     return document
         return None
+
+    @classmethod
+    def _apply_order_context_intent(
+        cls, intent: IntentResult, history: Sequence[Message]
+    ) -> IntentResult:
+        if intent.category == IntentCategory.SAFETY_EMERGENCY:
+            return intent
+        if not cls._is_order_in_progress(history):
+            return intent
+        return IntentResult(
+            category=IntentCategory.PLACE_ORDER,
+            confidence=intent.confidence,
+            reasoning=f"order_in_progress override: {intent.reasoning}",
+            classifier=f"{intent.classifier}+order_context",
+        )
+
+    @classmethod
+    def _is_order_in_progress(cls, history: Sequence[Message]) -> bool:
+        for message in reversed(history):
+            if message.role != "assistant":
+                continue
+            documents = message.retrieved_documents or []
+            if not isinstance(documents, list):
+                return False
+            if cls._has_metadata_type(documents, CHAT_ORDER_METADATA_TYPE):
+                return False
+            return cls._has_metadata_type(documents, CHAT_ORDER_STATE_METADATA_TYPE)
+        return False
+
+    @staticmethod
+    def _order_state_metadata(status: str) -> dict[str, str]:
+        return {"type": CHAT_ORDER_STATE_METADATA_TYPE, "status": status}
+
+    @staticmethod
+    def _has_metadata_type(documents: Sequence[object], metadata_type: str) -> bool:
+        return any(
+            isinstance(document, dict) and document.get("type") == metadata_type
+            for document in documents
+        )
 
     async def _create_handoff_message(
         self,

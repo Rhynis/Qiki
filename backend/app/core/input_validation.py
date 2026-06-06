@@ -7,7 +7,7 @@ from typing import Any, ClassVar
 class VietnamesePhoneValidator:
     """Validate and normalize Vietnamese phone numbers."""
 
-    PATTERN = re.compile(r"^(\+84|0)[1-9][0-9]{8,9}$")
+    PATTERN = re.compile(r"^(\+84[35789][0-9]{8}|0[35789][0-9]{8})$")
 
     @classmethod
     def validate(cls, value: str) -> str:
