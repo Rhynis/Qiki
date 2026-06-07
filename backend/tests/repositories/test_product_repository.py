@@ -74,7 +74,7 @@ async def test_create_water_product_allows_20_liters(product_session: AsyncSessi
             size_kg=Decimal("20"),
             category="nuoc_uong",
             unit="lít",
-            price=Decimal("50000"),
+            price=Decimal("55000"),
             pricing_note="Gia tai cua hang; giao them phi.",
         )
     )
@@ -108,7 +108,13 @@ async def test_get_by_id_returns_product(product_session: AsyncSession) -> None:
 
 async def test_list_products_with_search(product_session: AsyncSession) -> None:
     await create_product(product_session, name="Binh gas gia dinh")
-    await create_product(product_session, sku="SHELL-45", name="Binh cong nghiep", brand="Shell")
+    await create_product(
+        product_session,
+        sku="SP-45KG-BO",
+        name="Binh cong nghiep",
+        brand="Saigon Petro",
+        size_kg=Decimal("45"),
+    )
 
     products, total = await ProductRepository(product_session).list_products(
         ProductSearchParams(search="gia dinh")
@@ -120,14 +126,14 @@ async def test_list_products_with_search(product_session: AsyncSession) -> None:
 
 async def test_list_products_with_brand_filter(product_session: AsyncSession) -> None:
     await create_product(product_session, brand="Saigon Petro")
-    await create_product(product_session, sku="SHELL-12", brand="Shell")
+    await create_product(product_session, sku="ELF-12KG-DO", brand="Elf Gas")
 
     products, total = await ProductRepository(product_session).list_products(
-        ProductSearchParams(brand="Shell")
+        ProductSearchParams(brand="Elf Gas")
     )
 
     assert total == 1
-    assert products[0].brand == "Shell"
+    assert products[0].brand == "Elf Gas"
 
 
 async def test_list_products_with_category_filter(product_session: AsyncSession) -> None:
@@ -140,7 +146,7 @@ async def test_list_products_with_category_filter(product_session: AsyncSession)
         size_kg=Decimal("20"),
         category="nuoc_uong",
         unit="lít",
-        price=Decimal("50000"),
+        price=Decimal("55000"),
     )
 
     products, total = await ProductRepository(product_session).list_products(

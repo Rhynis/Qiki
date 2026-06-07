@@ -216,12 +216,12 @@ class FakeProductService:
         self.products = products or [
             ProductResponse(
                 id=uuid.uuid4(),
-                sku="PETROLIMEX-12KG",
-                name="Bình gas Petrolimex 12kg",
+                sku="PLX-12KG-BIEN",
+                name="Bình gas Petrolimex 12kg (biển)",
                 brand="Petrolimex",
                 size_kg=Decimal("12"),
-                price=Decimal("440000"),
-                stock_quantity=20,
+                price=Decimal("675000"),
+                stock_quantity=50,
                 description=None,
                 image_url=None,
                 safety_info=None,
@@ -382,8 +382,8 @@ async def test_send_message_saves_user_and_assistant_messages() -> None:
     assert response.assistant_message is not None
     assert response.assistant_message.content == "Câu trả lời từ RAG"
     assert len(response.products) == 1
-    assert response.products[0].name == "Bình gas Petrolimex 12kg"
-    assert response.products[0].price == Decimal("440000")
+    assert response.products[0].name == "Bình gas Petrolimex 12kg (biển)"
+    assert response.products[0].price == Decimal("675000")
     assert rag.calls == 1
 
 
@@ -404,8 +404,8 @@ async def test_send_message_adds_product_catalog_context_to_rag() -> None:
     assert isinstance(product_context, str)
     assert "Bảng giá sản phẩm hiện có" in product_context
     assert "Bình gas Petrolimex 12kg" in product_context
-    assert "440.000đ" in product_context
-    assert "còn 20 bình" in product_context
+    assert "675.000đ" in product_context
+    assert "còn 50 bình" in product_context
 
 
 @pytest.mark.asyncio
@@ -446,9 +446,9 @@ async def test_send_message_omits_product_cards_for_general_info() -> None:
 def _multi_catalog() -> list[ProductResponse]:
     now = datetime.now(UTC)
     specs = [
-        ("PETROLIMEX-12KG", "Bình gas Petrolimex 12kg", "Petrolimex", "12", "440000", 40),
-        ("MT-GAS-12KG", "Bình gas MT Gas 12kg", "MT Gas", "12", "420000", 22),
-        ("PETROLIMEX-45KG", "Bình gas Petrolimex 45kg", "Petrolimex", "45", "1650000", 15),
+        ("PLX-12KG-BIEN", "Bình gas Petrolimex 12kg (biển)", "Petrolimex", "12", "675000", 50),
+        ("VT-12KG-XAM", "Bình gas VT 12kg (xám)", "VT Gas", "12", "605000", 50),
+        ("SP-45KG-BO", "Bình gas Saigon Petro 45kg (bò)", "Saigon Petro", "45", "2250000", 20),
     ]
     return [
         ProductResponse(
@@ -473,9 +473,9 @@ def _multi_catalog() -> list[ProductResponse]:
 def _multi_word_brand_catalog() -> list[ProductResponse]:
     now = datetime.now(UTC)
     specs = [
-        ("SHELL-GAS-12KG", "Bình gas Shell Gas 12kg", "Shell Gas", "12", "430000", 18),
-        ("ELF-GAS-12KG", "Bình gas Elf Gas 12kg", "Elf Gas", "12", "425000", 16),
-        ("MT-GAS-12KG", "Bình gas MT Gas 12kg", "MT Gas", "12", "420000", 22),
+        ("ELF-12KG-DO", "Bình gas Elf 12kg (đỏ)", "Elf Gas", "12", "710000", 50),
+        ("VT-12KG-XAM", "Bình gas VT 12kg (xám)", "VT Gas", "12", "605000", 50),
+        ("THUDUC-12KG", "Bình gas Thủ Đức 12kg", "Gas Thủ Đức", "12", "625000", 50),
     ]
     return [
         ProductResponse(
@@ -500,10 +500,10 @@ def _multi_word_brand_catalog() -> list[ProductResponse]:
 def _substring_brand_catalog() -> list[ProductResponse]:
     now = datetime.now(UTC)
     specs = [
-        ("PETROLIMEX-12KG", "Bình gas Petrolimex 12kg", "Petrolimex", "12", "440000", 40),
-        ("SAIGON-PETRO-12KG", "Bình gas Saigon Petro 12kg", "Saigon Petro", "12", "435000", 18),
-        ("SAIGON-PETRO-6KG", "Bình gas Saigon Petro 6kg", "Saigon Petro", "6", "260000", 12),
-        ("MT-GAS-12KG", "Bình gas MT Gas 12kg", "MT Gas", "12", "420000", 22),
+        ("PLX-12KG-BIEN", "Bình gas Petrolimex 12kg (biển)", "Petrolimex", "12", "675000", 50),
+        ("SP-12KG-XAM", "Bình gas Saigon Petro 12kg (xám)", "Saigon Petro", "12", "605000", 50),
+        ("ELF-6KG-DO", "Bình gas Elf 6kg (đỏ)", "Elf Gas", "6", "350000", 50),
+        ("VT-12KG-XAM", "Bình gas VT 12kg (xám)", "VT Gas", "12", "605000", 50),
     ]
     return [
         ProductResponse(
@@ -554,7 +554,7 @@ def _water_catalog() -> list[ProductResponse]:
             size_kg=Decimal("20"),
             category="nuoc_uong",
             unit="lít",
-            price=Decimal("50000"),
+            price=Decimal("55000"),
             stock_quantity=20,
             description=None,
             image_url=None,
@@ -580,11 +580,11 @@ async def test_product_cards_filtered_for_specific_product() -> None:
 
     response = await service.send_message(
         conversation.id,
-        SendMessageRequest(content="Giá bình MT Gas 12kg bao nhiêu?"),
+        SendMessageRequest(content="Giá bình VT Gas 12kg bao nhiêu?"),
         user=None,
     )
 
-    assert [product.sku for product in response.products] == ["MT-GAS-12KG"]
+    assert [product.sku for product in response.products] == ["VT-12KG-XAM"]
 
 
 @pytest.mark.asyncio
@@ -596,11 +596,11 @@ async def test_product_cards_brand_match_without_generic_gas_word() -> None:
 
     response = await service.send_message(
         conversation.id,
-        SendMessageRequest(content="bình shell 12kg"),
+        SendMessageRequest(content="bình elf 12kg"),
         user=None,
     )
 
-    assert [product.sku for product in response.products] == ["SHELL-GAS-12KG"]
+    assert [product.sku for product in response.products] == ["ELF-12KG-DO"]
 
 
 @pytest.mark.asyncio
@@ -616,7 +616,7 @@ async def test_product_cards_brand_match_exact_token_without_substring_bleed() -
         user=None,
     )
 
-    assert [product.sku for product in response.products] == ["SAIGON-PETRO-12KG"]
+    assert [product.sku for product in response.products] == ["SP-12KG-XAM"]
 
 
 @pytest.mark.asyncio
@@ -633,8 +633,7 @@ async def test_product_cards_saigon_petro_query_excludes_petrolimex() -> None:
     )
 
     assert [product.sku for product in response.products] == [
-        "SAIGON-PETRO-12KG",
-        "SAIGON-PETRO-6KG",
+        "SP-12KG-XAM",
     ]
 
 
@@ -651,7 +650,7 @@ async def test_product_cards_full_brand_name_does_not_match_shorter_substring_br
         user=None,
     )
 
-    assert [product.sku for product in response.products] == ["PETROLIMEX-12KG"]
+    assert [product.sku for product in response.products] == ["PLX-12KG-BIEN"]
 
 
 @pytest.mark.asyncio
@@ -668,8 +667,7 @@ async def test_product_cards_filtered_by_brand() -> None:
     )
 
     assert sorted(product.sku for product in response.products) == [
-        "PETROLIMEX-12KG",
-        "PETROLIMEX-45KG",
+        "PLX-12KG-BIEN",
     ]
 
 
@@ -721,9 +719,9 @@ async def test_product_cards_gas_category_query_returns_only_gas() -> None:
 
     assert response.user_message.intent == IntentCategory.PRODUCT_INQUIRY.value
     assert [product.sku for product in response.products] == [
-        "PETROLIMEX-12KG",
-        "MT-GAS-12KG",
-        "PETROLIMEX-45KG",
+        "PLX-12KG-BIEN",
+        "VT-12KG-XAM",
+        "SP-45KG-BO",
     ]
 
 
