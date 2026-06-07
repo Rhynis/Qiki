@@ -2,6 +2,7 @@
 
 import json
 from collections.abc import AsyncIterator, Mapping, Sequence
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from uuid import uuid4
 
@@ -22,6 +23,7 @@ from app.models.order import Order
 from app.rag.dependencies import get_rag_pipeline
 from app.repositories.product_repository import ProductRepository
 from app.schemas.product import ProductCreate
+from app.services.conversation_service import ConversationService
 
 pytestmark = pytest.mark.asyncio
 
@@ -113,7 +115,13 @@ async def create_catalog_product(session: AsyncSession) -> None:
 async def test_chat_order_confirm_endpoint_creates_real_order(
     test_client: AsyncClient,
     order_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(
+        ConversationService,
+        "_now_vn",
+        staticmethod(lambda: datetime(2026, 6, 8, 9, 0, tzinfo=timezone(timedelta(hours=7)))),
+    )
     await order_session.execute(
         text(
             "TRUNCATE TABLE messages, conversations, order_items, orders, products, users "
@@ -152,7 +160,9 @@ async def test_chat_order_confirm_endpoint_creates_real_order(
         assert response.status_code == 200
         body = response.json()
         answer = body["assistant_message"]["content"]
-        assert "Nhân viên sẽ sớm gọi điện lại xác nhận" in answer
+        # Câu xác nhận đổi theo giờ VN (trong giờ vs ngoài giờ); kiểm phần bất biến.
+        assert "Đã ghi nhận đơn" in answer
+        assert "xác nhận" in answer
         response_order_number = body["assistant_message"]["retrieved_documents"][0]["order_number"]
 
         result = await order_session.execute(select(Order))
