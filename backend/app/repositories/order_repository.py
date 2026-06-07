@@ -2,9 +2,9 @@
 
 from datetime import UTC, datetime
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import Select, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -21,6 +21,9 @@ ALLOWED_STATUS_TRANSITIONS: dict[str, list[str]] = {
     "cancelled": [],
 }
 
+ORDER_NUMBER_COUNTER_WIDTH = 3
+ORDER_NUMBER_PREFIX = "GB"
+
 
 class OrderRepository:
     """Data access layer for orders."""
@@ -36,10 +39,8 @@ class OrderRepository:
     ) -> Order:
         """Create an order and line items in the active transaction."""
         active_session = session or self.session
-        order_data.setdefault(
-            "order_number",
-            f"GB-{datetime.now(UTC):%Y%m%d}-{uuid4().hex[:4].upper()}",
-        )
+        if not order_data.get("order_number"):
+            order_data["order_number"] = await self._next_order_number(active_session)
         order = Order(**order_data)
         active_session.add(order)
         await active_session.flush()
@@ -48,6 +49,26 @@ class OrderRepository:
         await active_session.flush()
         await active_session.refresh(order, attribute_names=["items"])
         return order
+
+    async def _next_order_number(self, session: AsyncSession) -> str:
+        """Generate a daily sequential order number under a transaction advisory lock."""
+        today = datetime.now(UTC).strftime("%Y%m%d")
+        await session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext(:lock_key))"),
+            {"lock_key": f"orders:{today}"},
+        )
+        result = await session.execute(
+            text(
+                """
+                SELECT COALESCE(MAX(CAST(SUBSTRING(order_number FROM 13) AS INTEGER)), 0) + 1
+                FROM orders
+                WHERE order_number ~ :pattern
+                """
+            ),
+            {"pattern": rf"^{ORDER_NUMBER_PREFIX}-{today}-[0-9]+$"},
+        )
+        counter = int(result.scalar_one())
+        return f"{ORDER_NUMBER_PREFIX}-{today}-{counter:0{ORDER_NUMBER_COUNTER_WIDTH}d}"
 
     async def get_by_id(self, order_id: UUID) -> Order | None:
         """Find order by ID with items."""

@@ -1,6 +1,7 @@
 """Tests for OrderService."""
 
 import asyncio
+import re
 from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import uuid4
@@ -85,6 +86,35 @@ def checkout_payload(product: Product, **overrides: object) -> CheckoutRequest:
     }
     data.update(overrides)
     return CheckoutRequest.model_validate(data)
+
+
+def raw_order_data(index: int = 1) -> dict[str, object]:
+    """Return valid raw order data for repository-level tests."""
+    return {
+        "user_id": None,
+        "customer_name": f"Nguyen Van A {index}",
+        "customer_phone": "+84901234567",
+        "customer_email": None,
+        "delivery_address": "123 Nguyen Trai",
+        "delivery_ward": "Phuong Ben Thanh",
+        "delivery_district": "Quan 1",
+        "delivery_city": "TP. Hồ Chí Minh",
+        "delivery_notes": None,
+        "different_recipient_name": None,
+        "different_recipient_phone": None,
+        "subtotal": Decimal("0"),
+        "shipping_fee": Decimal("0"),
+        "total_amount": Decimal("0"),
+        "vat_invoice_requested": False,
+        "vat_info": None,
+        "payment_method": "cod",
+        "payment_status": "pending",
+        "status": "pending",
+        "source": "website",
+        "referral_conversation_id": None,
+        "idempotency_key": uuid4(),
+        "customer_notes": None,
+    }
 
 
 def service(session: AsyncSession) -> OrderService:
@@ -212,6 +242,24 @@ async def test_idempotency_returns_same_order(order_session: AsyncSession) -> No
     await order_session.refresh(product)
     assert second.id == first.id
     assert product.stock_quantity == 3
+
+
+async def test_order_numbers_are_daily_sequential_and_unique(order_session: AsyncSession) -> None:
+    today = datetime.now(UTC).strftime("%Y%m%d")
+
+    async def create_raw_order(index: int) -> str:
+        async with AsyncSessionLocal() as session:
+            order = await OrderRepository(session).create_with_items(raw_order_data(index), [])
+            await session.commit()
+            assert order.order_number is not None
+            return order.order_number
+
+    order_numbers = await asyncio.gather(*(create_raw_order(index) for index in range(1, 11)))
+    suffixes = sorted(int(order_number.rsplit("-", 1)[1]) for order_number in order_numbers)
+
+    assert len(set(order_numbers)) == 10
+    assert all(re.fullmatch(rf"GB-{today}-[0-9]{{3,}}", number) for number in order_numbers)
+    assert suffixes == list(range(1, 11))
 
 
 async def test_concurrent_order_creation_no_oversell(order_session: AsyncSession) -> None:
