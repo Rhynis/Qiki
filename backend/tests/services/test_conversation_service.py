@@ -824,6 +824,20 @@ async def test_chat_order_creates_water_order_without_escalation() -> None:
     assert orders.last_checkout.items[0].quantity == 1
 
 
+def test_chat_order_summary_formats_phone_for_display() -> None:
+    summary = ConversationService._format_order_summary(
+        product=_water_catalog()[1],
+        quantity=1,
+        customer_name="Nguyen Van A",
+        phone="+84902331845",
+        address="15 đường số 5, Khu phố 36, Phường Hiệp Bình, TP.HCM",
+        payment_method="cod",
+    )
+
+    assert "- Số điện thoại: **0902331845**" in summary
+    assert "+84902331845" not in summary
+
+
 @pytest.mark.asyncio
 async def test_chat_order_bare_water_category_asks_for_product_choice() -> None:
     payload = complete_order_payload(confirmed=True)

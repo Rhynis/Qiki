@@ -7,6 +7,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { PageHeader } from '@/components/shared/page-header'
 import { useLookupOrder } from '@/lib/hooks/use-orders'
+import { sanitizeOrderNumberForLookup } from '@/lib/utils/order-lookup'
+import { formatPhone } from '@/lib/utils/format'
 import { guestLookupSchema } from '@/lib/validations/order'
 
 export default function TrackOrderPage() {
@@ -14,15 +16,28 @@ export default function TrackOrderPage() {
   const [phone, setPhone] = useState('')
   const [error, setError] = useState<string | null>(null)
   const lookup = useLookupOrder()
+  const lookupError =
+    error ??
+    (lookup.isError
+      ? 'Không tìm thấy đơn hàng. Vui lòng kiểm tra lại mã đơn và số điện thoại.'
+      : null)
 
   const submit = async () => {
-    const result = guestLookupSchema.safeParse({ order_number: orderNumber, phone })
+    lookup.reset()
+    const result = guestLookupSchema.safeParse({
+      order_number: sanitizeOrderNumberForLookup(orderNumber),
+      phone: phone.trim(),
+    })
     if (!result.success) {
       setError(result.error.issues[0]?.message ?? 'Thông tin không hợp lệ')
       return
     }
     setError(null)
-    await lookup.mutateAsync(result.data)
+    try {
+      await lookup.mutateAsync(result.data)
+    } catch {
+      setError('Không tìm thấy đơn hàng. Vui lòng kiểm tra lại mã đơn và số điện thoại.')
+    }
   }
 
   return (
@@ -41,7 +56,7 @@ export default function TrackOrderPage() {
           <Label htmlFor="phone">Số điện thoại</Label>
           <Input id="phone" value={phone} onChange={(event) => setPhone(event.target.value)} />
         </div>
-        {error ? <p className="text-sm text-red-700">{error}</p> : null}
+        {lookupError ? <p className="text-sm text-red-700">{lookupError}</p> : null}
         <Button disabled={lookup.isPending} onClick={submit}>
           {lookup.isPending ? 'Đang tra cứu...' : 'Tra cứu'}
         </Button>
@@ -49,6 +64,7 @@ export default function TrackOrderPage() {
       {lookup.data ? (
         <div className="rounded-lg border bg-white p-5">
           <p className="font-semibold">{lookup.data.order_number}</p>
+          <p className="text-sm text-slate-600">SĐT: {formatPhone(lookup.data.customer_phone)}</p>
           <p className="text-sm text-slate-600">Trạng thái: {lookup.data.status}</p>
           <Button asChild className="mt-3" variant="outline">
             <Link href={`/orders/${lookup.data.id}`}>Xem chi tiết</Link>

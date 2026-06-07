@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { OrderStatusTimeline } from '@/components/shop/order/order-status-timeline'
 import { PageHeader } from '@/components/shared/page-header'
 import { useCancelOrder, useOrder } from '@/lib/hooks/use-orders'
-import { formatDate, formatPrice } from '@/lib/utils/format'
+import { formatDate, formatPhone, formatPrice } from '@/lib/utils/format'
 
 export function OrderDetailClient({ orderId }: { orderId: string }) {
   const [phone, setPhone] = useState('')
@@ -64,7 +64,7 @@ export function OrderDetailClient({ orderId }: { orderId: string }) {
             <div>
               <h2 className="font-semibold">Giao hàng</h2>
               <p>{order.customer_name}</p>
-              <p>{order.customer_phone}</p>
+              <p>{formatPhone(order.customer_phone)}</p>
               <p className="text-slate-600">
                 {[
                   order.delivery_address,
