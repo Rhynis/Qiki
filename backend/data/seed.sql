@@ -12,6 +12,22 @@ VALUES
   ('staff5@gasbot.vn', 'Hoàng Ngọc Mai', '+84901234508', 'staff')
 ON CONFLICT (email) DO NOTHING;
 
+UPDATE products
+SET is_active = false
+WHERE category = 'gas'
+  AND sku NOT IN (
+    'SP-12KG-XAM',
+    'SP-12KG-XANH',
+    'SP-45KG-BO',
+    'VT-12KG-XAM',
+    'ELF-12KG-DO',
+    'ELF-6KG-DO',
+    'PLX-12KG-BIEN',
+    'SAOMAI-12KG',
+    'THUDUC-12KG',
+    'THUDUC-6KG-NHUA'
+  );
+
 INSERT INTO products (
   sku,
   name,
@@ -26,19 +42,30 @@ INSERT INTO products (
   pricing_note
 )
 VALUES
-  ('PETROLIMEX-12KG', 'Bình gas Petrolimex 12kg', 'Petrolimex', 12, 'gas', 'kg', 440000, 40, 'Bình gas gia đình phổ biến, phù hợp nấu ăn hằng ngày.', 'Đặt bình nơi thoáng khí, khóa van sau khi sử dụng.', NULL),
-  ('PETROLIMEX-45KG', 'Bình gas Petrolimex 45kg', 'Petrolimex', 45, 'gas', 'kg', 1650000, 15, 'Bình gas dung tích lớn cho nhà hàng và bếp công nghiệp.', 'Cần kỹ thuật viên kiểm tra van và dây dẫn định kỳ.', NULL),
-  ('SAIGONPETRO-6KG', 'Bình gas Saigon Petro 6kg', 'Saigon Petro', 6, 'gas', 'kg', 220000, 30, 'Bình nhỏ gọn cho hộ gia đình ít sử dụng.', 'Không đặt gần nguồn nhiệt hoặc ổ điện.', NULL),
-  ('SAIGONPETRO-12KG', 'Bình gas Saigon Petro 12kg', 'Saigon Petro', 12, 'gas', 'kg', 430000, 35, 'Bình gas gia đình giá tốt, dễ đổi bình.', 'Kiểm tra mùi gas trước và sau khi thay bình.', NULL),
-  ('TOTAL-12KG', 'Bình gas Total 12kg', 'Total Gas', 12, 'gas', 'kg', 445000, 25, 'Sản phẩm gas chất lượng cao cho gia đình.', 'Dùng van điều áp chính hãng và dây dẫn còn hạn.', NULL),
-  ('TOTAL-45KG', 'Bình gas Total 45kg', 'Total Gas', 45, 'gas', 'kg', 1680000, 10, 'Bình dung tích lớn cho nhu cầu sử dụng cao.', 'Lắp đặt tại khu vực thông thoáng, có biển cảnh báo.', NULL),
-  ('ELF-12KG', 'Bình gas Elf 12kg', 'Elf Gas', 12, 'gas', 'kg', 435000, 28, 'Gas gia đình ổn định, dễ sử dụng.', 'Không tự ý sửa van hoặc thay dây dẫn khi có nghi ngờ rò rỉ.', NULL),
-  ('VTGAS-12KG', 'Bình gas VT Gas 12kg', 'VT Gas', 12, 'gas', 'kg', 425000, 26, 'Lựa chọn tiết kiệm cho gia đình.', 'Luôn khóa van bình khi không sử dụng.', NULL),
-  ('SHELL-12KG', 'Bình gas Shell 12kg', 'Shell Gas', 12, 'gas', 'kg', 450000, 20, 'Thương hiệu quen thuộc, chất lượng ổn định.', 'Nếu ngửi thấy mùi gas, mở cửa và gọi hotline ngay.', NULL),
-  ('MTGAS-12KG', 'Bình gas MT Gas 12kg', 'MT Gas', 12, 'gas', 'kg', 420000, 22, 'Sản phẩm phù hợp nhu cầu nấu ăn hằng ngày.', 'Không để bình gas trong phòng kín.', NULL),
-  ('VIHAWA-20L', 'Nước Vihawa 20 lít', 'Vihawa', 20, 'nuoc_uong', 'lít', 50000, 50, 'Bình nước uống Vihawa 20 lít dùng cho gia đình và văn phòng.', NULL, 'Giá niêm yết là giá mua tại cửa hàng. Giao hàng tận nơi +5.000đ; lên lầu +5.000đ mỗi lầu.'),
+  ('SP-12KG-XAM', 'Bình gas Saigon Petro 12kg (xám)', 'Saigon Petro', 12, 'gas', 'kg', 605000, 50, 'Bình gas Saigon Petro vỏ xám 12kg cho gia đình.', NULL, NULL),
+  ('SP-12KG-XANH', 'Bình gas Saigon Petro 12kg (xanh/vàng/biển)', 'Saigon Petro', 12, 'gas', 'kg', 665000, 50, 'Bình gas Saigon Petro vỏ xanh/vàng/biển 12kg.', NULL, NULL),
+  ('SP-45KG-BO', 'Bình gas Saigon Petro 45kg (bò)', 'Saigon Petro', 45, 'gas', 'kg', 2250000, 20, 'Bình gas Saigon Petro 45kg cho nhà hàng, bếp công nghiệp.', NULL, NULL),
+  ('VT-12KG-XAM', 'Bình gas VT 12kg (xám)', 'VT Gas', 12, 'gas', 'kg', 605000, 50, 'Bình gas VT vỏ xám 12kg cho gia đình.', NULL, NULL),
+  ('ELF-12KG-DO', 'Bình gas Elf 12kg (đỏ)', 'Elf Gas', 12, 'gas', 'kg', 710000, 50, 'Bình gas Elf vỏ đỏ 12kg cho gia đình.', NULL, NULL),
+  ('ELF-6KG-DO', 'Bình gas Elf 6kg (đỏ)', 'Elf Gas', 6, 'gas', 'kg', 350000, 50, 'Bình gas Elf 6kg nhỏ gọn cho hộ ít dùng.', NULL, NULL),
+  ('PLX-12KG-BIEN', 'Bình gas Petrolimex 12kg (biển)', 'Petrolimex', 12, 'gas', 'kg', 675000, 50, 'Bình gas Petrolimex vỏ biển 12kg cho gia đình.', NULL, NULL),
+  ('SAOMAI-12KG', 'Bình gas Sao Mai 12kg', 'Sao Mai', 12, 'gas', 'kg', 625000, 50, 'Bình gas Sao Mai 12kg cho gia đình.', NULL, NULL),
+  ('THUDUC-12KG', 'Bình gas Thủ Đức 12kg', 'Gas Thủ Đức', 12, 'gas', 'kg', 625000, 50, 'Bình gas Thủ Đức 12kg cho gia đình.', NULL, NULL),
+  ('THUDUC-6KG-NHUA', 'Bình gas Thủ Đức 6kg (vỏ nhựa)', 'Gas Thủ Đức', 6, 'gas', 'kg', 320000, 50, 'Bình gas Thủ Đức 6kg vỏ nhựa, nhỏ gọn.', NULL, NULL),
+  ('VIHAWA-20L', 'Nước Vihawa 20 lít', 'Vihawa', 20, 'nuoc_uong', 'lít', 55000, 50, 'Bình nước uống Vihawa 20 lít dùng cho gia đình và văn phòng.', NULL, 'Giá niêm yết là giá mua tại cửa hàng. Giao hàng tận nơi +5.000đ; lên lầu +5.000đ mỗi lầu.'),
   ('HOANHAO-20L', 'Nước Hoàn Hảo 20 lít', 'Hoàn Hảo', 20, 'nuoc_uong', 'lít', 15000, 50, 'Bình nước uống Hoàn Hảo 20 lít tiện đổi bình định kỳ.', NULL, 'Giá niêm yết là giá mua tại cửa hàng. Giao hàng tận nơi +5.000đ; lên lầu +5.000đ mỗi lầu.')
-ON CONFLICT (sku) DO NOTHING;
+ON CONFLICT (sku) DO UPDATE SET
+  name = EXCLUDED.name,
+  brand = EXCLUDED.brand,
+  size_kg = EXCLUDED.size_kg,
+  category = EXCLUDED.category,
+  unit = EXCLUDED.unit,
+  price = EXCLUDED.price,
+  stock_quantity = EXCLUDED.stock_quantity,
+  description = EXCLUDED.description,
+  safety_info = EXCLUDED.safety_info,
+  pricing_note = EXCLUDED.pricing_note,
+  is_active = true;
 
 INSERT INTO knowledge_base (title, content, category, source, embedding)
 SELECT
@@ -53,7 +80,7 @@ ON CONFLICT DO NOTHING;
 INSERT INTO knowledge_base (title, content, category, source, embedding)
 SELECT
   'Thông tin sản phẩm gas số ' || gs::text,
-  'Gas Quốc Cường cung cấp các thương hiệu gas phổ biến như Petrolimex, Saigon Petro, Total Gas, Elf Gas, VT Gas, Shell Gas và MT Gas. Bình 6kg phù hợp nhu cầu nhỏ, bình 12kg phù hợp gia đình, bình 45kg phù hợp nhà hàng hoặc bếp công nghiệp.',
+  'Gas Quốc Cường cung cấp các thương hiệu gas phổ biến như Saigon Petro, VT Gas, Elf Gas, Petrolimex, Sao Mai và Gas Thủ Đức. Bình 6kg phù hợp nhu cầu nhỏ, bình 12kg phù hợp gia đình, bình 45kg phù hợp nhà hàng hoặc bếp công nghiệp.',
   'product_info',
   'seed_data',
   array_fill(0.0::float8, ARRAY[768])::vector
