@@ -1082,6 +1082,12 @@ Tin mới:
         except ValueError:
             return None
 
+    @staticmethod
+    def _format_phone_display(phone: str) -> str:
+        if phone.startswith("+84"):
+            return "0" + phone[3:]
+        return phone
+
     @classmethod
     def _normalize_payment_method(
         cls, payment_method: str
@@ -1176,7 +1182,7 @@ Tin mới:
                 f"- Đơn giá: **{cls._format_vnd(product.price)}**",
                 f"- Thành tiền tạm tính: **{cls._format_vnd(subtotal)}**",
                 f"- Người nhận: **{customer_name}**",
-                f"- Số điện thoại: **{phone}**",
+                f"- Số điện thoại: **{cls._format_phone_display(phone)}**",
                 f"- Địa chỉ: **{address}**",
                 f"- Thanh toán: **{payment_label}**",
                 "",

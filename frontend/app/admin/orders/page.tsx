@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/shared/page-header'
 import { useAdminOrders } from '@/lib/hooks/use-orders'
-import { formatDate, formatPrice } from '@/lib/utils/format'
+import { formatDate, formatPhone, formatPrice } from '@/lib/utils/format'
 import type { OrderSearchParams, OrderStatus } from '@/types/order'
 
 export default function AdminOrdersPage() {
@@ -69,7 +69,7 @@ export default function AdminOrdersPage() {
                 <td className="p-3 font-medium">{order.order_number}</td>
                 <td className="p-3">
                   <p>{order.customer_name}</p>
-                  <p className="text-slate-600">{order.customer_phone}</p>
+                  <p className="text-slate-600">{formatPhone(order.customer_phone)}</p>
                 </td>
                 <td className="p-3">{formatDate(order.created_at)}</td>
                 <td className="p-3">{formatPrice(order.total_amount)}</td>

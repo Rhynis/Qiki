@@ -28,6 +28,7 @@ describe('format utilities', () => {
 
   it('formats phone numbers', () => {
     expect(formatPhone('+84901234567')).toBe('0901234567')
+    expect(formatPhone('0901234567')).toBe('0901234567')
   })
 
   it('masks phone numbers', () => {
