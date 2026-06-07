@@ -3,7 +3,7 @@
 import json
 import uuid
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
@@ -20,7 +20,7 @@ from app.models.user import User
 from app.rag.schemas import RAGResponse, SafetyResult
 from app.schemas.conversation import SendMessageRequest
 from app.schemas.product import ProductResponse
-from app.services.conversation_service import ConversationService
+from app.services.conversation_service import ORDER_CONTEXT_CONFIDENCE, ConversationService
 from app.services.routing_service import RoutingDecision
 
 
@@ -743,7 +743,11 @@ async def add_order_state_history(
     messages: FakeMessageRepository,
     conversation_id: uuid.UUID,
     status: str = "awaiting_missing_slots",
+    slots: dict[str, object] | None = None,
 ) -> None:
+    metadata: dict[str, object] = {"type": "chat_order_state", "status": status}
+    if slots:
+        metadata["slots"] = slots
     await messages.create(
         {
             "conversation_id": conversation_id,
@@ -761,13 +765,18 @@ async def add_order_state_history(
             "intent": IntentCategory.PLACE_ORDER.value,
             "intent_confidence": 0.9,
             "latency_ms": 0,
-            "retrieved_documents": [{"type": "chat_order_state", "status": status}],
+            "retrieved_documents": [metadata],
         }
     )
 
 
 @pytest.mark.asyncio
-async def test_chat_order_creates_order_on_confirmation() -> None:
+async def test_chat_order_creates_order_on_confirmation(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        ConversationService,
+        "_now_vn",
+        staticmethod(lambda: datetime(2026, 6, 8, 9, 0, tzinfo=timezone(timedelta(hours=7)))),
+    )
     order_service = FakeOrderService()
     service, _conversations, _messages, _rag, orders = make_service(
         category=IntentCategory.PLACE_ORDER,
@@ -796,7 +805,14 @@ async def test_chat_order_creates_order_on_confirmation() -> None:
 
 
 @pytest.mark.asyncio
-async def test_chat_order_creates_water_order_without_escalation() -> None:
+async def test_chat_order_creates_water_order_without_escalation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        ConversationService,
+        "_now_vn",
+        staticmethod(lambda: datetime(2026, 6, 8, 9, 0, tzinfo=timezone(timedelta(hours=7)))),
+    )
     products = _water_catalog()
     payload = complete_order_payload(confirmed=True)
     payload["product"] = "Hoàn Hảo 20 lít"
@@ -822,6 +838,36 @@ async def test_chat_order_creates_water_order_without_escalation() -> None:
     assert response.products == []
     assert orders.last_checkout.items[0].product_id == products[0].id
     assert orders.last_checkout.items[0].quantity == 1
+
+
+@pytest.mark.asyncio
+async def test_chat_order_confirmation_outside_hours_is_time_aware(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        ConversationService,
+        "_now_vn",
+        staticmethod(lambda: datetime(2026, 6, 7, 21, 0, tzinfo=timezone(timedelta(hours=7)))),
+    )
+    order_service = FakeOrderService()
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([complete_order_payload(confirmed=True)]),
+        order_service=order_service,
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Đúng rồi, xác nhận đặt đơn này"),
+        user=None,
+    )
+
+    assert orders.calls == 1
+    assert response.assistant_message is not None
+    assert "QC-000123" in response.assistant_message.content
+    assert "Hiện đã ngoài giờ làm việc" in response.assistant_message.content
+    assert "sáng mai từ 06:30" in response.assistant_message.content
 
 
 @pytest.mark.asyncio
@@ -888,7 +934,7 @@ async def test_chat_order_missing_address_mentions_khu_pho() -> None:
     assert orders.calls == 0
     assert response.assistant_message is not None
     assert "khu phố" in response.assistant_message.content
-    assert "mốc gần nhà" in response.assistant_message.content
+    assert "mốc gần nhà" not in response.assistant_message.content
     assert response.products == []
 
 
@@ -915,6 +961,139 @@ async def test_chat_order_address_slot_fill_does_not_return_full_catalog() -> No
     assert response.assistant_message is not None
     assert "số điện thoại" in response.assistant_message.content
     assert response.products == []
+
+
+@pytest.mark.asyncio
+async def test_product_quantity_message_starts_order_without_rag() -> None:
+    service, _conversations, _messages, rag, orders = make_service(
+        category=IntentCategory.PRODUCT_INQUIRY,
+        llm_provider=FakeLLMProvider([{}]),
+        product_service=FakeProductService(products=_water_catalog()),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="vihawa 1 bình"),
+        user=None,
+    )
+
+    assert response.user_message.intent == IntentCategory.PLACE_ORDER.value
+    assert response.conversation.status == "active"
+    assert rag.calls == 0
+    assert orders.calls == 0
+    assert response.assistant_message is not None
+    assert "phải không" not in response.assistant_message.content
+    assert "sản phẩm" not in response.assistant_message.content
+    assert "số lượng" not in response.assistant_message.content
+    assert "số điện thoại" in response.assistant_message.content
+    state = response.assistant_message.retrieved_documents[0]
+    assert state["type"] == "chat_order_state"
+    assert state["slots"]["product"] == "Nước Vihawa 20 lít"
+    assert state["slots"]["quantity"] == 1
+
+
+@pytest.mark.asyncio
+async def test_order_context_low_confidence_affirmation_does_not_escalate() -> None:
+    service, _conversations, messages, rag, orders = make_service(
+        category=IntentCategory.PRODUCT_INQUIRY,
+        confidence=0.2,
+        llm_provider=FakeLLMProvider([{}]),
+        product_service=FakeProductService(products=_water_catalog()),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_order_state_history(
+        messages,
+        conversation.id,
+        slots={"product": "Nước Vihawa 20 lít", "quantity": 1},
+    )
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="đúng r"),
+        user=None,
+    )
+
+    assert response.user_message.intent == IntentCategory.PLACE_ORDER.value
+    assert response.user_message.intent_confidence == ORDER_CONTEXT_CONFIDENCE
+    assert response.conversation.status == "active"
+    assert rag.calls == 0
+    assert orders.calls == 0
+    assert response.assistant_message is not None
+    assert "sản phẩm" not in response.assistant_message.content
+    assert "số lượng" not in response.assistant_message.content
+    assert "số điện thoại" in response.assistant_message.content
+
+
+@pytest.mark.asyncio
+async def test_chat_order_parses_name_and_cod_from_short_slot_fill() -> None:
+    service, _conversations, messages, _rag, orders = make_service(
+        category=IntentCategory.PRODUCT_INQUIRY,
+        confidence=0.3,
+        llm_provider=FakeLLMProvider([{}]),
+        product_service=FakeProductService(products=_water_catalog()),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_order_state_history(
+        messages,
+        conversation.id,
+        slots={
+            "product": "Nước Vihawa 20 lít",
+            "quantity": 1,
+            "customer_phone": "0903026306",
+            "delivery_address": "15 đường số 5, Khu phố 36, Phường Hiệp Bình, TP.HCM",
+        },
+    )
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="van cod"),
+        user=None,
+    )
+
+    assert response.user_message.intent == IntentCategory.PLACE_ORDER.value
+    assert response.conversation.status == "active"
+    assert orders.calls == 0
+    assert response.assistant_message is not None
+    assert "Qiki tóm tắt đơn hàng" in response.assistant_message.content
+    assert "- Người nhận: **Van**" in response.assistant_message.content
+    assert "- Thanh toán: **COD**" in response.assistant_message.content
+    assert "tên người nhận" not in response.assistant_message.content
+
+
+@pytest.mark.asyncio
+async def test_chat_order_accepts_ck_as_bank_transfer() -> None:
+    service, _conversations, messages, _rag, orders = make_service(
+        category=IntentCategory.PRODUCT_INQUIRY,
+        confidence=0.3,
+        llm_provider=FakeLLMProvider([{}]),
+        product_service=FakeProductService(products=_water_catalog()),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_order_state_history(
+        messages,
+        conversation.id,
+        slots={
+            "product": "Nước Vihawa 20 lít",
+            "quantity": 1,
+            "customer_name": "Vân",
+            "customer_phone": "0903026306",
+            "delivery_address": "15 đường số 5, Khu phố 36, Phường Hiệp Bình, TP.HCM",
+        },
+    )
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="ck"),
+        user=None,
+    )
+
+    assert response.user_message.intent == IntentCategory.PLACE_ORDER.value
+    assert response.conversation.status == "active"
+    assert orders.calls == 0
+    assert response.assistant_message is not None
+    assert "Qiki tóm tắt đơn hàng" in response.assistant_message.content
+    assert "- Thanh toán: **chuyển khoản**" in response.assistant_message.content
 
 
 @pytest.mark.asyncio

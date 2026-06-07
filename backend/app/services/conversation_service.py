@@ -5,6 +5,7 @@ import re
 import unicodedata
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
+from datetime import datetime, time, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Literal
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
@@ -42,6 +43,8 @@ from app.services.routing_service import RoutingDecision, RoutingService
 CHAT_ORDER_METADATA_TYPE = "chat_order"
 CHAT_ORDER_STATE_METADATA_TYPE = "chat_order_state"
 ORDER_CONFIRMATION_PROMPT = "Bạn xác nhận đặt đơn này không?"
+ORDER_CONTEXT_CONFIDENCE = 0.9
+VN_TIMEZONE = timezone(timedelta(hours=7))
 
 
 @dataclass(frozen=True)
@@ -153,6 +156,16 @@ class ConversationService:
         intent = await self.intent_classifier.classify(request.content, history_payload)
         intent = self._apply_order_context_intent(intent, history)
 
+        catalog_products: list[ProductResponse] | None = None
+        if intent.category in {IntentCategory.PRODUCT_INQUIRY, IntentCategory.PLACE_ORDER}:
+            catalog_products = await self.product_service.list_active_catalog(limit=50)
+        if (
+            intent.category == IntentCategory.PRODUCT_INQUIRY
+            and catalog_products
+            and self._looks_like_order_request(request.content, catalog_products)
+        ):
+            intent = self._order_context_intent(intent, "product_quantity_order")
+
         user_message = await self.message_repository.create(
             {
                 "conversation_id": conversation.id,
@@ -171,10 +184,7 @@ class ConversationService:
                 routing.reason,
             )
 
-        catalog_products: list[ProductResponse] | None = None
         product_cards: list[ProductCardResponse] = []
-        if intent.category in {IntentCategory.PRODUCT_INQUIRY, IntentCategory.PLACE_ORDER}:
-            catalog_products = await self.product_service.list_active_catalog(limit=50)
         if intent.category == IntentCategory.PRODUCT_INQUIRY:
             assert catalog_products is not None
             card_products = self._select_card_products(request.content, catalog_products)
@@ -325,22 +335,40 @@ class ConversationService:
         ) -> ChatOrderResult:
             return ChatOrderResult(message=message, card_products=list(card_products or []))
 
-        async def order_state_message(content: str, status: str) -> Message:
+        async def order_state_message(
+            content: str,
+            status: str,
+            state_slots: ChatOrderSlots | None = None,
+        ) -> Message:
             return await self._create_assistant_message(
                 conversation,
                 content,
                 IntentCategory.PLACE_ORDER,
                 confidence,
-                metadata=[self._order_state_metadata(status)],
+                metadata=[self._order_state_metadata(status, state_slots)],
             )
 
+        order_state = self._find_order_state(history)
+        previous_slots = self._slots_from_order_state(order_state)
         slots = await self._extract_order_slots(content, history_payload, products)
+        slots = self._merge_order_slots(
+            previous_slots,
+            self._infer_order_slots(content, products),
+            slots,
+        )
         slots = self._with_phone_candidate(slots, content)
+        slots = self._with_order_cues(slots, content)
+        if order_state and order_state.get("status") == "awaiting_confirmation":
+            slots = replace(
+                slots,
+                confirmed=slots.confirmed or self._is_affirmation(content),
+            )
         if self._is_bare_category_query(slots.product):
             return result(
                 await order_state_message(
                     self._format_category_product_question(slots.product or ""),
                     "awaiting_product_choice",
+                    slots,
                 ),
                 category_cards(slots.product),
             )
@@ -354,6 +382,7 @@ class ConversationService:
                 await order_state_message(
                     self._format_invalid_phone_question(slots.customer_phone),
                     "awaiting_missing_slots",
+                    slots,
                 )
             )
         if matched_product is None and slots.product:
@@ -364,6 +393,7 @@ class ConversationService:
                         "Bạn muốn đặt sản phẩm nào trong cửa hàng (gas hoặc nước uống hiện có)?"
                     ),
                     "awaiting_product_choice",
+                    slots,
                 )
             )
         missing = self._missing_order_slots(slots, matched_product)
@@ -372,6 +402,7 @@ class ConversationService:
                 await order_state_message(
                     self._format_missing_slot_question(missing),
                     "awaiting_missing_slots",
+                    slots,
                 )
             )
 
@@ -393,6 +424,7 @@ class ConversationService:
                         "Bạn có thể gọi 090 3026306 để được nhân viên hỗ trợ thêm."
                     ),
                     "awaiting_missing_slots",
+                    slots,
                 ),
             )
 
@@ -405,6 +437,7 @@ class ConversationService:
                         "Bạn muốn điều chỉnh số lượng không?"
                     ),
                     "awaiting_missing_slots",
+                    slots,
                 )
             )
 
@@ -414,6 +447,7 @@ class ConversationService:
                 await order_state_message(
                     "Bạn muốn thanh toán khi nhận hàng (COD) hay chuyển khoản?",
                     "awaiting_missing_slots",
+                    slots,
                 )
             )
 
@@ -429,6 +463,7 @@ class ConversationService:
                         payment_method,
                     ),
                     "awaiting_confirmation",
+                    slots,
                 ),
             )
 
@@ -463,8 +498,7 @@ class ConversationService:
                 conversation,
                 (
                     f"Đã ghi nhận đơn **{order.order_number}**. "
-                    "**Nhân viên sẽ sớm gọi điện lại xác nhận** đơn trong giờ làm việc "
-                    "(T2-T6 06:30-20:00, T7-CN 07:30-20:00). Cảm ơn bạn!"
+                    f"{self._format_order_callback_sentence()}"
                 ),
                 IntentCategory.PLACE_ORDER,
                 confidence,
@@ -493,7 +527,7 @@ Các trường:
 - customer_name: tên khách, hoặc null
 - customer_phone: số điện thoại, hoặc null
 - delivery_address: địa chỉ giao hàng đầy đủ gồm số nhà, tên/số đường, khu phố,
-  phường, TP.HCM; với Hiệp Bình cần khu phố và mốc gần nhà; hoặc null
+  phường, TP.HCM; với Hiệp Bình cần khu phố; hoặc null
 - payment_method: "cod" hoặc "bank_transfer", hoặc null
 - confirmed: true nếu khách xác nhận rõ đơn Qiki đã tóm tắt ở lượt trước; ngược lại false
 
@@ -603,7 +637,8 @@ Tin mới:
 
     @staticmethod
     def _format_decimal(value: Decimal) -> str:
-        return format(value.normalize(), "f").rstrip("0").rstrip(".")
+        text = format(value, "f")
+        return text.rstrip("0").rstrip(".") if "." in text else text
 
     @staticmethod
     def _product_to_card(product: ProductResponse) -> ProductCardResponse:
@@ -784,15 +819,60 @@ Tin mới:
             return value
         if isinstance(value, str):
             normalized = cls._normalize_match_text(value)
-            return normalized in {"true", "yes", "y", "ok", "okay", "dong y", "xac nhan", "dung"}
+            return normalized in {
+                "true",
+                "yes",
+                "y",
+                "ok",
+                "okay",
+                "dong y",
+                "xac nhan",
+                "dung",
+                "dung r",
+                "dung roi",
+            }
         return False
 
     @classmethod
     def _with_phone_candidate(cls, slots: ChatOrderSlots, content: str) -> ChatOrderSlots:
-        if slots.customer_phone:
-            return slots
         candidate = cls._extract_phone_candidate(content)
-        return replace(slots, customer_phone=candidate) if candidate else slots
+        if not candidate:
+            return slots
+        if slots.customer_phone and cls._validate_phone(slots.customer_phone) is not None:
+            return slots
+        return replace(slots, customer_phone=candidate)
+
+    @classmethod
+    def _with_order_cues(cls, slots: ChatOrderSlots, content: str) -> ChatOrderSlots:
+        payment_method = slots.payment_method or cls._extract_payment_candidate(content)
+        customer_name = slots.customer_name or cls._extract_name_candidate(content, payment_method)
+        return replace(slots, customer_name=customer_name, payment_method=payment_method)
+
+    @classmethod
+    def _extract_payment_candidate(cls, content: str) -> str | None:
+        normalized = cls._normalize_match_text(content)
+        tokens = set(normalized.split())
+        if "cod" in tokens or "tien mat" in normalized or "nhan hang" in normalized:
+            return "cod"
+        if "ck" in tokens or "chuyen khoan" in normalized or "khoan" in tokens:
+            return "bank_transfer"
+        return None
+
+    @classmethod
+    def _extract_name_candidate(cls, content: str, payment_method: str | None) -> str | None:
+        if payment_method is None:
+            return None
+        text = re.sub(r"\+?\d[\d\s.-]{1,}\d", " ", content)
+        text = re.sub(r"\b(cod|cash|ck)\b", " ", text, flags=re.IGNORECASE)
+        text = re.sub(r"\b(tiền mặt|tien mat|chuyển khoản|chuyen khoan)\b", " ", text)
+        words = re.findall(r"[A-Za-zÀ-ỹ]+", text)
+        ignored = {"ok", "okay", "dong", "dung", "roi", "phai", "thanh", "toan"}
+        name_words = [
+            word.strip() for word in words if cls._normalize_match_text(word) not in ignored
+        ]
+        if not name_words or len(name_words) > 3:
+            return None
+        return " ".join(name_words).title()
 
     @staticmethod
     def _extract_phone_candidate(content: str) -> str | None:
@@ -802,6 +882,118 @@ Tin mới:
             if len(digits) >= 3:
                 return "+" + digits if candidate.startswith("+") else digits
         return None
+
+    @classmethod
+    def _infer_order_slots(
+        cls,
+        content: str,
+        products: Sequence[ProductResponse],
+    ) -> ChatOrderSlots:
+        matched_product = cls._match_product(content, products)
+        quantity = cls._extract_quantity_candidate(content)
+        return ChatOrderSlots(
+            product=cls._format_product_display_name(matched_product)
+            if matched_product is not None
+            else None,
+            quantity=quantity,
+        )
+
+    @classmethod
+    def _looks_like_order_request(
+        cls,
+        content: str,
+        products: Sequence[ProductResponse],
+    ) -> bool:
+        inferred = cls._infer_order_slots(content, products)
+        return bool(inferred.product and inferred.quantity)
+
+    @classmethod
+    def _extract_quantity_candidate(cls, content: str) -> int | None:
+        normalized = cls._normalize_match_text(content)
+        digit_match = re.search(
+            r"\b([1-9][0-9]?)\s*(binh|chai|can|thung)\b",
+            normalized,
+        )
+        if digit_match:
+            return int(digit_match.group(1))
+        words = {
+            "mot": 1,
+            "hai": 2,
+            "ba": 3,
+            "bon": 4,
+            "tu": 4,
+            "nam": 5,
+        }
+        for word, value in words.items():
+            if re.search(rf"\b{word}\s*(binh|chai|can|thung)?\b", normalized):
+                return value
+        return None
+
+    @staticmethod
+    def _merge_order_slots(*sources: ChatOrderSlots | None) -> ChatOrderSlots:
+        merged = ChatOrderSlots()
+        for source in sources:
+            if source is None:
+                continue
+            merged = replace(
+                merged,
+                product=source.product or merged.product,
+                quantity=source.quantity or merged.quantity,
+                customer_name=source.customer_name or merged.customer_name,
+                customer_phone=source.customer_phone or merged.customer_phone,
+                delivery_address=source.delivery_address or merged.delivery_address,
+                payment_method=source.payment_method or merged.payment_method,
+                confirmed=merged.confirmed or source.confirmed,
+            )
+        return merged
+
+    @staticmethod
+    def _slots_to_metadata(slots: ChatOrderSlots | None) -> dict[str, Any]:
+        if slots is None:
+            return {}
+        payload: dict[str, Any] = {}
+        if slots.product:
+            payload["product"] = slots.product
+        if slots.quantity is not None:
+            payload["quantity"] = slots.quantity
+        if slots.customer_name:
+            payload["customer_name"] = slots.customer_name
+        if slots.customer_phone:
+            payload["customer_phone"] = slots.customer_phone
+        if slots.delivery_address:
+            payload["delivery_address"] = slots.delivery_address
+        if slots.payment_method:
+            payload["payment_method"] = slots.payment_method
+        return payload
+
+    @classmethod
+    def _slots_from_metadata(cls, payload: object) -> ChatOrderSlots | None:
+        if not isinstance(payload, dict):
+            return None
+        return ChatOrderSlots(
+            product=cls._optional_str(payload.get("product")),
+            quantity=cls._optional_int(payload.get("quantity")),
+            customer_name=cls._optional_str(payload.get("customer_name")),
+            customer_phone=cls._optional_str(payload.get("customer_phone")),
+            delivery_address=cls._optional_str(payload.get("delivery_address")),
+            payment_method=cls._optional_str(payload.get("payment_method")),
+        )
+
+    @classmethod
+    def _is_affirmation(cls, content: str) -> bool:
+        normalized = cls._normalize_match_text(content)
+        return normalized in {
+            "dung",
+            "dung r",
+            "dung roi",
+            "ok",
+            "okay",
+            "uh",
+            "u",
+            "phai",
+            "phai roi",
+            "xac nhan",
+        }
 
     @classmethod
     def _missing_order_slots(
@@ -821,7 +1013,7 @@ Tin mới:
         if not slots.delivery_address:
             missing.append(
                 "địa chỉ giao hàng chi tiết (số nhà, tên/số đường, khu phố, phường, "
-                "TP.HCM; với Hiệp Bình cần thêm mốc gần nhà)"
+                "TP.HCM; với Hiệp Bình cần khu phố)"
             )
         if not slots.payment_method:
             missing.append("hình thức thanh toán")
@@ -898,11 +1090,71 @@ Tin mới:
         if normalized in {"cod", "cash", "tien mat"} or "nhan hang" in normalized:
             return "cod"
         if (
-            normalized in {"bank transfer", "bank_transfer", "chuyen khoan"}
+            normalized in {"bank transfer", "bank_transfer", "chuyen khoan", "ck"}
             or "khoan" in normalized
         ):
             return "bank_transfer"
         return None
+
+    @classmethod
+    def _format_order_callback_sentence(cls) -> str:
+        now = cls._now_vn()
+        if cls._is_business_open(now):
+            return (
+                "**Nhân viên sẽ sớm gọi điện lại xác nhận** đơn trong giờ làm việc "
+                "(T2-T6 06:30-20:00, T7-CN 07:30-20:00). Cảm ơn bạn!"
+            )
+        return (
+            "Hiện đã ngoài giờ làm việc. "
+            f"Nhân viên sẽ gọi lại xác nhận đơn vào {cls._next_opening_label(now)}. "
+            "Cảm ơn bạn!"
+        )
+
+    @staticmethod
+    def _now_vn() -> datetime:
+        return datetime.now(VN_TIMEZONE)
+
+    @classmethod
+    def _is_business_open(cls, now: datetime) -> bool:
+        opening, closing = cls._business_hours_for_weekday(now.weekday())
+        current = now.time().replace(tzinfo=None)
+        return opening <= current < closing
+
+    @classmethod
+    def _next_opening_label(cls, now: datetime) -> str:
+        for day_offset in range(8):
+            candidate_date = now.date() + timedelta(days=day_offset)
+            opening, closing = cls._business_hours_for_weekday(candidate_date.weekday())
+            if day_offset == 0 and now.time().replace(tzinfo=None) < closing:
+                next_open = datetime.combine(candidate_date, opening, tzinfo=VN_TIMEZONE)
+                break
+            if day_offset > 0:
+                next_open = datetime.combine(candidate_date, opening, tzinfo=VN_TIMEZONE)
+                break
+        else:
+            next_open = now + timedelta(days=1)
+
+        time_text = next_open.strftime("%H:%M")
+        if next_open.date() == now.date():
+            return f"hôm nay từ {time_text}"
+        if next_open.date() == now.date() + timedelta(days=1):
+            prefix = "sáng mai" if next_open.time() < time(12, 0) else "ngày mai"
+            return f"{prefix} từ {time_text}"
+        weekday_names = [
+            "thứ Hai",
+            "thứ Ba",
+            "thứ Tư",
+            "thứ Năm",
+            "thứ Sáu",
+            "thứ Bảy",
+            "Chủ nhật",
+        ]
+        return f"{weekday_names[next_open.weekday()]} từ {time_text}"
+
+    @staticmethod
+    def _business_hours_for_weekday(weekday: int) -> tuple[time, time]:
+        opening = time(6, 30) if weekday < 5 else time(7, 30)
+        return opening, time(20, 0)
 
     @classmethod
     def _format_order_summary(
@@ -968,10 +1220,14 @@ Tin mới:
             return intent
         if not cls._is_order_in_progress(history):
             return intent
+        return cls._order_context_intent(intent, "order_in_progress")
+
+    @staticmethod
+    def _order_context_intent(intent: IntentResult, reason: str) -> IntentResult:
         return IntentResult(
             category=IntentCategory.PLACE_ORDER,
-            confidence=intent.confidence,
-            reasoning=f"order_in_progress override: {intent.reasoning}",
+            confidence=max(intent.confidence, ORDER_CONTEXT_CONFIDENCE),
+            reasoning=f"{reason} override: {intent.reasoning}",
             classifier=f"{intent.classifier}+order_context",
         )
 
@@ -988,9 +1244,39 @@ Tin mới:
             return cls._has_metadata_type(documents, CHAT_ORDER_STATE_METADATA_TYPE)
         return False
 
-    @staticmethod
-    def _order_state_metadata(status: str) -> dict[str, str]:
-        return {"type": CHAT_ORDER_STATE_METADATA_TYPE, "status": status}
+    @classmethod
+    def _find_order_state(cls, history: Sequence[Message]) -> dict[str, Any] | None:
+        for message in reversed(history):
+            if message.role != "assistant":
+                continue
+            documents = message.retrieved_documents or []
+            if not isinstance(documents, list):
+                continue
+            for document in documents:
+                if (
+                    isinstance(document, dict)
+                    and document.get("type") == CHAT_ORDER_STATE_METADATA_TYPE
+                ):
+                    return document
+        return None
+
+    @classmethod
+    def _slots_from_order_state(cls, order_state: dict[str, Any] | None) -> ChatOrderSlots | None:
+        if order_state is None:
+            return None
+        return cls._slots_from_metadata(order_state.get("slots"))
+
+    @classmethod
+    def _order_state_metadata(
+        cls,
+        status: str,
+        slots: ChatOrderSlots | None = None,
+    ) -> dict[str, Any]:
+        metadata: dict[str, Any] = {"type": CHAT_ORDER_STATE_METADATA_TYPE, "status": status}
+        slot_payload = cls._slots_to_metadata(slots)
+        if slot_payload:
+            metadata["slots"] = slot_payload
+        return metadata
 
     @staticmethod
     def _has_metadata_type(documents: Sequence[object], metadata_type: str) -> bool:
