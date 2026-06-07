@@ -22,16 +22,23 @@ export function getOpeningStatus(): OpeningStatus {
 }
 
 /** Trả về trạng thái mở/đóng cửa, tự cập nhật mỗi phút. */
-export function useOpeningStatus(): OpeningStatus {
-  const [status, setStatus] = useState<OpeningStatus>(getOpeningStatus)
+export function useOpeningStatus(): OpeningStatus | null {
+  const [status, setStatus] = useState<OpeningStatus | null>(null)
 
   useEffect(() => {
     const updateStatus = () => setStatus(getOpeningStatus())
-    const mountUpdateId = window.setTimeout(updateStatus, 0)
+    updateStatus()
     const intervalId = window.setInterval(updateStatus, 60_000)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        updateStatus()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
     return () => {
-      window.clearTimeout(mountUpdateId)
       window.clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [])
 

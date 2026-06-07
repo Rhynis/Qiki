@@ -20,6 +20,7 @@ const PROTECTED_PHRASES = [
   'Thủ Đức',
   'Gas Quốc Cường',
   'trợ lý ảo',
+  'trong giờ mở cửa',
   'giờ mở cửa',
   'trước khi đặt',
   'từng bước',
