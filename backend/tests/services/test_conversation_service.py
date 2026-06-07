@@ -284,17 +284,19 @@ class FakeLLMProvider(BaseLLMProvider):
 
 
 class FakeOrderResponse:
-    def __init__(self) -> None:
+    def __init__(self, order_number: str = "QC-000123") -> None:
         self.id = uuid.uuid4()
-        self.order_number = "QC-000123"
+        self.order_number = order_number
 
 
 class FakeOrderService:
     def __init__(self) -> None:
         self.calls = 0
+        self.created_count = 0
         self.last_checkout: Any = None
         self.last_user: User | None = None
         self.last_idempotency_key: uuid.UUID | None = None
+        self.orders_by_key: dict[uuid.UUID, FakeOrderResponse] = {}
 
     async def create_order(
         self,
@@ -308,7 +310,12 @@ class FakeOrderService:
         self.last_checkout = checkout_data
         self.last_user = current_user
         self.last_idempotency_key = idempotency_key
-        return FakeOrderResponse()
+        if idempotency_key in self.orders_by_key:
+            return self.orders_by_key[idempotency_key]
+        self.created_count += 1
+        order = FakeOrderResponse(f"QC-{self.created_count + 122:06d}")
+        self.orders_by_key[idempotency_key] = order
+        return order
 
 
 class FakeSession:
@@ -770,6 +777,33 @@ async def add_order_state_history(
     )
 
 
+async def add_existing_chat_order_history(
+    messages: FakeMessageRepository,
+    conversation_id: uuid.UUID,
+    *,
+    order_number: str = "QC-000111",
+    slots: dict[str, object] | None = None,
+) -> None:
+    metadata: dict[str, object] = {
+        "type": "chat_order",
+        "order_id": str(uuid.uuid4()),
+        "order_number": order_number,
+    }
+    if slots:
+        metadata["slots"] = slots
+    await messages.create(
+        {
+            "conversation_id": conversation_id,
+            "role": "assistant",
+            "content": f"Đã ghi nhận đơn **{order_number}**.",
+            "intent": IntentCategory.PLACE_ORDER.value,
+            "intent_confidence": 0.9,
+            "latency_ms": 0,
+            "retrieved_documents": [metadata],
+        }
+    )
+
+
 @pytest.mark.asyncio
 async def test_chat_order_creates_order_on_confirmation(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
@@ -975,6 +1009,142 @@ async def test_chat_order_address_slot_fill_does_not_return_full_catalog() -> No
     assert response.assistant_message is not None
     assert "số điện thoại" in response.assistant_message.content
     assert response.products == []
+
+
+@pytest.mark.asyncio
+async def test_chat_order_allows_second_different_order_in_same_chat(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        ConversationService,
+        "_now_vn",
+        staticmethod(lambda: datetime(2026, 6, 8, 9, 0, tzinfo=timezone(timedelta(hours=7)))),
+    )
+    payload = complete_order_payload(confirmed=True)
+    payload["product"] = "Vihawa 20 lít"
+    service, _conversations, messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([payload]),
+        product_service=FakeProductService(products=_water_catalog()),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_existing_chat_order_history(
+        messages,
+        conversation.id,
+        order_number="QC-000111",
+        slots={
+            "product": "Bình gas Petrolimex 12kg (biển)",
+            "quantity": 1,
+            "customer_name": "Nguyen Van A",
+            "customer_phone": "+84903026306",
+            "delivery_address": "15 đường số 5, Khu phố 36, Phường Hiệp Bình, TP.HCM",
+        },
+    )
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Đúng rồi, xác nhận đặt nước Vihawa"),
+        user=None,
+    )
+
+    assert orders.created_count == 1
+    assert response.assistant_message is not None
+    assert "QC-000123" in response.assistant_message.content
+    assert "QC-000111" not in response.assistant_message.content
+    assert "đã được ghi nhận trước đó" not in response.assistant_message.content
+
+
+@pytest.mark.asyncio
+async def test_chat_order_missing_phone_never_claims_order_recorded() -> None:
+    payload = complete_order_payload()
+    payload["customer_phone"] = None
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([payload]),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Mình đặt 1 bình Petrolimex 12kg"),
+        user=None,
+    )
+
+    assert orders.created_count == 0
+    assert response.assistant_message is not None
+    assert "số điện thoại" in response.assistant_message.content
+    assert "Đã ghi nhận" not in response.assistant_message.content
+    assert "nhân viên sẽ" not in response.assistant_message.content.lower()
+    assert "gọi lại" not in response.assistant_message.content.lower()
+
+
+@pytest.mark.asyncio
+async def test_chat_order_reuses_previous_contact_by_asking_confirmation() -> None:
+    service, _conversations, messages, _rag, orders = make_service(
+        category=IntentCategory.PRODUCT_INQUIRY,
+        llm_provider=FakeLLMProvider([{}]),
+        product_service=FakeProductService(products=_water_catalog()),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_existing_chat_order_history(
+        messages,
+        conversation.id,
+        slots={
+            "customer_name": "Vân",
+            "customer_phone": "+84903026306",
+            "delivery_address": "15 đường số 5, Khu phố 36, Phường Hiệp Bình, TP.HCM",
+        },
+    )
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="vihawa 1 bình"),
+        user=None,
+    )
+
+    assert orders.created_count == 0
+    assert response.assistant_message is not None
+    assert "Bạn vẫn dùng" in response.assistant_message.content
+    assert "số **0903026306**" in response.assistant_message.content
+    assert "15 đường số 5" in response.assistant_message.content
+    assert "phải không" in response.assistant_message.content
+    state = response.assistant_message.retrieved_documents[0]
+    assert state["status"] == "awaiting_reused_contact_confirmation"
+    assert state["slots"]["customer_phone"] == "+84903026306"
+
+
+@pytest.mark.asyncio
+async def test_chat_order_double_ok_same_slots_is_idempotent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        ConversationService,
+        "_now_vn",
+        staticmethod(lambda: datetime(2026, 6, 8, 9, 0, tzinfo=timezone(timedelta(hours=7)))),
+    )
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([complete_order_payload(confirmed=True)]),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    first = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="ok xác nhận"),
+        user=None,
+    )
+    second = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="ok xác nhận"),
+        user=None,
+    )
+
+    assert orders.calls == 2
+    assert orders.created_count == 1
+    assert first.assistant_message is not None
+    assert second.assistant_message is not None
+    assert "QC-000123" in first.assistant_message.content
+    assert "QC-000123" in second.assistant_message.content
 
 
 @pytest.mark.asyncio
