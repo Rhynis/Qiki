@@ -306,23 +306,6 @@ class ConversationService:
         confidence: float,
         products: Sequence[ProductResponse],
     ) -> ChatOrderResult:
-        existing_order = self._find_existing_chat_order(history)
-        if existing_order:
-            order_number = str(existing_order.get("order_number", ""))
-            return ChatOrderResult(
-                message=await self._create_assistant_message(
-                    conversation,
-                    (
-                        f"Đơn **{order_number}** đã được ghi nhận trước đó. "
-                        "Nhân viên sẽ sớm gọi điện lại xác nhận với bạn trong giờ làm việc."
-                    ),
-                    IntentCategory.PLACE_ORDER,
-                    confidence,
-                    metadata=[existing_order],
-                ),
-                card_products=[],
-            )
-
         def category_cards(query: str | None) -> list[ProductResponse]:
             category = self._category_filter_from_query(self._normalize_match_text(query or ""))
             if category is None:
@@ -348,6 +331,11 @@ class ConversationService:
                 metadata=[self._order_state_metadata(status, state_slots)],
             )
 
+        conversation_history = await self.message_repository.list_by_conversation(
+            conversation.id,
+            skip=0,
+            limit=200,
+        )
         order_state = self._find_order_state(history)
         previous_slots = self._slots_from_order_state(order_state)
         slots = await self._extract_order_slots(content, history_payload, products)
@@ -358,7 +346,10 @@ class ConversationService:
         )
         slots = self._with_phone_candidate(slots, content)
         slots = self._with_order_cues(slots, content)
-        if order_state and order_state.get("status") == "awaiting_confirmation":
+        order_state_status = str(order_state.get("status", "")) if order_state else ""
+        if order_state_status == "awaiting_reused_contact_confirmation":
+            slots = replace(slots, confirmed=False)
+        elif order_state_status == "awaiting_confirmation":
             slots = replace(
                 slots,
                 confirmed=slots.confirmed or self._is_affirmation(content),
@@ -394,6 +385,21 @@ class ConversationService:
                     ),
                     "awaiting_product_choice",
                     slots,
+                )
+            )
+        reusable_contact_slots = self._find_reusable_contact_slots(conversation_history)
+        if self._should_confirm_reusable_contact(
+            order_state,
+            slots,
+            matched_product,
+            reusable_contact_slots,
+        ):
+            reused_slots = self._merge_order_slots(slots, reusable_contact_slots)
+            return result(
+                await order_state_message(
+                    self._format_reusable_contact_question(reusable_contact_slots),
+                    "awaiting_reused_contact_confirmation",
+                    reused_slots,
                 )
             )
         missing = self._missing_order_slots(slots, matched_product)
@@ -491,6 +497,13 @@ class ConversationService:
                 "type": CHAT_ORDER_METADATA_TYPE,
                 "order_id": str(order.id),
                 "order_number": order.order_number,
+                "slots": self._slots_to_metadata(
+                    replace(
+                        slots,
+                        customer_phone=normalized_phone,
+                        payment_method=payment_method,
+                    )
+                ),
             }
         ]
         return result(
@@ -977,6 +990,62 @@ Tin mới:
             customer_phone=cls._optional_str(payload.get("customer_phone")),
             delivery_address=cls._optional_str(payload.get("delivery_address")),
             payment_method=cls._optional_str(payload.get("payment_method")),
+        )
+
+    @classmethod
+    def _find_reusable_contact_slots(cls, history: Sequence[Message]) -> ChatOrderSlots | None:
+        for message in reversed(history):
+            documents = message.retrieved_documents or []
+            if not isinstance(documents, list):
+                continue
+            for document in documents:
+                if not isinstance(document, dict):
+                    continue
+                slots = cls._slots_from_metadata(document.get("slots"))
+                if slots is not None and cls._has_reusable_contact_slots(slots):
+                    return ChatOrderSlots(
+                        customer_name=slots.customer_name,
+                        customer_phone=slots.customer_phone,
+                        delivery_address=slots.delivery_address,
+                    )
+        return None
+
+    @staticmethod
+    def _has_reusable_contact_slots(slots: ChatOrderSlots) -> bool:
+        return bool(slots.customer_name or slots.customer_phone or slots.delivery_address)
+
+    @classmethod
+    def _should_confirm_reusable_contact(
+        cls,
+        order_state: dict[str, Any] | None,
+        slots: ChatOrderSlots,
+        matched_product: ProductResponse | None,
+        reusable_contact_slots: ChatOrderSlots | None,
+    ) -> bool:
+        return (
+            order_state is None
+            and matched_product is not None
+            and slots.quantity is not None
+            and reusable_contact_slots is not None
+            and cls._has_reusable_contact_slots(reusable_contact_slots)
+            and not cls._has_reusable_contact_slots(slots)
+        )
+
+    @classmethod
+    def _format_reusable_contact_question(cls, slots: ChatOrderSlots | None) -> str:
+        if slots is None:
+            return "Bạn vẫn dùng thông tin giao hàng như lần trước phải không ạ?"
+        parts: list[str] = []
+        if slots.customer_name:
+            parts.append(f"người nhận **{slots.customer_name}**")
+        if slots.customer_phone:
+            parts.append(f"số **{cls._format_phone_display(slots.customer_phone)}**")
+        if slots.delivery_address:
+            parts.append(f"giao tới **{slots.delivery_address}**")
+        detail = ", ".join(parts) if parts else "thông tin giao hàng cũ"
+        return (
+            f"Bạn vẫn dùng {detail} như lần trước phải không ạ? "
+            "Nếu khác bạn gửi lại giúp Qiki nhé."
         )
 
     @classmethod
