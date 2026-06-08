@@ -121,9 +121,9 @@ INTENT_ROUTING_RULES: dict[IntentCategory, IntentRoutingRule] = {
         "auto_response": False,
     },
     IntentCategory.PAYMENT_ISSUE: {
-        "requires_human": True,
+        "requires_human": False,
         "priority": 1,
-        "auto_response": False,
+        "auto_response": True,
     },
     IntentCategory.GENERAL_INFO: {
         "requires_human": False,

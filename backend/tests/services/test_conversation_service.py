@@ -165,7 +165,8 @@ class FakeRoutingService:
 
     async def route_intent(self, result: IntentResult) -> RoutingDecision:
         return RoutingDecision(
-            requires_human=self.requires_human or result.confidence < 0.6,
+            requires_human=self.requires_human
+            or result.category in {IntentCategory.COMPLAINT, IntentCategory.SAFETY_EMERGENCY},
             priority=0 if result.category == IntentCategory.SAFETY_EMERGENCY else 2,
             reason="test escalation",
             assigned_staff_id=self.staff_id,
@@ -1397,6 +1398,111 @@ async def test_product_quantity_message_starts_order_without_rag() -> None:
     assert state["slots"]["quantity"] == 1
 
 
+@pytest.mark.parametrize(
+    ("content", "expected_product", "expected_quantity"),
+    [
+        ("1 hoàn hảo", "Nước Hoàn Hảo 20 lít", 1),
+        ("2 vihawa", "Nước Vihawa 20 lít", 2),
+    ],
+)
+@pytest.mark.asyncio
+async def test_catalog_brand_short_phrase_starts_order_without_escalation(
+    content: str,
+    expected_product: str,
+    expected_quantity: int,
+) -> None:
+    service, _conversations, _messages, rag, orders = make_service(
+        category=IntentCategory.GENERAL_INFO,
+        confidence=0.2,
+        llm_provider=FakeLLMProvider([{}]),
+        product_service=FakeProductService(products=_water_catalog()),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content=content),
+        user=None,
+    )
+
+    assert response.user_message.intent == IntentCategory.PLACE_ORDER.value
+    assert response.conversation.status == "active"
+    assert rag.calls == 0
+    assert orders.calls == 0
+    assert response.assistant_message is not None
+    assert "số điện thoại" in response.assistant_message.content
+    assert response.products == []
+    state = response.assistant_message.retrieved_documents[0]
+    assert state["status"] == "awaiting_missing_slots"
+    assert state["slots"]["product"] == expected_product
+    assert state["slots"]["quantity"] == expected_quantity
+
+
+@pytest.mark.asyncio
+async def test_catalog_brand_change_in_order_asks_confirmation_without_escalation() -> None:
+    service, _conversations, messages, rag, orders = make_service(
+        category=IntentCategory.GENERAL_INFO,
+        confidence=0.2,
+        llm_provider=FakeLLMProvider([{}]),
+        product_service=FakeProductService(products=_water_catalog()),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_order_state_history(
+        messages,
+        conversation.id,
+        slots={
+            "product": "Nước Vihawa 20 lít",
+            "quantity": 1,
+            "customer_name": "Vân",
+            "customer_phone": "0903026306",
+            "delivery_address": "15 đường số 5, Khu phố 36, Phường Hiệp Bình, TP.HCM",
+            "payment_method": "cod",
+        },
+    )
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="à cho đổi qua hoàn hảo đi"),
+        user=None,
+    )
+
+    assert response.user_message.intent == IntentCategory.PLACE_ORDER.value
+    assert response.conversation.status == "active"
+    assert rag.calls == 0
+    assert orders.calls == 0
+    assert response.assistant_message is not None
+    assert (
+        "Bạn muốn đổi sang **Nước Hoàn Hảo 20 lít** thay cho "
+        "**Nước Vihawa 20 lít** ban đầu phải không ạ?"
+    ) in response.assistant_message.content
+
+
+@pytest.mark.asyncio
+async def test_low_confidence_ambiguous_message_asks_clarification_without_escalation() -> None:
+    service, _conversations, _messages, rag, orders = make_service(
+        category=IntentCategory.GENERAL_INFO,
+        confidence=0.2,
+        llm_provider=FakeLLMProvider([{}]),
+        product_service=FakeProductService(products=_water_catalog()),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="không rõ"),
+        user=None,
+    )
+
+    assert response.user_message.intent == IntentCategory.GENERAL_INFO.value
+    assert response.conversation.status == "active"
+    assert rag.calls == 0
+    assert orders.calls == 0
+    assert response.assistant_message is not None
+    assert "Qiki chưa rõ ý bạn" in response.assistant_message.content
+    assert "đặt hàng" in response.assistant_message.content
+    assert response.products == []
+
+
 @pytest.mark.asyncio
 async def test_order_context_low_confidence_affirmation_does_not_escalate() -> None:
     service, _conversations, messages, rag, orders = make_service(
@@ -1702,7 +1808,6 @@ async def test_order_in_progress_does_not_override_safety_emergency() -> None:
 async def test_human_handoff_skips_rag_for_complaint() -> None:
     service, _conversations, _messages, rag, _orders = make_service(
         category=IntentCategory.COMPLAINT,
-        requires_human=True,
     )
     conversation = await service.start_conversation(user=None, session_id="abc")
 
@@ -1712,6 +1817,27 @@ async def test_human_handoff_skips_rag_for_complaint() -> None:
         user=None,
     )
 
+    assert response.conversation.status == "escalated"
+    assert response.assistant_message is not None
+    assert "nhân viên" in response.assistant_message.content
+    assert rag.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_explicit_human_request_escalates_even_when_low_confidence() -> None:
+    service, _conversations, _messages, rag, _orders = make_service(
+        category=IntentCategory.GENERAL_INFO,
+        confidence=0.2,
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="cho gặp nhân viên"),
+        user=None,
+    )
+
+    assert response.user_message.intent == IntentCategory.COMPLAINT.value
     assert response.conversation.status == "escalated"
     assert response.assistant_message is not None
     assert "nhân viên" in response.assistant_message.content
