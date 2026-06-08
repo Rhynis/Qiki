@@ -56,6 +56,7 @@ class ChatOrderSlots:
     customer_name: str | None = None
     customer_phone: str | None = None
     delivery_address: str | None = None
+    delivery_notes: str | None = None
     payment_method: str | None = None
     confirmed: bool = False
 
@@ -155,6 +156,12 @@ class ConversationService:
         history_payload = self._history_to_payload(history)
         intent = await self.intent_classifier.classify(request.content, history_payload)
         intent = self._apply_order_context_intent(intent, history)
+        if (
+            intent.category != IntentCategory.SAFETY_EMERGENCY
+            and self._find_existing_chat_order(history)
+            and self._is_post_order_change_request(request.content)
+        ):
+            intent = self._order_context_intent(intent, "post_order_change")
 
         catalog_products: list[ProductResponse] | None = None
         if intent.category in {IntentCategory.PRODUCT_INQUIRY, IntentCategory.PLACE_ORDER}:
@@ -306,6 +313,18 @@ class ConversationService:
         confidence: float,
         products: Sequence[ProductResponse],
     ) -> ChatOrderResult:
+        existing_order = self._find_existing_chat_order(history)
+        if existing_order and self._is_post_order_change_request(content):
+            return ChatOrderResult(
+                message=await self._create_post_order_change_message(
+                    conversation,
+                    content,
+                    existing_order,
+                    confidence,
+                ),
+                card_products=[],
+            )
+
         def category_cards(query: str | None) -> list[ProductResponse]:
             category = self._category_filter_from_query(self._normalize_match_text(query or ""))
             if category is None:
@@ -322,13 +341,14 @@ class ConversationService:
             content: str,
             status: str,
             state_slots: ChatOrderSlots | None = None,
+            metadata_extra: dict[str, Any] | None = None,
         ) -> Message:
             return await self._create_assistant_message(
                 conversation,
                 content,
                 IntentCategory.PLACE_ORDER,
                 confidence,
-                metadata=[self._order_state_metadata(status, state_slots)],
+                metadata=[self._order_state_metadata(status, state_slots, metadata_extra)],
             )
 
         conversation_history = await self.message_repository.list_by_conversation(
@@ -338,15 +358,44 @@ class ConversationService:
         )
         order_state = self._find_order_state(history)
         previous_slots = self._slots_from_order_state(order_state)
-        slots = await self._extract_order_slots(content, history_payload, products)
-        slots = self._merge_order_slots(
-            previous_slots,
-            self._infer_order_slots(content, products),
-            slots,
+        extracted_slots = await self._extract_order_slots(content, history_payload, products)
+        inferred_slots = self._infer_order_slots(content, products)
+        incoming_slots = self._merge_order_slots(inferred_slots, extracted_slots)
+        previous_product = (
+            self._optional_str(order_state.get("previous_product")) if order_state else None
         )
+        order_state_status = str(order_state.get("status", "")) if order_state else ""
+        if order_state_status == "awaiting_product_change_confirmation":
+            if self._is_affirmation(content):
+                slots = previous_slots or ChatOrderSlots()
+            elif previous_product and self._is_keep_previous_product_request(content):
+                slots = replace(previous_slots or ChatOrderSlots(), product=previous_product)
+            else:
+                return result(
+                    await order_state_message(
+                        self._format_product_change_question(previous_product, previous_slots),
+                        "awaiting_product_change_confirmation",
+                        previous_slots,
+                        {"previous_product": previous_product} if previous_product else None,
+                    )
+                )
+            slots = replace(slots, confirmed=False)
+        elif self._should_confirm_product_change(previous_slots, incoming_slots, products):
+            pending_slots = self._merge_order_slots(previous_slots, incoming_slots)
+            assert previous_slots is not None
+            return result(
+                await order_state_message(
+                    self._format_product_change_question(previous_slots.product, pending_slots),
+                    "awaiting_product_change_confirmation",
+                    pending_slots,
+                    {"previous_product": previous_slots.product or ""},
+                )
+            )
+        else:
+            slots = self._merge_order_slots(previous_slots, incoming_slots)
         slots = self._with_phone_candidate(slots, content)
         slots = self._with_order_cues(slots, content)
-        order_state_status = str(order_state.get("status", "")) if order_state else ""
+        slots = self._with_delivery_time_candidate(slots, content)
         if order_state_status == "awaiting_reused_contact_confirmation":
             slots = replace(slots, confirmed=False)
         elif order_state_status == "awaiting_confirmation":
@@ -481,6 +530,7 @@ class ConversationService:
             delivery_ward=delivery_zone_match.ward,
             delivery_district=delivery_zone_match.delivery_zone,
             delivery_city="TP. Hồ Chí Minh",
+            delivery_notes=slots.delivery_notes,
             payment_method=payment_method,
             source="chatbot",
             referral_conversation_id=conversation.id,
@@ -511,7 +561,7 @@ class ConversationService:
                 conversation,
                 (
                     f"Đã ghi nhận đơn **{order.order_number}**. "
-                    f"{self._format_order_callback_sentence()}"
+                    f"{self._format_order_callback_sentence(slots.delivery_notes)}"
                 ),
                 IntentCategory.PLACE_ORDER,
                 confidence,
@@ -540,7 +590,8 @@ Các trường:
 - customer_name: tên khách, hoặc null
 - customer_phone: số điện thoại, hoặc null
 - delivery_address: địa chỉ giao hàng đầy đủ gồm số nhà, tên/số đường, khu phố,
-  phường, TP.HCM; với Hiệp Bình cần khu phố; hoặc null
+  phường, TP.HCM; hoặc null
+- delivery_notes: khung giờ giao khách đề xuất, hoặc null
 - payment_method: "cod" hoặc "bank_transfer", hoặc null
 - confirmed: true nếu khách xác nhận rõ đơn Qiki đã tóm tắt ở lượt trước; ngược lại false
 
@@ -570,6 +621,7 @@ Tin mới:
             customer_name=self._optional_str(payload.get("customer_name")),
             customer_phone=self._optional_str(payload.get("customer_phone")),
             delivery_address=self._optional_str(payload.get("delivery_address")),
+            delivery_notes=self._optional_str(payload.get("delivery_notes")),
             payment_method=self._optional_str(payload.get("payment_method")),
             confirmed=self._normalize_confirmation(payload.get("confirmed", False)),
         )
@@ -748,6 +800,60 @@ Tin mới:
             return "Bạn muốn đặt loại gas nào? Qiki gửi các lựa chọn bên dưới nhé."
         return "Bạn muốn đặt sản phẩm nào? Qiki gửi các lựa chọn bên dưới nhé."
 
+    async def _create_post_order_change_message(
+        self,
+        conversation: Conversation,
+        content: str,
+        existing_order: Mapping[str, Any],
+        confidence: float,
+    ) -> Message:
+        order_number = self._optional_str(existing_order.get("order_number")) or "đơn trước"
+        change_text = self._format_post_order_change_text(content)
+        metadata = dict(existing_order)
+        metadata["post_order_change_request"] = content
+        payment_method = self._extract_payment_candidate(content)
+        if payment_method:
+            metadata["requested_payment_method"] = payment_method
+        return await self._create_assistant_message(
+            conversation,
+            (
+                f"Đơn **{order_number}** đã ghi nhận. "
+                f"Qiki đã lưu yêu cầu {change_text}; "
+                "nhân viên sẽ xác nhận lại khi gọi cho bạn nhé."
+            ),
+            IntentCategory.PLACE_ORDER,
+            confidence,
+            metadata=[metadata],
+        )
+
+    @classmethod
+    def _format_post_order_change_text(cls, content: str) -> str:
+        payment_method = cls._extract_payment_candidate(content)
+        if payment_method == "bank_transfer":
+            return "đổi sang **chuyển khoản**"
+        if payment_method == "cod":
+            return "đổi sang **thanh toán khi nhận hàng (COD)**"
+        return "thay đổi thông tin đơn"
+
+    @classmethod
+    def _is_post_order_change_request(cls, content: str) -> bool:
+        normalized = cls._normalize_match_text(content)
+        if cls._extract_payment_candidate(content) and any(
+            phrase in normalized
+            for phrase in {"doi", "doi sang", "chuyen sang", "thay doi", "sua", "cap nhat"}
+        ):
+            return True
+        return any(
+            phrase in normalized
+            for phrase in {
+                "doi thong tin",
+                "sua thong tin",
+                "cap nhat thong tin",
+                "doi hinh thuc",
+                "sua hinh thuc",
+            }
+        )
+
     async def _create_assistant_message(
         self,
         conversation: Conversation,
@@ -862,12 +968,37 @@ Tin mới:
         return replace(slots, customer_name=customer_name, payment_method=payment_method)
 
     @classmethod
+    def _with_delivery_time_candidate(cls, slots: ChatOrderSlots, content: str) -> ChatOrderSlots:
+        delivery_notes = slots.delivery_notes or cls._extract_delivery_time_candidate(content)
+        return replace(slots, delivery_notes=delivery_notes)
+
+    @staticmethod
+    def _extract_delivery_time_candidate(content: str) -> str | None:
+        patterns = [
+            r"\bgiao\s+((?:sáng|sang|trưa|trua|chiều|chieu|tối|toi)\s+(?:nay|mai))\b",
+            r"\bgiao\s+((?:sau|trước|truoc)\s+\d{1,2}\s*h(?:\d{2})?)\b",
+            r"\b((?:sáng|sang|trưa|trua|chiều|chieu|tối|toi)\s+(?:nay|mai))\b",
+            r"\b((?:sau|trước|truoc)\s+\d{1,2}\s*h(?:\d{2})?)\b",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, content.lower(), flags=re.IGNORECASE)
+            if match:
+                return match.group(1).strip(" .,;:!?")
+        return None
+
+    @classmethod
     def _extract_payment_candidate(cls, content: str) -> str | None:
         normalized = cls._normalize_match_text(content)
         tokens = set(normalized.split())
         if "cod" in tokens or "tien mat" in normalized or "nhan hang" in normalized:
             return "cod"
-        if "ck" in tokens or "chuyen khoan" in normalized or "khoan" in tokens:
+        if (
+            "ck" in tokens
+            or "banking" in tokens
+            or "bank" in tokens
+            or "chuyen khoan" in normalized
+            or "khoan" in tokens
+        ):
             return "bank_transfer"
         return None
 
@@ -955,6 +1086,7 @@ Tin mới:
                 customer_name=source.customer_name or merged.customer_name,
                 customer_phone=source.customer_phone or merged.customer_phone,
                 delivery_address=source.delivery_address or merged.delivery_address,
+                delivery_notes=source.delivery_notes or merged.delivery_notes,
                 payment_method=source.payment_method or merged.payment_method,
                 confirmed=merged.confirmed or source.confirmed,
             )
@@ -975,6 +1107,8 @@ Tin mới:
             payload["customer_phone"] = slots.customer_phone
         if slots.delivery_address:
             payload["delivery_address"] = slots.delivery_address
+        if slots.delivery_notes:
+            payload["delivery_notes"] = slots.delivery_notes
         if slots.payment_method:
             payload["payment_method"] = slots.payment_method
         return payload
@@ -989,6 +1123,7 @@ Tin mới:
             customer_name=cls._optional_str(payload.get("customer_name")),
             customer_phone=cls._optional_str(payload.get("customer_phone")),
             delivery_address=cls._optional_str(payload.get("delivery_address")),
+            delivery_notes=cls._optional_str(payload.get("delivery_notes")),
             payment_method=cls._optional_str(payload.get("payment_method")),
         )
 
@@ -1049,6 +1184,50 @@ Tin mới:
         )
 
     @classmethod
+    def _should_confirm_product_change(
+        cls,
+        previous_slots: ChatOrderSlots | None,
+        incoming_slots: ChatOrderSlots,
+        products: Sequence[ProductResponse],
+    ) -> bool:
+        if not previous_slots or not previous_slots.product or not incoming_slots.product:
+            return False
+        old_product = cls._match_product(previous_slots.product, products)
+        new_product = cls._match_product(incoming_slots.product, products)
+        return (
+            old_product is not None and new_product is not None and old_product.id != new_product.id
+        )
+
+    @staticmethod
+    def _format_product_change_question(
+        previous_product: str | None,
+        pending_slots: ChatOrderSlots | None,
+    ) -> str:
+        new_product = (
+            pending_slots.product if pending_slots and pending_slots.product else "sản phẩm mới"
+        )
+        old_product = previous_product or "sản phẩm ban đầu"
+        return (
+            f"Bạn muốn đổi sang **{new_product}** thay cho "
+            f"**{old_product}** ban đầu phải không ạ?"
+        )
+
+    @classmethod
+    def _is_keep_previous_product_request(cls, content: str) -> bool:
+        normalized = cls._normalize_match_text(content)
+        return any(
+            phrase in normalized
+            for phrase in {
+                "giu cu",
+                "giu san pham cu",
+                "lay cu",
+                "lay san pham cu",
+                "khong doi",
+                "khong doi nua",
+            }
+        )
+
+    @classmethod
     def _is_affirmation(cls, content: str) -> bool:
         normalized = cls._normalize_match_text(content)
         return normalized in {
@@ -1081,8 +1260,7 @@ Tin mới:
             missing.append("số điện thoại")
         if not slots.delivery_address:
             missing.append(
-                "địa chỉ giao hàng chi tiết (số nhà, tên/số đường, khu phố, phường, "
-                "TP.HCM; với Hiệp Bình cần khu phố)"
+                "địa chỉ giao hàng chi tiết (số nhà, tên/số đường, khu phố, phường, " "TP.HCM)"
             )
         if not slots.payment_method:
             missing.append("hình thức thanh toán")
@@ -1140,7 +1318,7 @@ Tin mới:
 
     @staticmethod
     def _normalize_match_text(value: str) -> str:
-        decomposed = unicodedata.normalize("NFD", value.lower())
+        decomposed = unicodedata.normalize("NFD", value.lower().replace("đ", "d"))
         without_marks = "".join(char for char in decomposed if unicodedata.category(char) != "Mn")
         return re.sub(r"[^a-z0-9]+", " ", without_marks).strip()
 
@@ -1165,23 +1343,37 @@ Tin mới:
         if normalized in {"cod", "cash", "tien mat"} or "nhan hang" in normalized:
             return "cod"
         if (
-            normalized in {"bank transfer", "bank_transfer", "chuyen khoan", "ck"}
+            normalized
+            in {"bank transfer", "bank_transfer", "chuyen khoan", "ck", "bank", "banking"}
             or "khoan" in normalized
         ):
             return "bank_transfer"
         return None
 
     @classmethod
-    def _format_order_callback_sentence(cls) -> str:
+    def _format_order_callback_sentence(cls, delivery_notes: str | None = None) -> str:
         now = cls._now_vn()
+        if delivery_notes:
+            if cls._is_business_open(now):
+                return (
+                    "Qiki đã ghi chú giao theo khung giờ bạn đề xuất "
+                    f"(**{delivery_notes}**), nhân viên sẽ gọi lại xác nhận sớm nhất. "
+                    "Cảm ơn bạn!"
+                )
+            return (
+                "Hiện đã ngoài giờ làm việc. "
+                "Qiki đã ghi chú giao theo khung giờ bạn đề xuất "
+                f"(**{delivery_notes}**), ngày mai nhân viên sẽ gọi lại xác nhận sớm nhất. "
+                "Cảm ơn bạn!"
+            )
         if cls._is_business_open(now):
             return (
-                "**Nhân viên sẽ sớm gọi điện lại xác nhận** đơn trong giờ làm việc "
-                "(T2-T6 06:30-20:00, T7-CN 07:30-20:00). Cảm ơn bạn!"
+                "**Nhân viên sẽ liên hệ lại xác nhận đơn trong thời gian sớm nhất.** " "Cảm ơn bạn!"
             )
         return (
             "Hiện đã ngoài giờ làm việc. "
-            f"Nhân viên sẽ gọi lại xác nhận đơn vào {cls._next_opening_label(now)}. "
+            "**Ngày mai nhân viên sẽ gọi lại xác nhận đơn và hẹn giờ giao "
+            "trong thời gian sớm nhất.** "
             "Cảm ơn bạn!"
         )
 
@@ -1346,11 +1538,14 @@ Tin mới:
         cls,
         status: str,
         slots: ChatOrderSlots | None = None,
+        metadata_extra: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         metadata: dict[str, Any] = {"type": CHAT_ORDER_STATE_METADATA_TYPE, "status": status}
         slot_payload = cls._slots_to_metadata(slots)
         if slot_payload:
             metadata["slots"] = slot_payload
+        if metadata_extra:
+            metadata.update(metadata_extra)
         return metadata
 
     @staticmethod
