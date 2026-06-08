@@ -733,7 +733,9 @@ async def test_product_cards_gas_category_query_returns_only_gas() -> None:
 
 
 def complete_order_payload(
-    confirmed: bool = False, address: str | None = None
+    confirmed: bool = False,
+    address: str | None = None,
+    delivery_notes: str | None = None,
 ) -> dict[str, object]:
     return {
         "product": "Petrolimex 12kg",
@@ -741,6 +743,7 @@ def complete_order_payload(
         "customer_name": "Nguyen Van A",
         "customer_phone": "0903026306",
         "delivery_address": address or "15 đường số 5, Phường Hiệp Bình, TP. Hồ Chí Minh",
+        "delivery_notes": delivery_notes,
         "payment_method": "cod",
         "confirmed": confirmed,
     }
@@ -751,10 +754,13 @@ async def add_order_state_history(
     conversation_id: uuid.UUID,
     status: str = "awaiting_missing_slots",
     slots: dict[str, object] | None = None,
+    metadata_extra: dict[str, object] | None = None,
 ) -> None:
     metadata: dict[str, object] = {"type": "chat_order_state", "status": status}
     if slots:
         metadata["slots"] = slots
+    if metadata_extra:
+        metadata.update(metadata_extra)
     await messages.create(
         {
             "conversation_id": conversation_id,
@@ -828,7 +834,10 @@ async def test_chat_order_creates_order_on_confirmation(monkeypatch: pytest.Monk
     assert orders.calls == 1
     assert response.assistant_message is not None
     assert "QC-000123" in response.assistant_message.content
-    assert "Nhân viên sẽ sớm gọi điện lại xác nhận" in response.assistant_message.content
+    assert "Nhân viên sẽ liên hệ lại xác nhận đơn trong thời gian sớm nhất" in (
+        response.assistant_message.content
+    )
+    assert "T2-T6" not in response.assistant_message.content
     assert response.products == []
     assert orders.last_checkout.source == "chatbot"
     assert orders.last_checkout.referral_conversation_id == conversation.id
@@ -915,7 +924,8 @@ async def test_chat_order_confirmation_outside_hours_is_time_aware(
     assert response.assistant_message is not None
     assert "QC-000123" in response.assistant_message.content
     assert "Hiện đã ngoài giờ làm việc" in response.assistant_message.content
-    assert "sáng mai từ 06:30" in response.assistant_message.content
+    assert "Ngày mai nhân viên sẽ gọi lại xác nhận đơn" in response.assistant_message.content
+    assert "06:30" not in response.assistant_message.content
 
 
 @pytest.mark.asyncio
@@ -982,8 +992,218 @@ async def test_chat_order_missing_address_mentions_khu_pho() -> None:
     assert orders.calls == 0
     assert response.assistant_message is not None
     assert "khu phố" in response.assistant_message.content
+    assert "với Hiệp Bình cần khu phố" not in response.assistant_message.content
     assert "mốc gần nhà" not in response.assistant_message.content
     assert response.products == []
+
+
+@pytest.mark.asyncio
+async def test_chat_order_product_change_requires_confirmation() -> None:
+    products = _water_catalog()
+    service, _conversations, messages, _rag, orders = make_service(
+        category=IntentCategory.PRODUCT_INQUIRY,
+        llm_provider=FakeLLMProvider([{}]),
+        product_service=FakeProductService(products=products),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_order_state_history(
+        messages,
+        conversation.id,
+        slots={
+            "product": "Nước Hoàn Hảo 20 lít",
+            "quantity": 1,
+            "customer_name": "Vân",
+            "customer_phone": "0903026306",
+            "delivery_address": "15 đường số 5, Khu phố 36, Phường Hiệp Bình, TP.HCM",
+            "payment_method": "cod",
+        },
+    )
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="đổi sang Vihawa 1 bình"),
+        user=None,
+    )
+
+    assert orders.created_count == 0
+    assert response.assistant_message is not None
+    assert (
+        "Bạn muốn đổi sang **Nước Vihawa 20 lít** thay cho "
+        "**Nước Hoàn Hảo 20 lít** ban đầu phải không ạ?"
+    ) in response.assistant_message.content
+    state = response.assistant_message.retrieved_documents[0]
+    assert state["status"] == "awaiting_product_change_confirmation"
+    assert state["previous_product"] == "Nước Hoàn Hảo 20 lít"
+    assert state["slots"]["product"] == "Nước Vihawa 20 lít"
+
+
+@pytest.mark.asyncio
+async def test_chat_order_product_change_confirmation_uses_new_product(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        ConversationService,
+        "_now_vn",
+        staticmethod(lambda: datetime(2026, 6, 8, 9, 0, tzinfo=timezone(timedelta(hours=7)))),
+    )
+    products = _water_catalog()
+    service, _conversations, messages, _rag, orders = make_service(
+        category=IntentCategory.PRODUCT_INQUIRY,
+        llm_provider=FakeLLMProvider([{}]),
+        product_service=FakeProductService(products=products),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_order_state_history(
+        messages,
+        conversation.id,
+        status="awaiting_product_change_confirmation",
+        slots={
+            "product": "Nước Vihawa 20 lít",
+            "quantity": 1,
+            "customer_name": "Vân",
+            "customer_phone": "0903026306",
+            "delivery_address": "15 đường số 5, Khu phố 36, Phường Hiệp Bình, TP.HCM",
+            "payment_method": "cod",
+        },
+        metadata_extra={"previous_product": "Nước Hoàn Hảo 20 lít"},
+    )
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="đúng rồi"),
+        user=None,
+    )
+
+    assert orders.created_count == 0
+    assert response.assistant_message is not None
+    assert "Qiki tóm tắt đơn hàng" in response.assistant_message.content
+    assert "Nước Vihawa 20 lít" in response.assistant_message.content
+    assert "Nước Hoàn Hảo" not in response.assistant_message.content
+
+
+@pytest.mark.asyncio
+async def test_chat_order_product_change_keep_old_uses_previous_product() -> None:
+    products = _water_catalog()
+    service, _conversations, messages, _rag, orders = make_service(
+        category=IntentCategory.PRODUCT_INQUIRY,
+        llm_provider=FakeLLMProvider([{}]),
+        product_service=FakeProductService(products=products),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_order_state_history(
+        messages,
+        conversation.id,
+        status="awaiting_product_change_confirmation",
+        slots={
+            "product": "Nước Vihawa 20 lít",
+            "quantity": 1,
+            "customer_name": "Vân",
+            "customer_phone": "0903026306",
+            "delivery_address": "15 đường số 5, Khu phố 36, Phường Hiệp Bình, TP.HCM",
+            "payment_method": "cod",
+        },
+        metadata_extra={"previous_product": "Nước Hoàn Hảo 20 lít"},
+    )
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="giữ cũ"),
+        user=None,
+    )
+
+    assert orders.created_count == 0
+    assert response.assistant_message is not None
+    assert "Qiki tóm tắt đơn hàng" in response.assistant_message.content
+    assert "Nước Hoàn Hảo 20 lít" in response.assistant_message.content
+    assert "Nước Vihawa" not in response.assistant_message.content
+
+
+@pytest.mark.asyncio
+async def test_chat_order_delivery_time_note_in_hours(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        ConversationService,
+        "_now_vn",
+        staticmethod(lambda: datetime(2026, 6, 8, 9, 0, tzinfo=timezone(timedelta(hours=7)))),
+    )
+    order_service = FakeOrderService()
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([complete_order_payload(confirmed=True)]),
+        order_service=order_service,
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Đúng rồi, giao chiều mai"),
+        user=None,
+    )
+
+    assert orders.created_count == 1
+    assert orders.last_checkout.delivery_notes == "chiều mai"
+    assert response.assistant_message is not None
+    assert "giao theo khung giờ bạn đề xuất (**chiều mai**)" in response.assistant_message.content
+    assert "nhân viên sẽ gọi lại xác nhận sớm nhất" in response.assistant_message.content
+
+
+@pytest.mark.asyncio
+async def test_chat_order_delivery_time_note_outside_hours(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        ConversationService,
+        "_now_vn",
+        staticmethod(lambda: datetime(2026, 6, 7, 21, 0, tzinfo=timezone(timedelta(hours=7)))),
+    )
+    order_service = FakeOrderService()
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([complete_order_payload(confirmed=True)]),
+        order_service=order_service,
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Đúng rồi, giao sau 5h"),
+        user=None,
+    )
+
+    assert orders.created_count == 1
+    assert orders.last_checkout.delivery_notes == "sau 5h"
+    assert response.assistant_message is not None
+    assert "Hiện đã ngoài giờ làm việc" in response.assistant_message.content
+    assert "giao theo khung giờ bạn đề xuất (**sau 5h**)" in response.assistant_message.content
+
+
+@pytest.mark.asyncio
+async def test_post_order_payment_change_is_recorded_without_escalation() -> None:
+    service, _conversations, messages, rag, orders = make_service(
+        category=IntentCategory.PRODUCT_INQUIRY,
+        confidence=0.2,
+        llm_provider=FakeLLMProvider([{}]),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_existing_chat_order_history(messages, conversation.id, order_number="QC-000111")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="đổi hình thức thành banking"),
+        user=None,
+    )
+
+    assert response.user_message.intent == IntentCategory.PLACE_ORDER.value
+    assert response.conversation.status == "active"
+    assert rag.calls == 0
+    assert orders.created_count == 0
+    assert response.assistant_message is not None
+    assert "Đơn **QC-000111** đã ghi nhận" in response.assistant_message.content
+    assert "đổi sang **chuyển khoản**" in response.assistant_message.content
+    metadata = response.assistant_message.retrieved_documents[0]
+    assert metadata["post_order_change_request"] == "đổi hình thức thành banking"
+    assert metadata["requested_payment_method"] == "bank_transfer"
 
 
 @pytest.mark.asyncio
