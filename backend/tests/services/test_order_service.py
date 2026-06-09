@@ -4,6 +4,7 @@ import asyncio
 import re
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Literal
 from uuid import uuid4
 
 import pytest
@@ -50,20 +51,33 @@ async def create_product(
     session: AsyncSession,
     *,
     sku: str = "GAS-12-SAIGON",
+    name: str = "Binh gas 12kg",
+    brand: str = "Saigon Petro",
+    size_kg: Decimal = Decimal("12"),
+    category: Literal["gas", "nuoc_uong"] = "gas",
+    unit: Literal["kg", "lít"] = "kg",
+    price: Decimal = Decimal("350000"),
     stock_quantity: int = 20,
     is_active: bool = True,
 ) -> Product:
     product = await ProductRepository(session).create(
         ProductCreate(
             sku=sku,
-            name="Binh gas 12kg",
-            brand="Saigon Petro",
-            size_kg=Decimal("12"),
-            price=Decimal("350000"),
+            name=name,
+            brand=brand,
+            size_kg=size_kg,
+            category=category,
+            unit=unit,
+            price=price,
             stock_quantity=stock_quantity,
-            description="Binh gas gia dinh",
+            description="San pham giao tan noi",
             image_url="https://example.com/gas-12kg.jpg",
             safety_info="Dat binh noi thoang khi.",
+            pricing_note=(
+                "Giá tại cửa hàng; giao +5.000đ; lên lầu +5.000đ/lầu"
+                if category == "nuoc_uong"
+                else None
+            ),
         )
     )
     product.is_active = is_active
@@ -133,8 +147,78 @@ async def test_create_order_authenticated_user(order_session: AsyncSession) -> N
     )
 
     assert order.user_id == user.id
-    assert order.total_amount == Decimal("730000.00")
+    assert order.total_amount == Decimal("700000.00")
     assert order.items[0].product_name == "Binh gas 12kg"
+
+
+async def test_shipping_fee_gas_only_is_zero(order_session: AsyncSession) -> None:
+    product = await create_product(order_session)
+
+    order = await service(order_session).create_order(
+        checkout_payload(product),
+        None,
+        uuid4(),
+        order_session,
+    )
+
+    assert order.subtotal == Decimal("700000.00")
+    assert order.shipping_fee == Decimal("0.00")
+    assert order.total_amount == order.subtotal
+
+
+async def test_shipping_fee_water_charges_per_unit(order_session: AsyncSession) -> None:
+    product = await create_product(
+        order_session,
+        sku="VIHAWA-20L",
+        name="Nước Vihawa 20 lít",
+        brand="Vihawa",
+        size_kg=Decimal("20"),
+        category="nuoc_uong",
+        unit="lít",
+        price=Decimal("55000"),
+    )
+
+    order = await service(order_session).create_order(
+        checkout_payload(product),
+        None,
+        uuid4(),
+        order_session,
+    )
+
+    assert order.subtotal == Decimal("110000.00")
+    assert order.shipping_fee == Decimal("10000.00")
+    assert order.total_amount == order.subtotal + Decimal("10000.00")
+
+
+async def test_shipping_fee_mixed_only_counts_water(order_session: AsyncSession) -> None:
+    gas = await create_product(order_session, sku="SP-12KG-XAM")
+    water = await create_product(
+        order_session,
+        sku="HOANHAO-20L",
+        name="Nước Hoàn Hảo 20 lít",
+        brand="Hoàn Hảo",
+        size_kg=Decimal("20"),
+        category="nuoc_uong",
+        unit="lít",
+        price=Decimal("15000"),
+    )
+
+    order = await service(order_session).create_order(
+        checkout_payload(
+            gas,
+            items=[
+                OrderItemCreate(product_id=gas.id, quantity=1),
+                OrderItemCreate(product_id=water.id, quantity=3),
+            ],
+        ),
+        None,
+        uuid4(),
+        order_session,
+    )
+
+    assert order.subtotal == Decimal("395000.00")
+    assert order.shipping_fee == Decimal("15000.00")
+    assert order.total_amount == order.subtotal + Decimal("15000.00")
 
 
 async def test_create_order_guest_user(order_session: AsyncSession) -> None:

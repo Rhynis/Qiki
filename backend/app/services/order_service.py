@@ -1,5 +1,6 @@
 """Order service with ACID-compliant order creation."""
 
+from collections.abc import Mapping
 from decimal import Decimal
 from uuid import UUID
 
@@ -16,12 +17,14 @@ from app.core.exceptions import (
 from app.core.input_validation import VietnamesePhoneValidator
 from app.core.logging import get_logger
 from app.models.order import Order
+from app.models.product import Product
 from app.models.user import User
 from app.repositories.order_repository import ALLOWED_STATUS_TRANSITIONS, OrderRepository
 from app.repositories.product_repository import ProductRepository
 from app.schemas.order import CheckoutRequest, OrderListResponse, OrderResponse, OrderSearchParams
 
 logger = get_logger(__name__)
+WATER_DELIVERY_FEE_PER_UNIT = Decimal("5000")
 
 
 class OrderService:
@@ -95,11 +98,7 @@ class OrderService:
                 }
             )
 
-        shipping_fee = self._calculate_shipping(
-            checkout_data.delivery_district,
-            checkout_data.delivery_city,
-            subtotal,
-        )
+        shipping_fee = self._calculate_shipping(products, requested_by_product)
         total_amount = subtotal + shipping_fee
 
         for product_id, quantity in requested_by_product.items():
@@ -236,15 +235,17 @@ class OrderService:
         }
 
     def _calculate_shipping(
-        self, district: str | None, city: str | None, subtotal: Decimal
+        self,
+        products: Mapping[UUID, Product],
+        requested_by_product: Mapping[UUID, int],
     ) -> Decimal:
-        """Simple shipping calculation."""
-        del district
-        if subtotal >= Decimal("1000000"):
-            return Decimal("0")
-        if city and "Hồ Chí Minh" in city:
-            return Decimal("30000")
-        return Decimal("50000")
+        """Charge water delivery per unit; gas and other products ship free."""
+        water_units = sum(
+            quantity
+            for product_id, quantity in requested_by_product.items()
+            if products[product_id].category == "nuoc_uong"
+        )
+        return WATER_DELIVERY_FEE_PER_UNIT * water_units
 
     @staticmethod
     def _to_response(order: Order) -> OrderResponse:
