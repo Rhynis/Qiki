@@ -392,8 +392,14 @@ class ConversationService:
         previous_slots = self._slots_from_order_state(order_state)
         extracted_slots = await self._extract_order_slots(content, history_payload, products)
         inferred_slots = self._infer_order_slots(content, products)
-        incoming_slots = self._merge_order_slots(inferred_slots, extracted_slots)
-        candidate_item = self._first_order_item(incoming_slots)
+        incoming_slots = self._combine_current_message_slots(
+            inferred_slots,
+            extracted_slots,
+            content,
+            products,
+        )
+        candidate_items = incoming_slots.items
+        candidate_item = candidate_items[0] if candidate_items else None
         contact_slots = replace(incoming_slots, items=())
         order_state_status = str(order_state.get("status", "")) if order_state else ""
         base_slots = previous_slots or ChatOrderSlots()
@@ -419,8 +425,17 @@ class ConversationService:
                 slots = replace(base_slots, confirmed=False)
             elif self._is_negation(content) or self._is_keep_previous_product_request(content):
                 slots = original_slots
-            elif self._has_add_cue(normalized_content) and (candidate_item or pending_item):
-                slots = self._append_order_item(original_slots, candidate_item or pending_item)  # type: ignore[arg-type]
+            elif self._has_add_cue(normalized_content) and (candidate_items or pending_item):
+                items_to_append = (
+                    candidate_items
+                    if candidate_items
+                    else ((pending_item,) if pending_item else ())
+                )
+                slots = self._append_order_items(
+                    original_slots,
+                    items_to_append,
+                    products,
+                )
             elif candidate_item and candidate_item.product:
                 pending_slots = self._replace_first_matching_item(
                     original_slots,
@@ -462,7 +477,7 @@ class ConversationService:
             if payment_method:
                 slots = replace(base_slots, payment_method=payment_method, confirmed=False)
             elif pending_item and self._has_add_cue(normalized_content):
-                slots = self._append_order_item(base_slots, pending_item)
+                slots = self._append_order_items(base_slots, (pending_item,), products)
             elif pending_item and (
                 self._has_replace_cue(normalized_content) or self._is_affirmation(content)
             ):
@@ -495,23 +510,24 @@ class ConversationService:
             slots = self._merge_order_slots(slots, contact_slots)
         else:
             slots = self._merge_order_slots(previous_slots, contact_slots)
-            if candidate_item and candidate_item.product:
-                operation = self._detect_order_item_operation(
+            if candidate_items:
+                operation = self._detect_order_items_operation(
                     content,
                     previous_slots,
-                    candidate_item,
+                    candidate_items,
                     products,
                 )
                 if operation in {"set", None}:
-                    slots = self._with_order_items(slots, (candidate_item,))
+                    slots = self._with_order_items(slots, candidate_items)
                     if previous_slots is None or not previous_slots.items:
                         slots = replace(slots, confirmed=incoming_slots.confirmed)
                 elif operation == "add":
-                    slots = self._append_order_item(slots, candidate_item)
+                    slots = self._append_order_items(slots, candidate_items, products)
                 elif operation == "replace":
                     if not slots.items:
-                        slots = self._with_order_items(slots, (candidate_item,))
+                        slots = self._with_order_items(slots, candidate_items)
                     else:
+                        candidate_item = candidate_items[0]
                         pending_slots = self._replace_first_matching_item(
                             slots,
                             candidate_item,
@@ -532,10 +548,13 @@ class ConversationService:
                             )
                         )
                 elif operation == "remove":
+                    candidate_item = candidate_items[0]
                     slots = self._remove_order_item(slots, candidate_item, products)
                 elif operation == "merge_existing":
-                    slots = self._merge_existing_item(slots, candidate_item, products)
+                    for item in candidate_items:
+                        slots = self._merge_existing_item(slots, item, products)
                 elif operation == "ambiguous":
+                    candidate_item = candidate_items[0]
                     return result(
                         await order_state_message(
                             self._format_add_or_replace_question(
@@ -754,8 +773,10 @@ class ConversationService:
 Trích thông tin đặt sản phẩm từ lịch sử chat và tin mới. Chỉ trả về JSON hợp lệ.
 
 Các trường:
-- product: tên/brand/SKU sản phẩm khách muốn mua, hoặc null
-- quantity: số lượng sản phẩm/bình, hoặc null
+- items: danh sách tất cả sản phẩm khách nhắc trong tin mới, mỗi item gồm:
+  product: tên/brand/SKU sản phẩm khách muốn mua, hoặc null
+  quantity: số lượng sản phẩm/bình, hoặc null
+- product, quantity: legacy fallback nếu chỉ có một sản phẩm
 - customer_name: tên khách, hoặc null
 - customer_phone: số điện thoại, hoặc null
 - delivery_address: địa chỉ giao hàng đầy đủ gồm số nhà, tên/số đường, khu phố,
@@ -767,6 +788,7 @@ Các trường:
 Không tự suy đoán hoặc tự điền số điện thoại. Nếu tin mới có dãy số khách đưa
 nhưng không chắc hợp lệ, vẫn trả nguyên dãy số đó trong customer_phone để hệ thống kiểm tra.
 Chỉ chọn product từ danh sách sản phẩm có thể chọn; không dùng kiến thức ngoài catalog.
+Không lặp lại sản phẩm cũ trong lịch sử nếu tin mới không nhắc lại sản phẩm đó.
 
 Sản phẩm có thể chọn:
 {product_lines}
@@ -784,14 +806,16 @@ Tin mới:
             max_tokens=512,
         )
         payload = self._parse_json_object(response.text)
-        extracted_item = ChatOrderItem(
-            product=self._optional_str(payload.get("product")),
-            quantity=self._optional_int(payload.get("quantity")),
-        )
+        extracted_items = self._items_from_metadata(payload.get("items"))
+        if not extracted_items:
+            extracted_item = ChatOrderItem(
+                product=self._optional_str(payload.get("product")),
+                quantity=self._optional_int(payload.get("quantity")),
+            )
+            if extracted_item.product or extracted_item.quantity is not None:
+                extracted_items = (extracted_item,)
         return ChatOrderSlots(
-            items=(extracted_item,)
-            if extracted_item.product or extracted_item.quantity is not None
-            else (),
+            items=extracted_items,
             customer_name=self._optional_str(payload.get("customer_name")),
             customer_phone=self._optional_str(payload.get("customer_phone")),
             delivery_address=self._optional_str(payload.get("delivery_address")),
@@ -1253,22 +1277,168 @@ Tin mới:
         content: str,
         products: Sequence[ProductResponse],
     ) -> ChatOrderSlots:
-        matched_product = cls._match_product(content, products)
-        quantity = cls._extract_quantity_candidate(content)
-        if matched_product is not None and quantity is None:
-            quantity = cls._extract_leading_quantity_candidate(content)
-        return ChatOrderSlots(
-            items=(
-                ChatOrderItem(
-                    product=cls._format_product_display_name(matched_product)
-                    if matched_product is not None
-                    else None,
-                    quantity=quantity,
-                ),
+        items: list[ChatOrderItem] = []
+        for segment in cls._split_order_item_segments(content):
+            category_item = cls._category_order_item_from_segment(segment)
+            if category_item is not None:
+                items = list(cls._merge_candidate_items(tuple(items), category_item, products))
+                continue
+            matched_product = cls._match_product(segment, products)
+            quantity = cls._extract_quantity_candidate(segment)
+            if matched_product is not None and quantity is None:
+                quantity = cls._extract_leading_quantity_candidate(segment)
+            if matched_product is None and quantity is None:
+                continue
+            item = ChatOrderItem(
+                product=cls._format_product_display_name(matched_product)
+                if matched_product is not None
+                else None,
+                quantity=quantity,
             )
-            if matched_product is not None or quantity is not None
-            else (),
+            items = list(cls._merge_candidate_items(tuple(items), item, products))
+
+        if not items:
+            matched_product = cls._match_product(content, products)
+            quantity = cls._extract_quantity_candidate(content)
+            if matched_product is not None and quantity is None:
+                quantity = cls._extract_leading_quantity_candidate(content)
+            if matched_product is not None or quantity is not None:
+                items.append(
+                    ChatOrderItem(
+                        product=cls._format_product_display_name(matched_product)
+                        if matched_product is not None
+                        else None,
+                        quantity=quantity,
+                    )
+                )
+        return ChatOrderSlots(items=tuple(items))
+
+    @classmethod
+    def _split_order_item_segments(cls, content: str) -> tuple[str, ...]:
+        normalized = cls._normalize_match_text(content)
+        if not normalized:
+            return ()
+        parts = re.split(
+            r"\b(?:cong them|lay them|them vao|them|va|voi)\b|[,+]",
+            normalized,
         )
+        segments = tuple(part.strip() for part in parts if part.strip())
+        return segments or (normalized,)
+
+    @classmethod
+    def _category_order_item_from_segment(cls, segment: str) -> ChatOrderItem | None:
+        normalized = cls._normalize_match_text(segment)
+        tokens = [
+            token
+            for token in normalized.split()
+            if token
+            not in {
+                "dat",
+                "mua",
+                "lay",
+                "cho",
+                "toi",
+                "minh",
+                "can",
+                "muon",
+            }
+        ]
+        category_text = " ".join(tokens)
+        if not cls._is_bare_category_query(category_text):
+            return None
+        product = "nước uống" if "nuoc" in set(tokens) else category_text
+        return ChatOrderItem(product=product)
+
+    @classmethod
+    def _combine_current_message_slots(
+        cls,
+        inferred_slots: ChatOrderSlots,
+        extracted_slots: ChatOrderSlots,
+        content: str,
+        products: Sequence[ProductResponse],
+    ) -> ChatOrderSlots:
+        items = inferred_slots.items
+        for extracted_item in extracted_slots.items:
+            if extracted_item.product:
+                extracted_product = cls._match_product(extracted_item.product, products)
+                if (
+                    len(items) == 1
+                    and cls._is_bare_category_query(items[0].product)
+                    and extracted_product is not None
+                    and not cls._is_bare_category_query(extracted_item.product)
+                ):
+                    items = ()
+                should_accept_extracted = (
+                    not items
+                    or cls._is_product_mentioned_in_content(content, extracted_product)
+                    or cls._is_product_mentioned_in_content(content, extracted_item.product)
+                )
+                if not should_accept_extracted:
+                    continue
+            items = cls._merge_candidate_items(items, extracted_item, products)
+        return ChatOrderSlots(
+            items=items,
+            customer_name=extracted_slots.customer_name,
+            customer_phone=extracted_slots.customer_phone,
+            delivery_address=extracted_slots.delivery_address,
+            delivery_notes=extracted_slots.delivery_notes,
+            payment_method=extracted_slots.payment_method,
+            confirmed=extracted_slots.confirmed,
+        )
+
+    @classmethod
+    def _merge_candidate_items(
+        cls,
+        current: tuple[ChatOrderItem, ...],
+        incoming_item: ChatOrderItem,
+        products: Sequence[ProductResponse],
+    ) -> tuple[ChatOrderItem, ...]:
+        if not current:
+            return (incoming_item,)
+        matching_index = cls._find_matching_item_index(current, incoming_item, products)
+        if matching_index is None:
+            return (*current, incoming_item)
+        items = list(current)
+        current_item = items[matching_index]
+        items[matching_index] = ChatOrderItem(
+            product=current_item.product or incoming_item.product,
+            quantity=current_item.quantity
+            if current_item.quantity is not None
+            else incoming_item.quantity,
+        )
+        return tuple(items)
+
+    @classmethod
+    def _is_product_mentioned_in_content(
+        cls,
+        content: str,
+        product_or_query: ProductResponse | str | None,
+    ) -> bool:
+        if product_or_query is None:
+            return False
+        normalized_content = cls._normalize_match_text(content)
+        candidates: tuple[str, ...]
+        if isinstance(product_or_query, ProductResponse):
+            candidates = (
+                product_or_query.name,
+                product_or_query.brand,
+                product_or_query.sku,
+                cls._format_product_display_name(product_or_query),
+                f"{cls._format_decimal(product_or_query.size_kg)}kg",
+                f"{cls._format_decimal(product_or_query.size_kg)} {product_or_query.unit}",
+            )
+        else:
+            candidates = (product_or_query,)
+        for candidate in candidates:
+            normalized_candidate = cls._normalize_match_text(candidate)
+            if not normalized_candidate:
+                continue
+            if normalized_candidate in normalized_content:
+                return True
+            candidate_tokens = {token for token in normalized_candidate.split() if len(token) >= 3}
+            if candidate_tokens and candidate_tokens.issubset(set(normalized_content.split())):
+                return True
+        return False
 
     @classmethod
     def _looks_like_order_request(
@@ -1308,7 +1478,7 @@ Tin mới:
     def _extract_quantity_candidate(cls, content: str) -> int | None:
         normalized = cls._normalize_match_text(content)
         digit_match = re.search(
-            r"\b([1-9][0-9]?)\s*(binh|chai|can|thung)\b",
+            r"\b([1-9][0-9]?)\s*(binh|chai|can|thung|nuoc|gas)\b",
             normalized,
         )
         if digit_match:
@@ -1411,16 +1581,28 @@ Tin mới:
             return current
         if not current:
             return incoming
-        if len(current) == 1 and len(incoming) == 1:
-            current_item = current[0]
-            incoming_item = incoming[0]
-            return (
-                ChatOrderItem(
-                    product=incoming_item.product or current_item.product,
-                    quantity=incoming_item.quantity or current_item.quantity,
+        merged = list(current)
+        for incoming_item in incoming:
+            incoming_key = ConversationService._normalize_match_text(incoming_item.product or "")
+            matching_index = next(
+                (
+                    index
+                    for index, item in enumerate(merged)
+                    if incoming_key
+                    and ConversationService._normalize_match_text(item.product or "")
+                    == incoming_key
                 ),
+                None,
             )
-        return incoming
+            if matching_index is None:
+                merged.append(incoming_item)
+                continue
+            current_item = merged[matching_index]
+            merged[matching_index] = ChatOrderItem(
+                product=incoming_item.product or current_item.product,
+                quantity=incoming_item.quantity or current_item.quantity,
+            )
+        return tuple(merged)
 
     @classmethod
     def _slots_to_metadata(cls, slots: ChatOrderSlots | None) -> dict[str, Any]:
@@ -1613,6 +1795,41 @@ Tin mới:
             return "merge_existing"
         return "ambiguous"
 
+    @classmethod
+    def _detect_order_items_operation(
+        cls,
+        content: str,
+        previous_slots: ChatOrderSlots | None,
+        candidate_items: Sequence[ChatOrderItem],
+        products: Sequence[ProductResponse],
+    ) -> str | None:
+        product_items = tuple(item for item in candidate_items if item.product)
+        if not product_items:
+            return None
+        normalized = cls._normalize_match_text(content)
+        if cls._has_remove_cue(normalized):
+            return "remove"
+        if cls._has_add_cue(normalized):
+            return "add"
+        if cls._has_replace_cue(normalized):
+            return "replace"
+        previous_items = previous_slots.items if previous_slots else ()
+        if not previous_items:
+            return "set"
+        if all(
+            cls._find_matching_item_index(previous_items, item, products) is not None
+            for item in product_items
+        ):
+            return "merge_existing"
+        if len(product_items) == 1:
+            return cls._detect_order_item_operation(
+                content,
+                previous_slots,
+                product_items[0],
+                products,
+            )
+        return "ambiguous"
+
     @staticmethod
     def _has_add_cue(normalized: str) -> bool:
         return any(
@@ -1732,6 +1949,18 @@ Tin mới:
     @staticmethod
     def _append_order_item(slots: ChatOrderSlots, candidate_item: ChatOrderItem) -> ChatOrderSlots:
         return replace(slots, items=(*slots.items, candidate_item), confirmed=False)
+
+    @classmethod
+    def _append_order_items(
+        cls,
+        slots: ChatOrderSlots,
+        candidate_items: Sequence[ChatOrderItem],
+        products: Sequence[ProductResponse],
+    ) -> ChatOrderSlots:
+        merged_items = slots.items
+        for candidate_item in candidate_items:
+            merged_items = cls._merge_candidate_items(merged_items, candidate_item, products)
+        return replace(slots, items=merged_items, confirmed=False)
 
     @classmethod
     def _remove_order_item(
@@ -1915,6 +2144,8 @@ Tin mới:
             if query and query in haystack:
                 score += 4
             for token in query.split():
+                if token.isdigit() or len(token) < 2:
+                    continue
                 if token in haystack:
                     score += 1
             if score > best_score:
