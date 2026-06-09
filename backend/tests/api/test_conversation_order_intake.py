@@ -19,7 +19,7 @@ from app.llm.base import BaseLLMProvider
 from app.llm.dependencies import get_llm_provider
 from app.llm.schemas import LLMResponse
 from app.main import app
-from app.models.order import Order
+from app.models.order import Order, OrderItem
 from app.rag.dependencies import get_rag_pipeline
 from app.repositories.product_repository import ProductRepository
 from app.schemas.product import ProductCreate
@@ -46,11 +46,12 @@ class PlaceOrderClassifier(BaseIntentClassifier):
 
 
 class JSONLLMProvider(BaseLLMProvider):
-    """Fake LLM provider returning one JSON payload."""
+    """Fake LLM provider returning JSON payloads."""
 
-    def __init__(self, payload: dict[str, object]) -> None:
+    def __init__(self, payload: dict[str, object] | Sequence[dict[str, object]]) -> None:
         super().__init__(model="fake")
-        self.payload = payload
+        self.payloads = list(payload) if isinstance(payload, Sequence) else [payload]
+        self.calls = 0
 
     @property
     def provider_name(self) -> str:
@@ -66,8 +67,10 @@ class JSONLLMProvider(BaseLLMProvider):
         **kwargs: object,
     ) -> LLMResponse:
         del prompt, system_prompt, temperature, max_tokens, stop_sequences, kwargs
+        payload = self.payloads[min(self.calls, len(self.payloads) - 1)]
+        self.calls += 1
         return LLMResponse(
-            text=json.dumps(self.payload),
+            text=json.dumps(payload),
             latency_ms=1,
             model="fake",
             provider="fake",
@@ -107,6 +110,37 @@ async def create_catalog_product(session: AsyncSession) -> None:
             description="Binh gas gia dinh",
             image_url="https://example.com/gas-12kg.jpg",
             safety_info="Dat binh noi thoang khi.",
+        )
+    )
+    await session.commit()
+
+
+async def create_multi_item_catalog(session: AsyncSession) -> None:
+    """Create gas and water products for multi-item chat order tests."""
+    repository = ProductRepository(session)
+    await repository.create(
+        ProductCreate(
+            sku=f"WATER-{uuid4().hex[:8].upper()}",
+            name="Nước Vihawa 20 lít",
+            brand="Vihawa",
+            size_kg=Decimal("20"),
+            category="nuoc_uong",
+            unit="lít",
+            price=Decimal("55000"),
+            stock_quantity=10,
+            description="Nước uống bình 20 lít",
+            pricing_note="Giá tại cửa hàng; giao +5.000đ; lên lầu +5.000đ/lầu",
+        )
+    )
+    await repository.create(
+        ProductCreate(
+            sku=f"GAS-{uuid4().hex[:8].upper()}",
+            name="Bình gas Saigon Petro 12kg (xám)",
+            brand="Saigon Petro",
+            size_kg=Decimal("12"),
+            price=Decimal("605000"),
+            stock_quantity=10,
+            description="Bình gas gia đình",
         )
     )
     await session.commit()
@@ -173,5 +207,91 @@ async def test_chat_order_confirm_endpoint_creates_real_order(
         assert orders[0].source == "chatbot"
         assert orders[0].status == "pending"
         assert orders[0].referral_conversation_id is not None
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_chat_order_multi_item_creates_order_items(
+    test_client: AsyncClient,
+    order_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        ConversationService,
+        "_now_vn",
+        staticmethod(lambda: datetime(2026, 6, 8, 9, 0, tzinfo=timezone(timedelta(hours=7)))),
+    )
+    await order_session.execute(
+        text(
+            "TRUNCATE TABLE messages, conversations, order_items, orders, products, users "
+            "RESTART IDENTITY CASCADE"
+        )
+    )
+    await order_session.commit()
+    await create_multi_item_catalog(order_session)
+
+    payloads = [
+        {
+            "product": "Vihawa 20 lít",
+            "quantity": 1,
+            "customer_name": "Nguyen Van A",
+            "customer_phone": "0903026306",
+            "delivery_address": "15 đường số 5, Phường Hiệp Bình, TP. Hồ Chí Minh",
+            "payment_method": "cod",
+            "confirmed": False,
+        },
+        {},
+        {"confirmed": True},
+    ]
+
+    llm_provider = JSONLLMProvider(payloads)
+    app.dependency_overrides[get_intent_classifier] = lambda: PlaceOrderClassifier()
+    app.dependency_overrides[get_llm_provider] = lambda: llm_provider
+    app.dependency_overrides[get_rag_pipeline] = lambda: UnusedRAGPipeline()
+    try:
+        started = await test_client.post(
+            "/api/v1/conversations/start",
+            json={"session_id": "chat-order-multi-item"},
+        )
+        assert started.status_code == 200
+        conversation_id = started.json()["id"]
+
+        first = await test_client.post(
+            f"/api/v1/conversations/{conversation_id}/messages",
+            json={"content": "đặt 1 Vihawa"},
+        )
+        assert first.status_code == 200
+        assert "Qiki tóm tắt đơn hàng" in first.json()["assistant_message"]["content"]
+
+        second = await test_client.post(
+            f"/api/v1/conversations/{conversation_id}/messages",
+            json={"content": "thêm 1 bình gas Saigon Petro"},
+        )
+        assert second.status_code == 200
+        second_answer = second.json()["assistant_message"]["content"]
+        assert "Nước Vihawa 20 lít" in second_answer
+        assert "Bình gas Saigon Petro 12kg (xám)" in second_answer
+
+        third = await test_client.post(
+            f"/api/v1/conversations/{conversation_id}/messages",
+            json={"content": "ok xác nhận"},
+        )
+        assert third.status_code == 200
+        answer = third.json()["assistant_message"]["content"]
+        assert "Đã ghi nhận đơn" in answer
+
+        result = await order_session.execute(select(Order))
+        orders = result.scalars().all()
+        assert len(orders) == 1
+        assert orders[0].delivery_notes == "[Phí giao nước +5k/bình; lên lầu +5k/lầu]"
+
+        item_result = await order_session.execute(
+            select(OrderItem).order_by(OrderItem.product_name)
+        )
+        items = item_result.scalars().all()
+        assert [(item.product_name, item.quantity) for item in items] == [
+            ("Bình gas Saigon Petro 12kg (xám)", 1),
+            ("Nước Vihawa 20 lít", 1),
+        ]
     finally:
         app.dependency_overrides.clear()
