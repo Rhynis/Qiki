@@ -1878,7 +1878,7 @@ async def test_safety_emergency_is_not_overridden_by_catalog_phrase() -> None:
 
     response = await service.send_message(
         conversation.id,
-        SendMessageRequest(content="Hoàn Hảo bị rò rỉ gas"),
+        SendMessageRequest(content="Bình gas Saigon Petro bị rò rỉ gas"),
         user=None,
     )
 
