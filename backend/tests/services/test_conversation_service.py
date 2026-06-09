@@ -1438,6 +1438,94 @@ async def test_catalog_brand_short_phrase_starts_order_without_escalation(
     assert state["slots"]["quantity"] == expected_quantity
 
 
+@pytest.mark.parametrize(
+    ("content", "expected_product", "expected_quantity"),
+    [
+        ("1 hoàn hảo", "Nước Hoàn Hảo 20 lít", 1),
+        ("hoàn hảo 1 bình", "Nước Hoàn Hảo 20 lít", 1),
+        ("2 vihawa", "Nước Vihawa 20 lít", 2),
+    ],
+)
+@pytest.mark.asyncio
+async def test_catalog_phrase_overrides_complaint_intent_without_escalation(
+    content: str,
+    expected_product: str,
+    expected_quantity: int,
+) -> None:
+    service, _conversations, _messages, rag, orders = make_service(
+        category=IntentCategory.COMPLAINT,
+        confidence=0.8,
+        llm_provider=FakeLLMProvider([{}]),
+        product_service=FakeProductService(products=_water_catalog()),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content=content),
+        user=None,
+    )
+
+    assert response.user_message.intent == IntentCategory.PLACE_ORDER.value
+    assert response.conversation.status == "active"
+    assert rag.calls == 0
+    assert orders.calls == 0
+    assert response.assistant_message is not None
+    assert "số điện thoại" in response.assistant_message.content
+    state = response.assistant_message.retrieved_documents[0]
+    assert state["status"] == "awaiting_missing_slots"
+    assert state["slots"]["product"] == expected_product
+    assert state["slots"]["quantity"] == expected_quantity
+
+
+@pytest.mark.asyncio
+async def test_catalog_question_overrides_complaint_intent_to_product_inquiry() -> None:
+    service, _conversations, _messages, rag, orders = make_service(
+        category=IntentCategory.COMPLAINT,
+        confidence=0.8,
+        product_service=FakeProductService(products=_water_catalog()),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="giá hoàn hảo bao nhiêu"),
+        user=None,
+    )
+
+    assert response.user_message.intent == IntentCategory.PRODUCT_INQUIRY.value
+    assert response.conversation.status == "active"
+    assert rag.calls == 1
+    assert orders.calls == 0
+    assert [product.sku for product in response.products] == ["HOANHAO-20L"]
+
+
+@pytest.mark.asyncio
+async def test_brand_size_phrase_overrides_complaint_intent_without_escalation() -> None:
+    service, _conversations, _messages, rag, orders = make_service(
+        category=IntentCategory.COMPLAINT,
+        confidence=0.8,
+        llm_provider=FakeLLMProvider([{}]),
+        product_service=FakeProductService(products=_substring_brand_catalog()),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="saigon petro 12kg"),
+        user=None,
+    )
+
+    assert response.user_message.intent == IntentCategory.PLACE_ORDER.value
+    assert response.conversation.status == "active"
+    assert rag.calls == 0
+    assert orders.calls == 0
+    assert response.assistant_message is not None
+    assert "số điện thoại" in response.assistant_message.content
+    state = response.assistant_message.retrieved_documents[0]
+    assert state["slots"]["product"] == "Bình gas Saigon Petro 12kg (xám)"
+
+
 @pytest.mark.asyncio
 async def test_catalog_brand_change_in_order_asks_confirmation_without_escalation() -> None:
     service, _conversations, messages, rag, orders = make_service(
@@ -1779,6 +1867,31 @@ async def test_safety_emergency_escalates_and_keeps_hotline() -> None:
 
 
 @pytest.mark.asyncio
+async def test_safety_emergency_is_not_overridden_by_catalog_phrase() -> None:
+    product_service = FakeProductService(products=_water_catalog())
+    service, _conversations, _messages, rag, _orders = make_service(
+        category=IntentCategory.SAFETY_EMERGENCY,
+        requires_human=True,
+        product_service=product_service,
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Bình gas Saigon Petro bị rò rỉ gas"),
+        user=None,
+    )
+
+    assert response.user_message.intent == IntentCategory.SAFETY_EMERGENCY.value
+    assert response.conversation.status == "escalated"
+    assert response.assistant_message is not None
+    assert response.assistant_message.is_emergency is True
+    assert response.products == []
+    assert product_service.calls == 0
+    assert rag.calls == 1
+
+
+@pytest.mark.asyncio
 async def test_order_in_progress_does_not_override_safety_emergency() -> None:
     product_service = FakeProductService()
     service, _conversations, messages, rag, _orders = make_service(
@@ -1817,6 +1930,27 @@ async def test_human_handoff_skips_rag_for_complaint() -> None:
         user=None,
     )
 
+    assert response.conversation.status == "escalated"
+    assert response.assistant_message is not None
+    assert "nhân viên" in response.assistant_message.content
+    assert rag.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_real_complaint_without_catalog_product_still_escalates() -> None:
+    service, _conversations, _messages, rag, _orders = make_service(
+        category=IntentCategory.COMPLAINT,
+        product_service=FakeProductService(products=_water_catalog()),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="giao trễ quá tệ"),
+        user=None,
+    )
+
+    assert response.user_message.intent == IntentCategory.COMPLAINT.value
     assert response.conversation.status == "escalated"
     assert response.assistant_message is not None
     assert "nhân viên" in response.assistant_message.content

@@ -175,12 +175,20 @@ class ConversationService:
         catalog_products: list[ProductResponse] | None = None
         if self._should_load_catalog_for_intent(intent):
             catalog_products = await self.product_service.list_active_catalog(limit=50)
-        if (
-            intent.category not in {IntentCategory.SAFETY_EMERGENCY, IntentCategory.COMPLAINT}
-            and catalog_products
-            and self._looks_like_order_request(request.content, catalog_products)
-        ):
+        catalog_override = (
+            self._catalog_product_intent_override(request.content, catalog_products)
+            if intent.category != IntentCategory.SAFETY_EMERGENCY and catalog_products
+            else None
+        )
+        if catalog_override == IntentCategory.PLACE_ORDER:
             intent = self._order_context_intent(intent, "catalog_product_order")
+        elif catalog_override == IntentCategory.PRODUCT_INQUIRY:
+            intent = IntentResult(
+                category=IntentCategory.PRODUCT_INQUIRY,
+                confidence=max(intent.confidence, ORDER_CONTEXT_CONFIDENCE),
+                reasoning=f"catalog_product_inquiry override: {intent.reasoning}",
+                classifier=f"{intent.classifier}+catalog_product_inquiry",
+            )
 
         user_message = await self.message_repository.create(
             {
@@ -819,10 +827,7 @@ Tin mới:
 
     @staticmethod
     def _should_load_catalog_for_intent(intent: IntentResult) -> bool:
-        return intent.category not in {
-            IntentCategory.SAFETY_EMERGENCY,
-            IntentCategory.COMPLAINT,
-        }
+        return intent.category != IntentCategory.SAFETY_EMERGENCY
 
     @staticmethod
     def _should_ask_intent_clarification(intent: IntentResult) -> bool:
@@ -1116,21 +1121,33 @@ Tin mới:
         content: str,
         products: Sequence[ProductResponse],
     ) -> bool:
+        return cls._catalog_product_intent_override(content, products) == IntentCategory.PLACE_ORDER
+
+    @classmethod
+    def _catalog_product_intent_override(
+        cls,
+        content: str,
+        products: Sequence[ProductResponse],
+    ) -> IntentCategory | None:
         normalized = cls._normalize_match_text(content)
         if cls._is_bare_category_query(normalized):
-            return False
+            return None
         matched_product = cls._match_product(content, products)
         if matched_product is None:
-            return False
+            return None
         quantity = cls._extract_quantity_candidate(content)
         if quantity is None:
             quantity = cls._extract_leading_quantity_candidate(content)
         has_question = cls._has_product_question_cue(normalized)
-        return bool(
+        if has_question:
+            return IntentCategory.PRODUCT_INQUIRY
+        if (
             quantity
-            or (cls._has_order_action_cue(normalized) and not has_question)
+            or cls._has_order_action_cue(normalized)
             or cls._is_short_catalog_product_phrase(normalized, matched_product)
-        )
+        ):
+            return IntentCategory.PLACE_ORDER
+        return None
 
     @classmethod
     def _extract_quantity_candidate(cls, content: str) -> int | None:
@@ -1177,7 +1194,7 @@ Tin mới:
     @staticmethod
     def _has_product_question_cue(normalized: str) -> bool:
         return any(
-            phrase in normalized
+            re.search(rf"\b{re.escape(phrase)}\b", normalized)
             for phrase in {
                 "gia",
                 "bao nhieu",
@@ -1199,7 +1216,18 @@ Tin mới:
             cls._normalize_match_text(cls._format_product_display_name(product)),
             cls._normalize_match_text(product.sku),
         }
-        return compact in {candidate.replace(" ", "") for candidate in candidates if candidate}
+        if compact in {candidate.replace(" ", "") for candidate in candidates if candidate}:
+            return True
+        normalized_brand = cls._normalize_match_text(product.brand)
+        if normalized_brand and normalized.startswith(normalized_brand):
+            size_value = cls._normalize_match_text(cls._format_decimal(product.size_kg))
+            unit_value = cls._normalize_match_text(product.unit)
+            compact_normalized = normalized.replace(" ", "")
+            return (
+                f"{size_value}kg" in compact_normalized
+                or f"{size_value}{unit_value}" in compact_normalized
+            )
+        return False
 
     @staticmethod
     def _merge_order_slots(*sources: ChatOrderSlots | None) -> ChatOrderSlots:
