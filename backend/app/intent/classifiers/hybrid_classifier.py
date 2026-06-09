@@ -94,6 +94,6 @@ class HybridIntentClassifier(BaseIntentClassifier):
 
     @staticmethod
     def _normalize_text(text: str) -> str:
-        decomposed = unicodedata.normalize("NFD", text.lower())
+        decomposed = unicodedata.normalize("NFD", text.lower().replace("đ", "d"))
         without_marks = "".join(char for char in decomposed if unicodedata.category(char) != "Mn")
         return re.sub(r"[^a-z0-9]+", " ", without_marks).strip()

@@ -28,7 +28,7 @@ class RoutingService:
     async def route_intent(self, result: IntentResult) -> RoutingDecision:
         """Return the routing decision for an intent result."""
         rule = INTENT_ROUTING_RULES[result.category]
-        requires_human = rule["requires_human"] or result.confidence < 0.6
+        requires_human = rule["requires_human"]
         priority = rule["priority"]
 
         if result.category == IntentCategory.SAFETY_EMERGENCY:
@@ -42,15 +42,10 @@ class RoutingService:
 
         if requires_human:
             staff = await self._find_available_staff()
-            reason = (
-                "Low confidence requires review"
-                if result.confidence < 0.6
-                else "Intent requires staff"
-            )
             return RoutingDecision(
                 requires_human=True,
                 priority=priority,
-                reason=reason,
+                reason="Intent requires staff",
                 assigned_staff_id=staff.id if staff else None,
             )
 

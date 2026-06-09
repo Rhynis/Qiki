@@ -156,6 +156,15 @@ class ConversationService:
         history_payload = self._history_to_payload(history)
         intent = await self.intent_classifier.classify(request.content, history_payload)
         intent = self._apply_order_context_intent(intent, history)
+        if intent.category != IntentCategory.SAFETY_EMERGENCY and self._is_explicit_human_request(
+            request.content
+        ):
+            intent = IntentResult(
+                category=IntentCategory.COMPLAINT,
+                confidence=max(intent.confidence, ORDER_CONTEXT_CONFIDENCE),
+                reasoning=f"explicit_human_request override: {intent.reasoning}",
+                classifier=f"{intent.classifier}+explicit_human_request",
+            )
         if (
             intent.category != IntentCategory.SAFETY_EMERGENCY
             and self._find_existing_chat_order(history)
@@ -164,14 +173,14 @@ class ConversationService:
             intent = self._order_context_intent(intent, "post_order_change")
 
         catalog_products: list[ProductResponse] | None = None
-        if intent.category in {IntentCategory.PRODUCT_INQUIRY, IntentCategory.PLACE_ORDER}:
+        if self._should_load_catalog_for_intent(intent):
             catalog_products = await self.product_service.list_active_catalog(limit=50)
         if (
-            intent.category == IntentCategory.PRODUCT_INQUIRY
+            intent.category not in {IntentCategory.SAFETY_EMERGENCY, IntentCategory.COMPLAINT}
             and catalog_products
             and self._looks_like_order_request(request.content, catalog_products)
         ):
-            intent = self._order_context_intent(intent, "product_quantity_order")
+            intent = self._order_context_intent(intent, "catalog_product_order")
 
         user_message = await self.message_repository.create(
             {
@@ -191,8 +200,10 @@ class ConversationService:
                 routing.reason,
             )
 
+        should_ask_clarification = self._should_ask_intent_clarification(intent)
+
         product_cards: list[ProductCardResponse] = []
-        if intent.category == IntentCategory.PRODUCT_INQUIRY:
+        if intent.category == IntentCategory.PRODUCT_INQUIRY and not should_ask_clarification:
             assert catalog_products is not None
             card_products = self._select_card_products(request.content, catalog_products)
             product_cards = [self._product_to_card(product) for product in card_products]
@@ -209,6 +220,12 @@ class ConversationService:
             )
         elif routing.requires_human:
             assistant_message = await self._create_handoff_message(conversation, routing)
+        elif should_ask_clarification:
+            assistant_message = await self._create_intent_clarification_message(
+                conversation,
+                intent.category,
+                intent.confidence,
+            )
         elif intent.category == IntentCategory.PLACE_ORDER:
             order_result = await self._handle_chat_order(
                 conversation,
@@ -800,6 +817,37 @@ Tin mới:
             return "Bạn muốn đặt loại gas nào? Qiki gửi các lựa chọn bên dưới nhé."
         return "Bạn muốn đặt sản phẩm nào? Qiki gửi các lựa chọn bên dưới nhé."
 
+    @staticmethod
+    def _should_load_catalog_for_intent(intent: IntentResult) -> bool:
+        return intent.category not in {
+            IntentCategory.SAFETY_EMERGENCY,
+            IntentCategory.COMPLAINT,
+        }
+
+    @staticmethod
+    def _should_ask_intent_clarification(intent: IntentResult) -> bool:
+        return intent.confidence < 0.6 and intent.category not in {
+            IntentCategory.SAFETY_EMERGENCY,
+            IntentCategory.COMPLAINT,
+            IntentCategory.PLACE_ORDER,
+        }
+
+    async def _create_intent_clarification_message(
+        self,
+        conversation: Conversation,
+        intent: IntentCategory,
+        confidence: float,
+    ) -> Message:
+        return await self._create_assistant_message(
+            conversation,
+            (
+                "Qiki chưa rõ ý bạn. Bạn muốn **đặt hàng**, "
+                "**hỏi giá/sản phẩm**, hay **hỏi thông tin cửa hàng** ạ?"
+            ),
+            intent,
+            confidence,
+        )
+
     async def _create_post_order_change_message(
         self,
         conversation: Conversation,
@@ -851,6 +899,24 @@ Tin mới:
                 "cap nhat thong tin",
                 "doi hinh thuc",
                 "sua hinh thuc",
+            }
+        )
+
+    @classmethod
+    def _is_explicit_human_request(cls, content: str) -> bool:
+        normalized = cls._normalize_match_text(content)
+        return any(
+            phrase in normalized
+            for phrase in {
+                "gap nhan vien",
+                "gap nguoi that",
+                "cho gap nhan vien",
+                "cho gap nguoi that",
+                "goi nhan vien",
+                "goi nguoi that",
+                "chuyen nhan vien",
+                "chuyen nguoi that",
+                "can nhan vien",
             }
         )
 
@@ -1035,6 +1101,8 @@ Tin mới:
     ) -> ChatOrderSlots:
         matched_product = cls._match_product(content, products)
         quantity = cls._extract_quantity_candidate(content)
+        if matched_product is not None and quantity is None:
+            quantity = cls._extract_leading_quantity_candidate(content)
         return ChatOrderSlots(
             product=cls._format_product_display_name(matched_product)
             if matched_product is not None
@@ -1048,8 +1116,21 @@ Tin mới:
         content: str,
         products: Sequence[ProductResponse],
     ) -> bool:
-        inferred = cls._infer_order_slots(content, products)
-        return bool(inferred.product and inferred.quantity)
+        normalized = cls._normalize_match_text(content)
+        if cls._is_bare_category_query(normalized):
+            return False
+        matched_product = cls._match_product(content, products)
+        if matched_product is None:
+            return False
+        quantity = cls._extract_quantity_candidate(content)
+        if quantity is None:
+            quantity = cls._extract_leading_quantity_candidate(content)
+        has_question = cls._has_product_question_cue(normalized)
+        return bool(
+            quantity
+            or (cls._has_order_action_cue(normalized) and not has_question)
+            or cls._is_short_catalog_product_phrase(normalized, matched_product)
+        )
 
     @classmethod
     def _extract_quantity_candidate(cls, content: str) -> int | None:
@@ -1072,6 +1153,53 @@ Tin mới:
             if re.search(rf"\b{word}\s*(binh|chai|can|thung)?\b", normalized):
                 return value
         return None
+
+    @staticmethod
+    def _extract_leading_quantity_candidate(content: str) -> int | None:
+        match = re.match(r"\s*([1-9][0-9]?)\b", content)
+        return int(match.group(1)) if match else None
+
+    @staticmethod
+    def _has_order_action_cue(normalized: str) -> bool:
+        return any(
+            phrase in normalized
+            for phrase in {
+                "dat",
+                "mua",
+                "lay",
+                "doi qua",
+                "doi sang",
+                "chuyen qua",
+                "chuyen sang",
+            }
+        )
+
+    @staticmethod
+    def _has_product_question_cue(normalized: str) -> bool:
+        return any(
+            phrase in normalized
+            for phrase in {
+                "gia",
+                "bao nhieu",
+                "co ban",
+                "con hang",
+                "loai nao",
+                "san pham nao",
+            }
+        )
+
+    @classmethod
+    def _is_short_catalog_product_phrase(cls, normalized: str, product: ProductResponse) -> bool:
+        if cls._has_product_question_cue(normalized):
+            return False
+        compact = normalized.replace(" ", "")
+        candidates = {
+            cls._normalize_match_text(product.brand),
+            cls._normalize_match_text(product.name),
+            cls._normalize_match_text(cls._format_product_display_name(product)),
+            cls._normalize_match_text(product.sku),
+        }
+        return compact in {candidate.replace(" ", "") for candidate in candidates if candidate}
 
     @staticmethod
     def _merge_order_slots(*sources: ChatOrderSlots | None) -> ChatOrderSlots:

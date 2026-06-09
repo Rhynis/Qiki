@@ -67,13 +67,13 @@ async def test_complaint_requires_human() -> None:
 
 
 @pytest.mark.asyncio
-async def test_payment_issue_requires_human() -> None:
+async def test_payment_issue_can_auto_respond() -> None:
     staff = make_user()
     service = RoutingService(FakeUserRepository(staff=[staff]))  # type: ignore[arg-type]
 
     decision = await service.route_intent(intent(IntentCategory.PAYMENT_ISSUE))
 
-    assert decision.requires_human is True
+    assert decision.requires_human is False
     assert decision.priority == 1
 
 
@@ -90,14 +90,14 @@ async def test_safety_emergency_has_highest_priority() -> None:
 
 
 @pytest.mark.asyncio
-async def test_low_confidence_auto_response_is_flagged_for_human() -> None:
+async def test_low_confidence_auto_response_does_not_require_human() -> None:
     staff = make_user()
     service = RoutingService(FakeUserRepository(staff=[staff]))  # type: ignore[arg-type]
 
     decision = await service.route_intent(intent(IntentCategory.GENERAL_INFO, confidence=0.59))
 
-    assert decision.requires_human is True
-    assert "Low confidence" in decision.reason
+    assert decision.requires_human is False
+    assert decision.reason == "Automatic response allowed"
 
 
 @pytest.mark.asyncio
