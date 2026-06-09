@@ -48,11 +48,18 @@ VN_TIMEZONE = timezone(timedelta(hours=7))
 
 
 @dataclass(frozen=True)
-class ChatOrderSlots:
-    """Order details extracted from chat history."""
+class ChatOrderItem:
+    """One product line in a chat order."""
 
     product: str | None = None
     quantity: int | None = None
+
+
+@dataclass(frozen=True)
+class ChatOrderSlots:
+    """Order details extracted from chat history."""
+
+    items: tuple[ChatOrderItem, ...] = ()
     customer_name: str | None = None
     customer_phone: str | None = None
     delivery_address: str | None = None
@@ -386,38 +393,160 @@ class ConversationService:
         extracted_slots = await self._extract_order_slots(content, history_payload, products)
         inferred_slots = self._infer_order_slots(content, products)
         incoming_slots = self._merge_order_slots(inferred_slots, extracted_slots)
-        previous_product = (
-            self._optional_str(order_state.get("previous_product")) if order_state else None
-        )
+        candidate_item = self._first_order_item(incoming_slots)
+        contact_slots = replace(incoming_slots, items=())
         order_state_status = str(order_state.get("status", "")) if order_state else ""
+        base_slots = previous_slots or ChatOrderSlots()
+        normalized_content = self._normalize_match_text(content)
         if order_state_status == "awaiting_product_change_confirmation":
-            if self._is_affirmation(content):
-                slots = previous_slots or ChatOrderSlots()
-            elif previous_product and self._is_keep_previous_product_request(content):
-                slots = replace(previous_slots or ChatOrderSlots(), product=previous_product)
+            previous_items = self._previous_items_from_state(order_state, previous_slots)
+            original_slots = replace(base_slots, items=previous_items, confirmed=False)
+            pending_item = self._pending_item_from_state(order_state) or self._pending_change_item(
+                previous_items,
+                base_slots.items,
+                products,
+            )
+            payment_method = self._extract_payment_candidate(content)
+            if payment_method:
+                slots = replace(original_slots, payment_method=payment_method, confirmed=False)
+            elif (
+                self._is_negation(content)
+                and self._has_add_cue(normalized_content)
+                and pending_item
+            ):
+                slots = self._append_order_item(original_slots, pending_item)
+            elif self._is_affirmation(content):
+                slots = replace(base_slots, confirmed=False)
+            elif self._is_negation(content) or self._is_keep_previous_product_request(content):
+                slots = original_slots
+            elif self._has_add_cue(normalized_content) and (candidate_item or pending_item):
+                slots = self._append_order_item(original_slots, candidate_item or pending_item)  # type: ignore[arg-type]
+            elif candidate_item and candidate_item.product:
+                pending_slots = self._replace_first_matching_item(
+                    original_slots,
+                    candidate_item,
+                    products,
+                )
+                return result(
+                    await order_state_message(
+                        self._format_product_change_question(
+                            self._format_order_item_label(self._first_order_item(original_slots)),
+                            pending_slots,
+                        ),
+                        "awaiting_product_change_confirmation",
+                        pending_slots,
+                        {
+                            "previous_items": self._items_to_metadata(previous_items),
+                            "pending_item": self._items_to_metadata((candidate_item,)),
+                        },
+                    )
+                )
             else:
                 return result(
                     await order_state_message(
-                        self._format_product_change_question(previous_product, previous_slots),
+                        self._format_pending_change_clarification(),
                         "awaiting_product_change_confirmation",
-                        previous_slots,
-                        {"previous_product": previous_product} if previous_product else None,
+                        base_slots,
+                        {
+                            "previous_items": self._items_to_metadata(previous_items),
+                            "pending_item": self._items_to_metadata((pending_item,))
+                            if pending_item
+                            else [],
+                        },
                     )
                 )
-            slots = replace(slots, confirmed=False)
-        elif self._should_confirm_product_change(previous_slots, incoming_slots, products):
-            pending_slots = self._merge_order_slots(previous_slots, incoming_slots)
-            assert previous_slots is not None
-            return result(
-                await order_state_message(
-                    self._format_product_change_question(previous_slots.product, pending_slots),
-                    "awaiting_product_change_confirmation",
-                    pending_slots,
-                    {"previous_product": previous_slots.product or ""},
+            slots = self._merge_order_slots(slots, contact_slots)
+        elif order_state_status == "awaiting_add_or_replace":
+            pending_item = self._pending_item_from_state(order_state) or candidate_item
+            payment_method = self._extract_payment_candidate(content)
+            if payment_method:
+                slots = replace(base_slots, payment_method=payment_method, confirmed=False)
+            elif pending_item and self._has_add_cue(normalized_content):
+                slots = self._append_order_item(base_slots, pending_item)
+            elif pending_item and (
+                self._has_replace_cue(normalized_content) or self._is_affirmation(content)
+            ):
+                slots = self._replace_first_matching_item(base_slots, pending_item, products)
+            elif self._is_negation(content):
+                slots = replace(base_slots, confirmed=False)
+            elif candidate_item and candidate_item.product:
+                return result(
+                    await order_state_message(
+                        self._format_add_or_replace_question(
+                            self._first_order_item(base_slots),
+                            candidate_item,
+                        ),
+                        "awaiting_add_or_replace",
+                        base_slots,
+                        {"pending_item": self._items_to_metadata((candidate_item,))},
+                    )
                 )
-            )
+            else:
+                return result(
+                    await order_state_message(
+                        "Bạn nhắn **thêm** để đặt thêm, hoặc **đổi** để thay sản phẩm nhé.",
+                        "awaiting_add_or_replace",
+                        base_slots,
+                        {"pending_item": self._items_to_metadata((pending_item,))}
+                        if pending_item
+                        else None,
+                    )
+                )
+            slots = self._merge_order_slots(slots, contact_slots)
         else:
-            slots = self._merge_order_slots(previous_slots, incoming_slots)
+            slots = self._merge_order_slots(previous_slots, contact_slots)
+            if candidate_item and candidate_item.product:
+                operation = self._detect_order_item_operation(
+                    content,
+                    previous_slots,
+                    candidate_item,
+                    products,
+                )
+                if operation in {"set", None}:
+                    slots = self._with_order_items(slots, (candidate_item,))
+                    if previous_slots is None or not previous_slots.items:
+                        slots = replace(slots, confirmed=incoming_slots.confirmed)
+                elif operation == "add":
+                    slots = self._append_order_item(slots, candidate_item)
+                elif operation == "replace":
+                    if not slots.items:
+                        slots = self._with_order_items(slots, (candidate_item,))
+                    else:
+                        pending_slots = self._replace_first_matching_item(
+                            slots,
+                            candidate_item,
+                            products,
+                        )
+                        return result(
+                            await order_state_message(
+                                self._format_product_change_question(
+                                    self._format_order_item_label(self._first_order_item(slots)),
+                                    pending_slots,
+                                ),
+                                "awaiting_product_change_confirmation",
+                                pending_slots,
+                                {
+                                    "previous_items": self._items_to_metadata(slots.items),
+                                    "pending_item": self._items_to_metadata((candidate_item,)),
+                                },
+                            )
+                        )
+                elif operation == "remove":
+                    slots = self._remove_order_item(slots, candidate_item, products)
+                elif operation == "merge_existing":
+                    slots = self._merge_existing_item(slots, candidate_item, products)
+                elif operation == "ambiguous":
+                    return result(
+                        await order_state_message(
+                            self._format_add_or_replace_question(
+                                self._first_order_item(slots),
+                                candidate_item,
+                            ),
+                            "awaiting_add_or_replace",
+                            slots,
+                            {"pending_item": self._items_to_metadata((candidate_item,))},
+                        )
+                    )
         slots = self._with_phone_candidate(slots, content)
         slots = self._with_order_cues(slots, content)
         slots = self._with_delivery_time_candidate(slots, content)
@@ -428,17 +557,22 @@ class ConversationService:
                 slots,
                 confirmed=slots.confirmed or self._is_affirmation(content),
             )
-        if self._is_bare_category_query(slots.product):
+        bare_category_item = next(
+            (item for item in slots.items if self._is_bare_category_query(item.product)),
+            None,
+        )
+        if bare_category_item:
             return result(
                 await order_state_message(
-                    self._format_category_product_question(slots.product or ""),
+                    self._format_category_product_question(bare_category_item.product or ""),
                     "awaiting_product_choice",
                     slots,
                 ),
-                category_cards(slots.product),
+                category_cards(bare_category_item.product),
             )
 
-        matched_product = self._match_product(slots.product, products)
+        matched_items = self._match_order_items(slots.items, products)
+        matched_order_products = self._matched_order_products(matched_items)
         normalized_phone = (
             self._validate_phone(slots.customer_phone) if slots.customer_phone else None
         )
@@ -450,7 +584,11 @@ class ConversationService:
                     slots,
                 )
             )
-        if matched_product is None and slots.product:
+        unmatched_item = next(
+            (item for item, product in matched_items if item.product and product is None),
+            None,
+        )
+        if unmatched_item is not None:
             return result(
                 await order_state_message(
                     (
@@ -465,7 +603,7 @@ class ConversationService:
         if self._should_confirm_reusable_contact(
             order_state,
             slots,
-            matched_product,
+            matched_items,
             reusable_contact_slots,
         ):
             reused_slots = self._merge_order_slots(slots, reusable_contact_slots)
@@ -476,7 +614,7 @@ class ConversationService:
                     reused_slots,
                 )
             )
-        missing = self._missing_order_slots(slots, matched_product)
+        missing = self._missing_order_slots(slots, matched_items)
         if missing:
             return result(
                 await order_state_message(
@@ -486,13 +624,12 @@ class ConversationService:
                 )
             )
 
-        assert slots.quantity is not None
         assert slots.customer_name is not None
         assert slots.customer_phone is not None
         assert slots.delivery_address is not None
         assert slots.payment_method is not None
-        assert matched_product is not None
         assert normalized_phone is not None
+        assert matched_order_products
 
         delivery_zone_match = resolve_ward_delivery_zone(slots.delivery_address)
         if delivery_zone_match is None:
@@ -508,18 +645,20 @@ class ConversationService:
                 ),
             )
 
-        if matched_product.stock_quantity < slots.quantity:
-            return result(
-                await order_state_message(
-                    (
-                        f"Sản phẩm **{matched_product.name}** hiện chỉ còn "
-                        f"{matched_product.stock_quantity} bình. "
-                        "Bạn muốn điều chỉnh số lượng không?"
-                    ),
-                    "awaiting_missing_slots",
-                    slots,
+        for item, product in matched_order_products:
+            assert item.quantity is not None
+            if product.stock_quantity < item.quantity:
+                return result(
+                    await order_state_message(
+                        (
+                            f"Sản phẩm **{product.name}** hiện chỉ còn "
+                            f"{product.stock_quantity} bình. "
+                            "Bạn muốn điều chỉnh số lượng không?"
+                        ),
+                        "awaiting_missing_slots",
+                        slots,
+                    )
                 )
-            )
 
         payment_method = self._normalize_payment_method(slots.payment_method)
         if payment_method is None:
@@ -535,8 +674,7 @@ class ConversationService:
             return result(
                 await order_state_message(
                     self._format_order_summary(
-                        matched_product,
-                        slots.quantity,
+                        matched_order_products,
                         slots.customer_name,
                         normalized_phone,
                         slots.delivery_address,
@@ -548,14 +686,20 @@ class ConversationService:
             )
 
         checkout = CheckoutRequest(
-            items=[OrderItemCreate(product_id=matched_product.id, quantity=slots.quantity)],
+            items=[
+                OrderItemCreate(product_id=product.id, quantity=item.quantity or 0)
+                for item, product in matched_order_products
+            ],
             customer_name=slots.customer_name,
             customer_phone=normalized_phone,
             delivery_address=slots.delivery_address,
             delivery_ward=delivery_zone_match.ward,
             delivery_district=delivery_zone_match.delivery_zone,
             delivery_city="TP. Hồ Chí Minh",
-            delivery_notes=slots.delivery_notes,
+            delivery_notes=self._delivery_notes_with_water_fee(
+                slots.delivery_notes,
+                matched_order_products,
+            ),
             payment_method=payment_method,
             source="chatbot",
             referral_conversation_id=conversation.id,
@@ -640,9 +784,14 @@ Tin mới:
             max_tokens=512,
         )
         payload = self._parse_json_object(response.text)
-        return ChatOrderSlots(
+        extracted_item = ChatOrderItem(
             product=self._optional_str(payload.get("product")),
             quantity=self._optional_int(payload.get("quantity")),
+        )
+        return ChatOrderSlots(
+            items=(extracted_item,)
+            if extracted_item.product or extracted_item.quantity is not None
+            else (),
             customer_name=self._optional_str(payload.get("customer_name")),
             customer_phone=self._optional_str(payload.get("customer_phone")),
             delivery_address=self._optional_str(payload.get("delivery_address")),
@@ -1109,10 +1258,16 @@ Tin mới:
         if matched_product is not None and quantity is None:
             quantity = cls._extract_leading_quantity_candidate(content)
         return ChatOrderSlots(
-            product=cls._format_product_display_name(matched_product)
-            if matched_product is not None
-            else None,
-            quantity=quantity,
+            items=(
+                ChatOrderItem(
+                    product=cls._format_product_display_name(matched_product)
+                    if matched_product is not None
+                    else None,
+                    quantity=quantity,
+                ),
+            )
+            if matched_product is not None or quantity is not None
+            else (),
         )
 
     @classmethod
@@ -1237,8 +1392,7 @@ Tin mới:
                 continue
             merged = replace(
                 merged,
-                product=source.product or merged.product,
-                quantity=source.quantity or merged.quantity,
+                items=ConversationService._merge_order_items(merged.items, source.items),
                 customer_name=source.customer_name or merged.customer_name,
                 customer_phone=source.customer_phone or merged.customer_phone,
                 delivery_address=source.delivery_address or merged.delivery_address,
@@ -1249,14 +1403,33 @@ Tin mới:
         return merged
 
     @staticmethod
-    def _slots_to_metadata(slots: ChatOrderSlots | None) -> dict[str, Any]:
+    def _merge_order_items(
+        current: tuple[ChatOrderItem, ...],
+        incoming: tuple[ChatOrderItem, ...],
+    ) -> tuple[ChatOrderItem, ...]:
+        if not incoming:
+            return current
+        if not current:
+            return incoming
+        if len(current) == 1 and len(incoming) == 1:
+            current_item = current[0]
+            incoming_item = incoming[0]
+            return (
+                ChatOrderItem(
+                    product=incoming_item.product or current_item.product,
+                    quantity=incoming_item.quantity or current_item.quantity,
+                ),
+            )
+        return incoming
+
+    @classmethod
+    def _slots_to_metadata(cls, slots: ChatOrderSlots | None) -> dict[str, Any]:
         if slots is None:
             return {}
         payload: dict[str, Any] = {}
-        if slots.product:
-            payload["product"] = slots.product
-        if slots.quantity is not None:
-            payload["quantity"] = slots.quantity
+        item_payload = cls._items_to_metadata(slots.items)
+        if item_payload:
+            payload["items"] = item_payload
         if slots.customer_name:
             payload["customer_name"] = slots.customer_name
         if slots.customer_phone:
@@ -1270,12 +1443,48 @@ Tin mới:
         return payload
 
     @classmethod
+    def _items_to_metadata(cls, items: Sequence[ChatOrderItem]) -> list[dict[str, Any]]:
+        payload: list[dict[str, Any]] = []
+        for item in items:
+            data: dict[str, Any] = {}
+            if item.product:
+                data["product"] = item.product
+            if item.quantity is not None:
+                data["quantity"] = item.quantity
+            if data:
+                payload.append(data)
+        return payload
+
+    @classmethod
+    def _items_from_metadata(cls, payload: object) -> tuple[ChatOrderItem, ...]:
+        if not isinstance(payload, list):
+            return ()
+        items: list[ChatOrderItem] = []
+        for item in payload:
+            if not isinstance(item, dict):
+                continue
+            parsed = ChatOrderItem(
+                product=cls._optional_str(item.get("product")),
+                quantity=cls._optional_int(item.get("quantity")),
+            )
+            if parsed.product or parsed.quantity is not None:
+                items.append(parsed)
+        return tuple(items)
+
+    @classmethod
     def _slots_from_metadata(cls, payload: object) -> ChatOrderSlots | None:
         if not isinstance(payload, dict):
             return None
+        items = cls._items_from_metadata(payload.get("items"))
+        if not items:
+            legacy_item = ChatOrderItem(
+                product=cls._optional_str(payload.get("product")),
+                quantity=cls._optional_int(payload.get("quantity")),
+            )
+            if legacy_item.product or legacy_item.quantity is not None:
+                items = (legacy_item,)
         return ChatOrderSlots(
-            product=cls._optional_str(payload.get("product")),
-            quantity=cls._optional_int(payload.get("quantity")),
+            items=items,
             customer_name=cls._optional_str(payload.get("customer_name")),
             customer_phone=cls._optional_str(payload.get("customer_phone")),
             delivery_address=cls._optional_str(payload.get("delivery_address")),
@@ -1310,13 +1519,15 @@ Tin mới:
         cls,
         order_state: dict[str, Any] | None,
         slots: ChatOrderSlots,
-        matched_product: ProductResponse | None,
+        matched_items: Sequence[tuple[ChatOrderItem, ProductResponse | None]],
         reusable_contact_slots: ChatOrderSlots | None,
     ) -> bool:
         return (
             order_state is None
-            and matched_product is not None
-            and slots.quantity is not None
+            and bool(matched_items)
+            and all(
+                product is not None and item.quantity is not None for item, product in matched_items
+            )
             and reusable_contact_slots is not None
             and cls._has_reusable_contact_slots(reusable_contact_slots)
             and not cls._has_reusable_contact_slots(slots)
@@ -1339,6 +1550,239 @@ Tin mới:
             "Nếu khác bạn gửi lại giúp Qiki nhé."
         )
 
+    @staticmethod
+    def _first_order_item(slots: ChatOrderSlots | None) -> ChatOrderItem | None:
+        return slots.items[0] if slots and slots.items else None
+
+    @staticmethod
+    def _with_order_items(
+        slots: ChatOrderSlots,
+        items: Sequence[ChatOrderItem],
+    ) -> ChatOrderSlots:
+        return replace(slots, items=tuple(items), confirmed=False)
+
+    @classmethod
+    def _pending_item_from_state(cls, order_state: dict[str, Any] | None) -> ChatOrderItem | None:
+        if order_state is None:
+            return None
+        items = cls._items_from_metadata(order_state.get("pending_item"))
+        return items[0] if items else None
+
+    @classmethod
+    def _previous_items_from_state(
+        cls,
+        order_state: dict[str, Any] | None,
+        fallback_slots: ChatOrderSlots | None,
+    ) -> tuple[ChatOrderItem, ...]:
+        if order_state is not None:
+            previous_items = cls._items_from_metadata(order_state.get("previous_items"))
+            if previous_items:
+                return previous_items
+            previous_product = cls._optional_str(order_state.get("previous_product"))
+            if previous_product:
+                fallback_item = cls._first_order_item(fallback_slots)
+                return (
+                    ChatOrderItem(
+                        product=previous_product,
+                        quantity=fallback_item.quantity if fallback_item else None,
+                    ),
+                )
+        return fallback_slots.items if fallback_slots else ()
+
+    @classmethod
+    def _detect_order_item_operation(
+        cls,
+        content: str,
+        previous_slots: ChatOrderSlots | None,
+        candidate_item: ChatOrderItem | None,
+        products: Sequence[ProductResponse],
+    ) -> str | None:
+        if candidate_item is None or not candidate_item.product:
+            return None
+        normalized = cls._normalize_match_text(content)
+        if cls._has_remove_cue(normalized):
+            return "remove"
+        if cls._has_add_cue(normalized):
+            return "add"
+        if cls._has_replace_cue(normalized):
+            return "replace"
+        previous_items = previous_slots.items if previous_slots else ()
+        if not previous_items:
+            return "set"
+        if cls._find_matching_item_index(previous_items, candidate_item, products) is not None:
+            return "merge_existing"
+        return "ambiguous"
+
+    @staticmethod
+    def _has_add_cue(normalized: str) -> bool:
+        return any(
+            phrase in normalized
+            for phrase in {
+                "them",
+                "them vao",
+                "them mot",
+                "them 1",
+                "lay them",
+                "cong them",
+                "co them",
+                "va ",
+            }
+        )
+
+    @staticmethod
+    def _has_replace_cue(normalized: str) -> bool:
+        return any(
+            phrase in normalized
+            for phrase in {
+                "doi",
+                "doi sang",
+                "doi qua",
+                "doi thanh",
+                "thay",
+                "thay bang",
+            }
+        )
+
+    @staticmethod
+    def _has_remove_cue(normalized: str) -> bool:
+        return any(
+            phrase in normalized
+            for phrase in {
+                "bo",
+                "xoa",
+                "huy",
+            }
+        )
+
+    @classmethod
+    def _is_negation(cls, content: str) -> bool:
+        normalized = cls._normalize_match_text(content)
+        return normalized in {
+            "ko",
+            "khong",
+            "k",
+            "ko phai",
+            "khong phai",
+            "thoi",
+            "khong doi",
+            "giu nguyen",
+        } or any(
+            phrase in normalized
+            for phrase in {
+                "ko phai",
+                "khong phai",
+                "khong doi",
+                "giu nguyen",
+            }
+        )
+
+    @classmethod
+    def _find_matching_item_index(
+        cls,
+        items: Sequence[ChatOrderItem],
+        candidate_item: ChatOrderItem,
+        products: Sequence[ProductResponse],
+    ) -> int | None:
+        candidate_product = cls._match_product(candidate_item.product, products)
+        if candidate_product is None:
+            return None
+        for index, item in enumerate(items):
+            item_product = cls._match_product(item.product, products)
+            if item_product is not None and item_product.id == candidate_product.id:
+                return index
+        return None
+
+    @classmethod
+    def _replace_first_matching_item(
+        cls,
+        slots: ChatOrderSlots,
+        candidate_item: ChatOrderItem,
+        products: Sequence[ProductResponse],
+    ) -> ChatOrderSlots:
+        items = list(slots.items)
+        if not items:
+            return cls._with_order_items(slots, (candidate_item,))
+        matching_index = cls._find_matching_item_index(items, candidate_item, products)
+        replace_index = matching_index if matching_index is not None else 0
+        existing = items[replace_index]
+        items[replace_index] = ChatOrderItem(
+            product=candidate_item.product or existing.product,
+            quantity=candidate_item.quantity or existing.quantity,
+        )
+        return cls._with_order_items(slots, items)
+
+    @classmethod
+    def _merge_existing_item(
+        cls,
+        slots: ChatOrderSlots,
+        candidate_item: ChatOrderItem,
+        products: Sequence[ProductResponse],
+    ) -> ChatOrderSlots:
+        items = list(slots.items)
+        matching_index = cls._find_matching_item_index(items, candidate_item, products)
+        if matching_index is None:
+            return cls._with_order_items(slots, [*items, candidate_item])
+        existing = items[matching_index]
+        items[matching_index] = ChatOrderItem(
+            product=candidate_item.product or existing.product,
+            quantity=candidate_item.quantity or existing.quantity,
+        )
+        return cls._with_order_items(slots, items)
+
+    @staticmethod
+    def _append_order_item(slots: ChatOrderSlots, candidate_item: ChatOrderItem) -> ChatOrderSlots:
+        return replace(slots, items=(*slots.items, candidate_item), confirmed=False)
+
+    @classmethod
+    def _remove_order_item(
+        cls,
+        slots: ChatOrderSlots,
+        candidate_item: ChatOrderItem,
+        products: Sequence[ProductResponse],
+    ) -> ChatOrderSlots:
+        matching_index = cls._find_matching_item_index(slots.items, candidate_item, products)
+        if matching_index is None:
+            return slots
+        return cls._with_order_items(
+            slots,
+            [item for index, item in enumerate(slots.items) if index != matching_index],
+        )
+
+    @classmethod
+    def _format_order_item_label(cls, item: ChatOrderItem | None) -> str:
+        return item.product if item and item.product else "sản phẩm mới"
+
+    @classmethod
+    def _format_add_or_replace_question(
+        cls,
+        old_item: ChatOrderItem | None,
+        new_item: ChatOrderItem,
+    ) -> str:
+        old_label = cls._format_order_item_label(old_item) or "sản phẩm ban đầu"
+        new_label = cls._format_order_item_label(new_item)
+        return (
+            f"Bạn muốn **thêm** {new_label} vào đơn, hay **đổi** "
+            f"{old_label} sang {new_label}? Bạn nhắn 'thêm' hoặc 'đổi' giúp Qiki nhé."
+        )
+
+    @classmethod
+    def _format_pending_change_clarification(cls) -> str:
+        return (
+            "Bạn nhắn **đúng** để đổi, **không** để giữ nguyên, " "hoặc **thêm** để đặt thêm nhé."
+        )
+
+    @classmethod
+    def _pending_change_item(
+        cls,
+        previous_items: Sequence[ChatOrderItem],
+        pending_items: Sequence[ChatOrderItem],
+        products: Sequence[ProductResponse],
+    ) -> ChatOrderItem | None:
+        for pending_item in pending_items:
+            if cls._find_matching_item_index(previous_items, pending_item, products) is None:
+                return pending_item
+        return pending_items[0] if pending_items else None
+
     @classmethod
     def _should_confirm_product_change(
         cls,
@@ -1346,22 +1790,28 @@ Tin mới:
         incoming_slots: ChatOrderSlots,
         products: Sequence[ProductResponse],
     ) -> bool:
-        if not previous_slots or not previous_slots.product or not incoming_slots.product:
+        previous_item = cls._first_order_item(previous_slots)
+        incoming_item = cls._first_order_item(incoming_slots)
+        if (
+            not previous_item
+            or not previous_item.product
+            or not incoming_item
+            or not incoming_item.product
+        ):
             return False
-        old_product = cls._match_product(previous_slots.product, products)
-        new_product = cls._match_product(incoming_slots.product, products)
+        old_product = cls._match_product(previous_item.product, products)
+        new_product = cls._match_product(incoming_item.product, products)
         return (
             old_product is not None and new_product is not None and old_product.id != new_product.id
         )
 
-    @staticmethod
+    @classmethod
     def _format_product_change_question(
+        cls,
         previous_product: str | None,
         pending_slots: ChatOrderSlots | None,
     ) -> str:
-        new_product = (
-            pending_slots.product if pending_slots and pending_slots.product else "sản phẩm mới"
-        )
+        new_product = cls._format_order_item_label(cls._first_order_item(pending_slots))
         old_product = previous_product or "sản phẩm ban đầu"
         return (
             f"Bạn muốn đổi sang **{new_product}** thay cho "
@@ -1403,12 +1853,12 @@ Tin mới:
     def _missing_order_slots(
         cls,
         slots: ChatOrderSlots,
-        matched_product: ProductResponse | None,
+        matched_items: Sequence[tuple[ChatOrderItem, ProductResponse | None]],
     ) -> list[str]:
         missing: list[str] = []
-        if matched_product is None:
+        if not slots.items or any(product is None for _item, product in matched_items):
             missing.append("sản phẩm")
-        if slots.quantity is None:
+        if any(item.quantity is None for item in slots.items):
             missing.append("số lượng")
         if not slots.customer_name:
             missing.append("tên người nhận")
@@ -1471,6 +1921,20 @@ Tin mới:
                 best_score = score
                 best_product = product
         return best_product if best_score > 0 else None
+
+    @classmethod
+    def _match_order_items(
+        cls,
+        items: Sequence[ChatOrderItem],
+        products: Sequence[ProductResponse],
+    ) -> list[tuple[ChatOrderItem, ProductResponse | None]]:
+        return [(item, cls._match_product(item.product, products)) for item in items]
+
+    @staticmethod
+    def _matched_order_products(
+        matched_items: Sequence[tuple[ChatOrderItem, ProductResponse | None]],
+    ) -> list[tuple[ChatOrderItem, ProductResponse]]:
+        return [(item, product) for item, product in matched_items if product is not None]
 
     @staticmethod
     def _normalize_match_text(value: str) -> str:
@@ -1582,38 +2046,77 @@ Tin mới:
     @classmethod
     def _format_order_summary(
         cls,
-        product: ProductResponse,
-        quantity: int,
+        items: Sequence[tuple[ChatOrderItem, ProductResponse]],
         customer_name: str,
         phone: str,
         address: str,
         payment_method: Literal["cod", "bank_transfer"],
     ) -> str:
-        subtotal = product.price * quantity
+        product_subtotal = sum(
+            (product.price * (item.quantity or 0) for item, product in items),
+            Decimal("0"),
+        )
+        water_quantity = cls._water_item_quantity(items)
+        water_delivery_fee = cls._water_delivery_fee(items)
+        subtotal = product_subtotal + water_delivery_fee
         payment_label = "COD" if payment_method == "cod" else "chuyển khoản"
-        return "\n".join(
+        lines = ["Qiki tóm tắt đơn hàng của bạn:"]
+        for item, product in items:
+            quantity = item.quantity or 0
+            line_total = product.price * quantity
+            lines.append(
+                f"- {product.name} ({product.brand}) × {quantity} — {cls._format_vnd(line_total)}"  # noqa: RUF001
+            )
+        if water_delivery_fee:
+            lines.append(
+                f"- Phí giao nước: +{cls._format_vnd(water_delivery_fee)} "
+                f"(5k/bình × {water_quantity} bình nước)"  # noqa: RUF001
+            )
+        lines.extend(
             [
-                "Qiki tóm tắt đơn hàng của bạn:",
-                f"- Sản phẩm: **{product.name}** ({product.brand})",
-                f"- Số lượng: **{quantity}** bình",
-                f"- Đơn giá: **{cls._format_vnd(product.price)}**",
-                f"- Thành tiền tạm tính: **{cls._format_vnd(subtotal)}**",
+                f"- Tạm tính: **{cls._format_vnd(subtotal)}**",
                 f"- Người nhận: **{customer_name}**",
                 f"- Số điện thoại: **{cls._format_phone_display(phone)}**",
                 f"- Địa chỉ: **{address}**",
                 f"- Thanh toán: **{payment_label}**",
-                "",
-                ORDER_CONFIRMATION_PROMPT,
             ]
         )
+        if water_delivery_fee:
+            lines.append("- Ghi chú: Phí lên lầu +5.000đ/lầu (nếu có), nhân viên báo khi giao.")
+        lines.extend(["", ORDER_CONFIRMATION_PROMPT])
+        return "\n".join(lines)
 
     @staticmethod
-    def _chat_order_idempotency_key(conversation_id: UUID, slots: ChatOrderSlots) -> UUID:
+    def _water_item_quantity(items: Sequence[tuple[ChatOrderItem, ProductResponse]]) -> int:
+        return sum(item.quantity or 0 for item, product in items if product.category == "nuoc_uong")
+
+    @classmethod
+    def _water_delivery_fee(cls, items: Sequence[tuple[ChatOrderItem, ProductResponse]]) -> Decimal:
+        return Decimal("5000") * cls._water_item_quantity(items)
+
+    @classmethod
+    def _delivery_notes_with_water_fee(
+        cls,
+        delivery_notes: str | None,
+        items: Sequence[tuple[ChatOrderItem, ProductResponse]],
+    ) -> str | None:
+        if cls._water_delivery_fee(items) <= 0:
+            return delivery_notes
+        fee_note = "[Phí giao nước +5k/bình; lên lầu +5k/lầu]"
+        return f"{fee_note} {delivery_notes}".strip() if delivery_notes else fee_note
+
+    @classmethod
+    def _chat_order_idempotency_key(cls, conversation_id: UUID, slots: ChatOrderSlots) -> UUID:
+        item_fingerprint = "|".join(
+            f"{item.product or ''}:{item.quantity or ''}"
+            for item in sorted(
+                slots.items, key=lambda item: (item.product or "", item.quantity or 0)
+            )
+        )
         fingerprint = "|".join(
             [
                 str(conversation_id),
-                slots.product or "",
-                str(slots.quantity or ""),
+                item_fingerprint,
                 slots.customer_phone or "",
                 slots.delivery_address or "",
             ]
