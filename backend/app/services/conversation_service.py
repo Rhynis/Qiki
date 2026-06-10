@@ -35,7 +35,7 @@ from app.schemas.conversation import (
 from app.schemas.message import MessageResponse
 from app.schemas.order import CheckoutRequest, OrderItemCreate, OrderResponse
 from app.schemas.product import ProductResponse
-from app.services.address_lookup import resolve_ward_delivery_zone
+from app.services.address_lookup import resolve_ward_delivery_zone, validate_khu_pho
 from app.services.order_service import OrderService, is_serialization_failure
 from app.services.product_service import ProductService
 from app.services.routing_service import RoutingDecision, RoutingService
@@ -706,6 +706,32 @@ class ConversationService:
                     "awaiting_missing_slots",
                     slots,
                 ),
+            )
+
+        khu_pho_validation = validate_khu_pho(slots.delivery_address)
+        if khu_pho_validation.status == "missing":
+            return result(
+                await order_state_message(
+                    (
+                        "Bạn cho Qiki xin thêm **số khu phố** giúp nhé "
+                        f"(P. {khu_pho_validation.ward_display} có khu phố "
+                        f"1–{khu_pho_validation.khu_pho_max})."  # noqa: RUF001
+                    ),
+                    "awaiting_missing_slots",
+                    slots,
+                )
+            )
+        if khu_pho_validation.status == "out_of_range":
+            return result(
+                await order_state_message(
+                    (
+                        f"Dạ P. {khu_pho_validation.ward_display} chỉ có khu phố "
+                        f"1–{khu_pho_validation.khu_pho_max} thôi ạ, "  # noqa: RUF001
+                        "bạn kiểm tra lại số khu phố giúp Qiki nhé."
+                    ),
+                    "awaiting_missing_slots",
+                    slots,
+                )
             )
 
         for item, product in matched_order_products:

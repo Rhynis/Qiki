@@ -786,7 +786,8 @@ def complete_order_payload(
         "quantity": 1,
         "customer_name": "Nguyen Van A",
         "customer_phone": "0903026306",
-        "delivery_address": address or "15 đường số 5, Phường Hiệp Bình, TP. Hồ Chí Minh",
+        "delivery_address": address
+        or "15 đường số 5, Khu phố 36, Phường Hiệp Bình, TP. Hồ Chí Minh",
         "delivery_notes": delivery_notes,
         "payment_method": "cod",
         "confirmed": confirmed,
@@ -1131,6 +1132,170 @@ async def test_chat_order_missing_address_mentions_khu_pho() -> None:
     assert "với Hiệp Bình cần khu phố" not in response.assistant_message.content
     assert "mốc gần nhà" not in response.assistant_message.content
     assert response.products == []
+
+
+@pytest.mark.asyncio
+async def test_khu_pho_out_of_range_asks_recheck() -> None:
+    payload = complete_order_payload(
+        confirmed=True,
+        address="15 đường số 5, Khu phố 95, Phường Hiệp Bình, TP.HCM",
+    )
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([payload]),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Tôi muốn đặt 1 bình Petrolimex 12kg"),
+        user=None,
+    )
+
+    assert orders.created_count == 0
+    assert response.assistant_message is not None
+    assert "P. Hiệp Bình chỉ có khu phố 1–91" in response.assistant_message.content  # noqa: RUF001
+    state = response.assistant_message.retrieved_documents[0]
+    assert state["status"] == "awaiting_missing_slots"
+
+
+@pytest.mark.asyncio
+async def test_khu_pho_in_range_proceeds() -> None:
+    payload = complete_order_payload(
+        confirmed=True,
+        address="15 đường số 5, Khu phố 36, Phường Hiệp Bình, TP.HCM",
+    )
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([payload]),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Tôi muốn đặt 1 bình Petrolimex 12kg"),
+        user=None,
+    )
+
+    assert orders.created_count == 1
+    assert response.assistant_message is not None
+    assert "QC-000123" in response.assistant_message.content
+
+
+@pytest.mark.asyncio
+async def test_khu_pho_missing_asks() -> None:
+    payload = complete_order_payload(
+        confirmed=True,
+        address="15 đường số 5, Phường Hiệp Bình, TP.HCM",
+    )
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([payload]),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Tôi muốn đặt 1 bình Petrolimex 12kg"),
+        user=None,
+    )
+
+    assert orders.created_count == 0
+    assert response.assistant_message is not None
+    assert "xin thêm **số khu phố**" in response.assistant_message.content
+    assert "P. Hiệp Bình có khu phố 1–91" in response.assistant_message.content  # noqa: RUF001
+
+
+@pytest.mark.parametrize(
+    ("ward", "khu_pho", "expected_zone"),
+    [
+        ("Thạnh Mỹ Tây", 20, "Bình Thạnh"),
+        ("Linh Xuân", 10, "Thủ Đức"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_new_ward_names_resolve_zone(
+    ward: str,
+    khu_pho: int,
+    expected_zone: str,
+) -> None:
+    payload = complete_order_payload(
+        confirmed=True,
+        address=f"15 đường số 5, Khu phố {khu_pho}, Phường {ward}, TP.HCM",
+    )
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([payload]),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Tôi muốn đặt 1 bình Petrolimex 12kg"),
+        user=None,
+    )
+
+    assert orders.created_count == 1
+    assert response.assistant_message is not None
+    assert "QC-000123" in response.assistant_message.content
+    assert orders.last_checkout.delivery_district == expected_zone
+
+
+@pytest.mark.asyncio
+async def test_khu_pho_updatable() -> None:
+    service, _conversations, messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider(
+            [
+                {
+                    "delivery_address": "15 đường số 5, Khu phố 36, Phường Hiệp Bình, TP.HCM",
+                    "confirmed": True,
+                }
+            ]
+        ),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_order_state_history(
+        messages,
+        conversation.id,
+        slots=complete_order_slots(address="15 đường số 5, Khu phố 95, Phường Hiệp Bình, TP.HCM"),
+    )
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="đổi lại giao khu phố 36 phường hiệp bình"),
+        user=None,
+    )
+
+    assert orders.created_count == 1
+    assert response.assistant_message is not None
+    assert "QC-000123" in response.assistant_message.content
+    assert orders.last_checkout.delivery_address == (
+        "15 đường số 5, Khu phố 36, Phường Hiệp Bình, TP.HCM"
+    )
+
+
+@pytest.mark.asyncio
+async def test_unknown_ward_khu_pho_skipped() -> None:
+    payload = complete_order_payload(
+        confirmed=True,
+        address="15 đường số 5, Phường Hiệp Bình Chánh, TP.HCM",
+    )
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([payload]),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Tôi muốn đặt 1 bình Petrolimex 12kg"),
+        user=None,
+    )
+
+    assert orders.created_count == 1
+    assert response.assistant_message is not None
+    assert "số khu phố" not in response.assistant_message.content
 
 
 @pytest.mark.asyncio
