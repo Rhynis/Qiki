@@ -793,6 +793,28 @@ def complete_order_payload(
     }
 
 
+def complete_order_slots(
+    address: str | None = None,
+    delivery_notes: str | None = None,
+) -> dict[str, object]:
+    payload = complete_order_payload(address=address, delivery_notes=delivery_notes)
+    slots: dict[str, object] = {
+        "items": [
+            {
+                "product": payload["product"],
+                "quantity": payload["quantity"],
+            }
+        ],
+        "customer_name": payload["customer_name"],
+        "customer_phone": payload["customer_phone"],
+        "delivery_address": payload["delivery_address"],
+        "payment_method": payload["payment_method"],
+    }
+    if delivery_notes:
+        slots["delivery_notes"] = delivery_notes
+    return slots
+
+
 async def add_order_state_history(
     messages: FakeMessageRepository,
     conversation_id: uuid.UUID,
@@ -889,12 +911,18 @@ async def test_chat_order_creates_order_on_confirmation(monkeypatch: pytest.Monk
         staticmethod(lambda: datetime(2026, 6, 8, 9, 0, tzinfo=timezone(timedelta(hours=7)))),
     )
     order_service = FakeOrderService()
-    service, _conversations, _messages, _rag, orders = make_service(
+    service, _conversations, messages, _rag, orders = make_service(
         category=IntentCategory.PLACE_ORDER,
-        llm_provider=FakeLLMProvider([complete_order_payload(confirmed=True)]),
+        llm_provider=FakeLLMProvider([{"confirmed": True}]),
         order_service=order_service,
     )
     conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_order_state_history(
+        messages,
+        conversation.id,
+        status="awaiting_confirmation",
+        slots=complete_order_slots(),
+    )
 
     response = await service.send_message(
         conversation.id,
@@ -1009,12 +1037,18 @@ async def test_chat_order_confirmation_outside_hours_is_time_aware(
         staticmethod(lambda: datetime(2026, 6, 7, 21, 0, tzinfo=timezone(timedelta(hours=7)))),
     )
     order_service = FakeOrderService()
-    service, _conversations, _messages, _rag, orders = make_service(
+    service, _conversations, messages, _rag, orders = make_service(
         category=IntentCategory.PLACE_ORDER,
-        llm_provider=FakeLLMProvider([complete_order_payload(confirmed=True)]),
+        llm_provider=FakeLLMProvider([{"confirmed": True}]),
         order_service=order_service,
     )
     conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_order_state_history(
+        messages,
+        conversation.id,
+        status="awaiting_confirmation",
+        slots=complete_order_slots(),
+    )
 
     response = await service.send_message(
         conversation.id,
@@ -1537,6 +1571,45 @@ async def test_address_message_does_not_inject_phantom_product() -> None:
 
 
 @pytest.mark.asyncio
+async def test_phantom_not_injected_even_when_confirmed_true() -> None:
+    products = _water_catalog() + _substring_brand_catalog()
+    service, _conversations, messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider(
+            [
+                {
+                    "items": [{"product": "Bình gas Saigon Petro 12kg"}],
+                    "customer_name": "van",
+                    "delivery_address": "15 đường số 5 khu phố 1 P. Hiệp Bình TP.HCM",
+                    "confirmed": True,
+                }
+            ]
+        ),
+        product_service=FakeProductService(products=products),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_order_state_history(
+        messages,
+        conversation.id,
+        slots={"items": [{"product": "Nước Hoàn Hảo 20 lít", "quantity": 1}]},
+    )
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="van 15 đường số 5 khu phố 1 hiệp bình"),
+        user=None,
+    )
+
+    assert orders.created_count == 0
+    assert response.assistant_message is not None
+    assert "Bạn muốn **thêm**" not in response.assistant_message.content
+    state = response.assistant_message.retrieved_documents[0]
+    assert state["status"] != "awaiting_add_or_replace"
+    assert_state_item_count(state, 1)
+    assert_state_item(state, "Nước Hoàn Hảo 20 lít", 1)
+
+
+@pytest.mark.asyncio
 async def test_quantity_preserved_through_contact_message() -> None:
     products = _water_catalog() + _substring_brand_catalog()
     service, _conversations, _messages, _rag, orders = make_service(
@@ -1705,12 +1778,18 @@ async def test_chat_order_delivery_time_note_in_hours(
         staticmethod(lambda: datetime(2026, 6, 8, 9, 0, tzinfo=timezone(timedelta(hours=7)))),
     )
     order_service = FakeOrderService()
-    service, _conversations, _messages, _rag, orders = make_service(
+    service, _conversations, messages, _rag, orders = make_service(
         category=IntentCategory.PLACE_ORDER,
-        llm_provider=FakeLLMProvider([complete_order_payload(confirmed=True)]),
+        llm_provider=FakeLLMProvider([{"confirmed": True}]),
         order_service=order_service,
     )
     conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_order_state_history(
+        messages,
+        conversation.id,
+        status="awaiting_confirmation",
+        slots=complete_order_slots(),
+    )
 
     response = await service.send_message(
         conversation.id,
@@ -1735,12 +1814,18 @@ async def test_chat_order_delivery_time_note_outside_hours(
         staticmethod(lambda: datetime(2026, 6, 7, 21, 0, tzinfo=timezone(timedelta(hours=7)))),
     )
     order_service = FakeOrderService()
-    service, _conversations, _messages, _rag, orders = make_service(
+    service, _conversations, messages, _rag, orders = make_service(
         category=IntentCategory.PLACE_ORDER,
-        llm_provider=FakeLLMProvider([complete_order_payload(confirmed=True)]),
+        llm_provider=FakeLLMProvider([{"confirmed": True}]),
         order_service=order_service,
     )
     conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_order_state_history(
+        messages,
+        conversation.id,
+        status="awaiting_confirmation",
+        slots=complete_order_slots(),
+    )
 
     response = await service.send_message(
         conversation.id,
@@ -1919,20 +2004,26 @@ async def test_chat_order_double_ok_same_slots_is_idempotent(
         "_now_vn",
         staticmethod(lambda: datetime(2026, 6, 8, 9, 0, tzinfo=timezone(timedelta(hours=7)))),
     )
-    service, _conversations, _messages, _rag, orders = make_service(
+    service, _conversations, messages, _rag, orders = make_service(
         category=IntentCategory.PLACE_ORDER,
-        llm_provider=FakeLLMProvider([complete_order_payload(confirmed=True)]),
+        llm_provider=FakeLLMProvider([{}]),
     )
     conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_order_state_history(
+        messages,
+        conversation.id,
+        status="awaiting_confirmation",
+        slots=complete_order_slots(),
+    )
 
     first = await service.send_message(
         conversation.id,
-        SendMessageRequest(content="ok xác nhận"),
+        SendMessageRequest(content="ok"),
         user=None,
     )
     second = await service.send_message(
         conversation.id,
-        SendMessageRequest(content="ok xác nhận"),
+        SendMessageRequest(content="ok"),
         user=None,
     )
 

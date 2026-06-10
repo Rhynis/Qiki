@@ -165,18 +165,21 @@ async def test_chat_order_confirm_endpoint_creates_real_order(
     await order_session.commit()
     await create_catalog_product(order_session)
 
-    payload = {
-        "product": "Saigon Petro 12kg",
-        "quantity": 1,
-        "customer_name": "Nguyen Van A",
-        "customer_phone": "0903026306",
-        "delivery_address": "15 đường số 5, Phường Hiệp Bình, TP. Hồ Chí Minh",
-        "payment_method": "cod",
-        "confirmed": True,
-    }
+    payloads = [
+        {
+            "product": "Saigon Petro 12kg",
+            "quantity": 1,
+            "customer_name": "Nguyen Van A",
+            "customer_phone": "0903026306",
+            "delivery_address": "15 đường số 5, Phường Hiệp Bình, TP. Hồ Chí Minh",
+            "payment_method": "cod",
+            "confirmed": False,
+        },
+        {"confirmed": True},
+    ]
 
     app.dependency_overrides[get_intent_classifier] = lambda: PlaceOrderClassifier()
-    app.dependency_overrides[get_llm_provider] = lambda: JSONLLMProvider(payload)
+    app.dependency_overrides[get_llm_provider] = lambda: JSONLLMProvider(payloads)
     app.dependency_overrides[get_rag_pipeline] = lambda: UnusedRAGPipeline()
     try:
         started = await test_client.post(
@@ -186,9 +189,17 @@ async def test_chat_order_confirm_endpoint_creates_real_order(
         assert started.status_code == 200
         conversation_id = started.json()["id"]
 
+        summary = await test_client.post(
+            f"/api/v1/conversations/{conversation_id}/messages",
+            json={"content": "Đặt 1 bình Saigon Petro 12kg"},
+        )
+
+        assert summary.status_code == 200
+        assert "Qiki tóm tắt đơn hàng" in summary.json()["assistant_message"]["content"]
+
         response = await test_client.post(
             f"/api/v1/conversations/{conversation_id}/messages",
-            json={"content": "Đúng rồi, xác nhận đặt đơn này"},
+            json={"content": "xác nhận"},
         )
 
         assert response.status_code == 200
