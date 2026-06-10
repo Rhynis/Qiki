@@ -1333,6 +1333,68 @@ async def test_repeat_same_product_merges_not_duplicates() -> None:
     assert_state_item(state, "Nước Hoàn Hảo 20 lít", 1)
 
 
+def test_infer_skips_generic_token_in_address() -> None:
+    products = _water_catalog() + _substring_brand_catalog()
+
+    slots = ConversationService._infer_order_slots(
+        "tên ABC, sđt 0907654321, giao 15 đường số 5 khu phố 36 P. Hiệp Bình " "TP.HCM, trả cod",
+        products,
+    )
+    matched_product = ConversationService._match_product("saigon petro 12kg", products)
+
+    assert slots.items == ()
+    assert matched_product is not None
+    assert matched_product.name == "Bình gas Saigon Petro 12kg (xám)"
+
+
+@pytest.mark.asyncio
+async def test_water_only_order_address_reaches_summary() -> None:
+    products = _water_catalog() + _substring_brand_catalog()
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider(
+            [
+                {},
+                {
+                    "customer_name": "ABC",
+                    "customer_phone": "0907654321",
+                    "delivery_address": "15 đường số 5, Khu phố 36, Phường Hiệp Bình, TP.HCM",
+                    "payment_method": "cod",
+                    "confirmed": False,
+                },
+            ]
+        ),
+        product_service=FakeProductService(products=products),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    first = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="đặt 1 nước hoàn hảo"),
+        user=None,
+    )
+    second = await service.send_message(
+        conversation.id,
+        SendMessageRequest(
+            content=(
+                "tên ABC, sđt 0907654321, giao 15 đường số 5 khu phố 36 "
+                "P. Hiệp Bình TP.HCM, trả cod"
+            )
+        ),
+        user=None,
+    )
+
+    assert orders.created_count == 0
+    assert first.assistant_message is not None
+    assert second.assistant_message is not None
+    state = second.assistant_message.retrieved_documents[0]
+    assert state["status"] == "awaiting_confirmation"
+    assert "Qiki tóm tắt đơn hàng" in second.assistant_message.content
+    assert "Bạn muốn thêm" not in second.assistant_message.content
+    assert_state_item_count(state, 1)
+    assert_state_item(state, "Nước Hoàn Hảo 20 lít", 1)
+
+
 @pytest.mark.asyncio
 async def test_chat_order_confirm_loop_negation_keeps_items() -> None:
     products = _water_catalog()

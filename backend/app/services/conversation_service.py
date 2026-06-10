@@ -45,6 +45,17 @@ CHAT_ORDER_STATE_METADATA_TYPE = "chat_order_state"
 ORDER_CONFIRMATION_PROMPT = "Bạn xác nhận đặt đơn này không?"
 ORDER_CONTEXT_CONFIDENCE = 0.9
 VN_TIMEZONE = timezone(timedelta(hours=7))
+GENERIC_PRODUCT_MATCH_TOKENS = {
+    "binh",
+    "gas",
+    "chai",
+    "can",
+    "thung",
+    "lit",
+    "nuoc",
+    "uong",
+    "kg",
+}
 
 
 @dataclass(frozen=True)
@@ -2140,10 +2151,20 @@ Tin mới:
                 f"{cls._format_decimal(product.size_kg)}{product.unit}",
             ]
             haystack = " ".join(cls._normalize_match_text(field) for field in fields)
+            query_tokens = query.split()
+            specific_token_hit = any(
+                token not in GENERIC_PRODUCT_MATCH_TOKENS
+                and not token.isdigit()
+                and len(token) >= 2
+                and token in haystack
+                for token in query_tokens
+            )
+            if not specific_token_hit:
+                continue
             score = 0
             if query and query in haystack:
                 score += 4
-            for token in query.split():
+            for token in query_tokens:
                 if token.isdigit() or len(token) < 2:
                     continue
                 if token in haystack:
