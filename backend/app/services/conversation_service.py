@@ -229,10 +229,16 @@ class ConversationService:
         should_ask_clarification = self._should_ask_intent_clarification(intent)
 
         product_cards: list[ProductCardResponse] = []
+        product_inquiry_message: str | None = None
         if intent.category == IntentCategory.PRODUCT_INQUIRY and not should_ask_clarification:
             assert catalog_products is not None
-            card_products = self._select_card_products(request.content, catalog_products)
-            product_cards = [self._product_to_card(product) for product in card_products]
+            product_inquiry_message = self._gas_size_inquiry_message(
+                request.content,
+                catalog_products,
+            )
+            if product_inquiry_message is None:
+                card_products = self._select_card_products(request.content, catalog_products)
+                product_cards = [self._product_to_card(product) for product in card_products]
 
         assistant_message: Message | None
         if intent.category == IntentCategory.SAFETY_EMERGENCY:
@@ -249,6 +255,13 @@ class ConversationService:
         elif should_ask_clarification:
             assistant_message = await self._create_intent_clarification_message(
                 conversation,
+                intent.category,
+                intent.confidence,
+            )
+        elif product_inquiry_message is not None:
+            assistant_message = await self._create_assistant_message(
+                conversation,
+                product_inquiry_message,
                 intent.category,
                 intent.confidence,
             )
@@ -415,6 +428,13 @@ class ConversationService:
         order_state_status = str(order_state.get("status", "")) if order_state else ""
         base_slots = previous_slots or ChatOrderSlots()
         normalized_content = self._normalize_match_text(content)
+        if order_state is not None and self._is_order_cancel_request(normalized_content):
+            return result(
+                await order_state_message(
+                    "Dạ Qiki đã huỷ đơn. Khi nào cần đặt lại bạn cứ nhắn Qiki nhé.",
+                    "order_cancelled",
+                )
+            )
         if order_state_status == "awaiting_product_change_confirmation":
             previous_items = self._previous_items_from_state(order_state, previous_slots)
             original_slots = replace(base_slots, items=previous_items, confirmed=False)
@@ -646,6 +666,19 @@ class ConversationService:
             )
         missing = self._missing_order_slots(slots, matched_items)
         if missing:
+            if order_state is not None and self._is_unproductive_order_turn(
+                content,
+                base_slots,
+                slots,
+                candidate_items,
+            ):
+                return result(
+                    await order_state_message(
+                        self._format_order_offtopic_message(missing),
+                        "awaiting_missing_slots",
+                        slots,
+                    )
+                )
             return result(
                 await order_state_message(
                     self._format_missing_slot_question(missing),
@@ -927,6 +960,47 @@ Tin mới:
             sku=product.sku,
             stock_quantity=product.stock_quantity,
         )
+
+    @classmethod
+    def _gas_size_inquiry_message(
+        cls,
+        query: str,
+        products: Sequence[ProductResponse],
+    ) -> str | None:
+        sizes = cls._available_gas_sizes(products)
+        if len(sizes) < 2:
+            return None
+        normalized_query = cls._normalize_match_text(query)
+        if cls._category_filter_from_query(normalized_query) != "gas":
+            return None
+        requested_size = cls._extract_gas_size_query(normalized_query)
+        size_options = cls._format_size_options(sizes)
+        if requested_size is not None and requested_size not in set(sizes):
+            return (
+                f"Dạ cửa hàng chỉ có gas loại {size_options} kg thôi ạ. "
+                "Bạn chọn loại nào giúp Qiki nhé."
+            )
+        if cls._is_bare_category_query(normalized_query):
+            return (
+                f"Cửa hàng Gas Quốc Cường có gas loại {size_options} kg. "
+                "Bạn muốn loại bao nhiêu kg ạ?"
+            )
+        return None
+
+    @classmethod
+    def _available_gas_sizes(cls, products: Sequence[ProductResponse]) -> list[Decimal]:
+        return sorted({product.size_kg for product in products if product.category == "gas"})
+
+    @staticmethod
+    def _extract_gas_size_query(normalized_query: str) -> Decimal | None:
+        match = re.search(r"\b([1-9][0-9]?)\s*kg\b", normalized_query)
+        if not match:
+            return None
+        return Decimal(match.group(1))
+
+    @classmethod
+    def _format_size_options(cls, sizes: Sequence[Decimal]) -> str:
+        return ", ".join(cls._format_decimal(size) for size in sizes)
 
     def _select_card_products(
         self,
@@ -1882,6 +1956,28 @@ Tin mới:
             }
         )
 
+    @staticmethod
+    def _is_order_cancel_request(normalized: str) -> bool:
+        return normalized in {
+            "huy",
+            "huy don",
+            "huy dat",
+            "thoi khong dat",
+            "khong dat nua",
+            "dung dat",
+            "khong mua nua",
+        } or any(
+            phrase in normalized
+            for phrase in {
+                "huy don",
+                "huy dat",
+                "thoi khong dat",
+                "khong dat nua",
+                "dung dat",
+                "khong mua nua",
+            }
+        )
+
     @classmethod
     def _is_negation(cls, content: str) -> bool:
         normalized = cls._normalize_match_text(content)
@@ -2120,6 +2216,58 @@ Tin mới:
             "Bạn cho Qiki xin thêm "
             + ", ".join(missing[:-1])
             + f" và {missing[-1]} để lên đơn nhé."
+        )
+
+    @staticmethod
+    def _format_order_offtopic_message(missing: Sequence[str]) -> str:
+        missing_text = (
+            missing[0] if len(missing) == 1 else (", ".join(missing[:-1]) + f" và {missing[-1]}")
+        )
+        return (
+            "Qiki chưa rõ ý bạn ạ. "
+            f"Mình đang chờ {missing_text} để hoàn tất đơn - bạn gửi giúp nhé, "
+            "hoặc nhắn **huỷ** nếu muốn dừng đặt hàng."
+        )
+
+    @classmethod
+    def _is_unproductive_order_turn(
+        cls,
+        content: str,
+        previous_slots: ChatOrderSlots,
+        slots: ChatOrderSlots,
+        candidate_items: Sequence[ChatOrderItem],
+    ) -> bool:
+        if candidate_items:
+            return False
+        normalized = cls._normalize_match_text(content)
+        if (
+            cls._is_order_cancel_request(normalized)
+            or cls._is_affirmation(content)
+            or cls._is_negation(content)
+            or cls._has_add_cue(normalized)
+            or cls._has_replace_cue(normalized)
+            or cls._has_remove_cue(normalized)
+        ):
+            return False
+        return not cls._order_slots_progressed(previous_slots, slots)
+
+    @staticmethod
+    def _order_slots_progressed(previous_slots: ChatOrderSlots, slots: ChatOrderSlots) -> bool:
+        if len(previous_slots.items) != len(slots.items):
+            return True
+        for previous_item, item in zip(previous_slots.items, slots.items, strict=True):
+            if previous_item.product != item.product or previous_item.quantity != item.quantity:
+                return True
+        return any(
+            getattr(previous_slots, field) != getattr(slots, field)
+            for field in (
+                "customer_name",
+                "customer_phone",
+                "delivery_address",
+                "delivery_notes",
+                "payment_method",
+                "confirmed",
+            )
         )
 
     @staticmethod
@@ -2435,6 +2583,8 @@ Tin mới:
                     isinstance(document, dict)
                     and document.get("type") == CHAT_ORDER_STATE_METADATA_TYPE
                 ):
+                    if document.get("status") == "order_cancelled":
+                        return None
                     return document
         return None
 
