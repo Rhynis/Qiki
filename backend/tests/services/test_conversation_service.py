@@ -1032,8 +1032,8 @@ async def test_chat_order_missing_slot_asks_again() -> None:
 
     assert orders.calls == 0
     assert response.assistant_message is not None
-    assert "số điện thoại" in response.assistant_message.content
-    assert response.products == []
+    assert "Bạn muốn đặt loại gas nào" in response.assistant_message.content
+    assert response.products != []
 
 
 @pytest.mark.asyncio
@@ -1391,6 +1391,84 @@ async def test_water_only_order_address_reaches_summary() -> None:
     assert state["status"] == "awaiting_confirmation"
     assert "Qiki tóm tắt đơn hàng" in second.assistant_message.content
     assert "Bạn muốn thêm" not in second.assistant_message.content
+    assert_state_item_count(state, 1)
+    assert_state_item(state, "Nước Hoàn Hảo 20 lít", 1)
+
+
+@pytest.mark.asyncio
+async def test_address_message_does_not_inject_phantom_product() -> None:
+    products = _water_catalog() + _substring_brand_catalog()
+    service, _conversations, messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider(
+            [
+                {
+                    "items": [{"product": "Bình gas Saigon Petro 12kg"}],
+                    "customer_name": "van",
+                    "delivery_address": "15 đường số 5 khu phố 1 P. Hiệp Bình TP.HCM",
+                }
+            ]
+        ),
+        product_service=FakeProductService(products=products),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_order_state_history(
+        messages,
+        conversation.id,
+        slots={"items": [{"product": "Nước Hoàn Hảo 20 lít", "quantity": 1}]},
+    )
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="van 15 đường số 5 khu phố 1 hiệp bình"),
+        user=None,
+    )
+
+    assert orders.created_count == 0
+    assert response.assistant_message is not None
+    assert "số điện thoại" in response.assistant_message.content
+    assert "hình thức thanh toán" in response.assistant_message.content
+    assert "số lượng" not in response.assistant_message.content
+    assert "Bạn muốn **thêm**" not in response.assistant_message.content
+    state = response.assistant_message.retrieved_documents[0]
+    assert state["status"] == "awaiting_missing_slots"
+    assert_state_item_count(state, 1)
+    assert_state_item(state, "Nước Hoàn Hảo 20 lít", 1)
+
+
+@pytest.mark.asyncio
+async def test_quantity_preserved_through_contact_message() -> None:
+    products = _water_catalog() + _substring_brand_catalog()
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider(
+            [
+                {},
+                {
+                    "items": [{"product": "Bình gas Saigon Petro 12kg"}],
+                    "customer_name": "van",
+                    "delivery_address": "15 đường số 5 khu phố 1 P. Hiệp Bình TP.HCM",
+                },
+            ]
+        ),
+        product_service=FakeProductService(products=products),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="đặt 1 nước hoàn hảo"),
+        user=None,
+    )
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="van 15 đường số 5 khu phố 1 hiệp bình"),
+        user=None,
+    )
+
+    assert orders.created_count == 0
+    assert response.assistant_message is not None
+    state = response.assistant_message.retrieved_documents[0]
     assert_state_item_count(state, 1)
     assert_state_item(state, "Nước Hoàn Hảo 20 lít", 1)
 
@@ -2124,7 +2202,7 @@ async def test_order_in_progress_keeps_order_route_for_ambiguous_phone_message()
 @pytest.mark.asyncio
 async def test_order_in_progress_unknown_product_stays_catalog_only() -> None:
     payload = complete_order_payload()
-    payload["product"] = "van điều áp mã 19002929"
+    payload["product"] = "van điều áp"
     service, _conversations, messages, rag, orders = make_service(
         category=IntentCategory.PRODUCT_INQUIRY,
         llm_provider=FakeLLMProvider([payload]),
@@ -2135,7 +2213,7 @@ async def test_order_in_progress_unknown_product_stays_catalog_only() -> None:
 
     response = await service.send_message(
         conversation.id,
-        SendMessageRequest(content="Van 0903026306 cod"),
+        SendMessageRequest(content="Van điều áp 0903026306 cod"),
         user=None,
     )
 
@@ -2183,7 +2261,7 @@ async def test_chat_order_outside_zone_declined() -> None:
 
     response = await service.send_message(
         conversation.id,
-        SendMessageRequest(content="Giao qua Quận 1 giúp tôi"),
+        SendMessageRequest(content="Đặt Petrolimex giao qua Quận 1 giúp tôi"),
         user=None,
     )
 
