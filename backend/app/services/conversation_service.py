@@ -2324,12 +2324,13 @@ Tin mới:
                 f"{cls._format_decimal(product.size_kg)}{product.unit}",
             ]
             haystack = " ".join(cls._normalize_match_text(field) for field in fields)
+            haystack_tokens = set(haystack.split())
             query_tokens = query.split()
             specific_token_hit = any(
                 token not in GENERIC_PRODUCT_MATCH_TOKENS
                 and not token.isdigit()
                 and len(token) >= 2
-                and token in haystack
+                and token in haystack_tokens
                 for token in query_tokens
             )
             if not specific_token_hit:
@@ -2340,7 +2341,7 @@ Tin mới:
             for token in query_tokens:
                 if token.isdigit() or len(token) < 2:
                     continue
-                if token in haystack:
+                if token in haystack_tokens:
                     score += 1
             if score > best_score:
                 best_score = score

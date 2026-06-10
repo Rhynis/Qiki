@@ -537,6 +537,27 @@ def _substring_brand_catalog() -> list[ProductResponse]:
     ]
 
 
+def _color_variant_catalog() -> list[ProductResponse]:
+    now = datetime.now(UTC)
+    return [
+        ProductResponse(
+            id=uuid.uuid4(),
+            sku="SP-12KG-XANH",
+            name="Bình gas Saigon Petro 12kg (xanh/vàng/biển)",
+            brand="Saigon Petro",
+            size_kg=Decimal("12"),
+            price=Decimal("665000"),
+            stock_quantity=50,
+            description=None,
+            image_url=None,
+            safety_info=None,
+            is_active=True,
+            created_at=now,
+            updated_at=now,
+        )
+    ]
+
+
 def _water_catalog() -> list[ProductResponse]:
     now = datetime.now(UTC)
     return [
@@ -1646,6 +1667,31 @@ def test_infer_skips_generic_token_in_address() -> None:
     assert matched_product.name == "Bình gas Saigon Petro 12kg (xám)"
 
 
+def test_match_product_name_substring_not_matched() -> None:
+    products = _color_variant_catalog()
+
+    slots = ConversationService._infer_order_slots(
+        "van 15 đường số 5 khu phố 1 P. Hiệp Bình TP.HCM",
+        products,
+    )
+
+    assert slots.items == ()
+
+
+def test_match_product_still_matches_real_tokens() -> None:
+    products = _color_variant_catalog()
+
+    exact_product = ConversationService._match_product("saigon petro 12kg", products)
+    size_product = ConversationService._match_product("1 bình 12kg", products)
+    name_substring = ConversationService._match_product("anh", products)
+
+    assert exact_product is not None
+    assert exact_product.name == "Bình gas Saigon Petro 12kg (xanh/vàng/biển)"
+    assert size_product is not None
+    assert size_product.name == "Bình gas Saigon Petro 12kg (xanh/vàng/biển)"
+    assert name_substring is None
+
+
 @pytest.mark.asyncio
 async def test_water_only_order_address_reaches_summary() -> None:
     products = _water_catalog() + _substring_brand_catalog()
@@ -1731,6 +1777,48 @@ async def test_address_message_does_not_inject_phantom_product() -> None:
     assert "Bạn muốn **thêm**" not in response.assistant_message.content
     state = response.assistant_message.retrieved_documents[0]
     assert state["status"] == "awaiting_missing_slots"
+    assert_state_item_count(state, 1)
+    assert_state_item(state, "Nước Hoàn Hảo 20 lít", 1)
+
+
+@pytest.mark.asyncio
+async def test_order_water_then_contact_with_name_van_no_phantom() -> None:
+    products = _water_catalog() + _color_variant_catalog()
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider(
+            [
+                {},
+                {
+                    "customer_name": "Văn",
+                    "customer_phone": "0903026306",
+                    "delivery_address": "15 đường số 5 khu phố 1 P. Hiệp Bình TP.HCM",
+                    "payment_method": "cod",
+                },
+            ]
+        ),
+        product_service=FakeProductService(products=products),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="đặt 1 nước hoàn hảo"),
+        user=None,
+    )
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(
+            content="tên Văn, sđt 0903026306, giao 15 đường số 5 khu phố 1 P. Hiệp Bình, cod"
+        ),
+        user=None,
+    )
+
+    assert orders.created_count == 0
+    assert response.assistant_message is not None
+    assert "Bạn muốn **thêm**" not in response.assistant_message.content
+    state = response.assistant_message.retrieved_documents[0]
+    assert state["status"] != "awaiting_add_or_replace"
     assert_state_item_count(state, 1)
     assert_state_item(state, "Nước Hoàn Hảo 20 lít", 1)
 
