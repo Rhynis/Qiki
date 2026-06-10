@@ -1449,7 +1449,6 @@ Tin mới:
                 mentioned = cls._is_product_mentioned_in_content(
                     content, extracted_product
                 ) or cls._is_product_mentioned_in_content(content, extracted_item.product)
-                allow_confirmed_history_item = extracted_slots.confirmed and not items
                 if (
                     len(items) == 1
                     and cls._is_bare_category_query(items[0].product)
@@ -1458,7 +1457,7 @@ Tin mới:
                     and mentioned
                 ):
                     items = ()
-                if not mentioned and not allow_confirmed_history_item:
+                if not mentioned:
                     continue
             items = cls._merge_candidate_items(items, extracted_item, products)
         return ChatOrderSlots(
