@@ -583,6 +583,10 @@ def _category_catalog() -> list[ProductResponse]:
     return _water_catalog() + _multi_catalog()
 
 
+def _gas_size_catalog() -> list[ProductResponse]:
+    return [*_substring_brand_catalog(), _multi_catalog()[2]]
+
+
 @pytest.mark.asyncio
 async def test_product_cards_filtered_for_specific_product() -> None:
     service, _conversations, _messages, _rag, _orders = make_service(
@@ -700,7 +704,7 @@ async def test_product_cards_full_catalog_for_general_query() -> None:
 
 
 @pytest.mark.asyncio
-async def test_product_cards_water_category_query_returns_only_water() -> None:
+async def test_bare_water_inquiry_still_shows_cards() -> None:
     service, _conversations, _messages, _rag, _orders = make_service(
         product_service=FakeProductService(products=_category_catalog())
     )
@@ -717,9 +721,9 @@ async def test_product_cards_water_category_query_returns_only_water() -> None:
 
 
 @pytest.mark.asyncio
-async def test_product_cards_gas_category_query_returns_only_gas() -> None:
+async def test_bare_gas_inquiry_asks_size_no_cards() -> None:
     service, _conversations, _messages, _rag, _orders = make_service(
-        product_service=FakeProductService(products=_category_catalog())
+        product_service=FakeProductService(products=_gas_size_catalog())
     )
     conversation = await service.start_conversation(user=None, session_id="abc")
 
@@ -730,11 +734,46 @@ async def test_product_cards_gas_category_query_returns_only_gas() -> None:
     )
 
     assert response.user_message.intent == IntentCategory.PRODUCT_INQUIRY.value
-    assert [product.sku for product in response.products] == [
-        "PLX-12KG-BIEN",
-        "VT-12KG-XAM",
-        "SP-45KG-BO",
-    ]
+    assert response.assistant_message is not None
+    assert "gas loại 6, 12, 45 kg" in response.assistant_message.content
+    assert "bao nhiêu kg" in response.assistant_message.content
+    assert response.products == []
+
+
+@pytest.mark.asyncio
+async def test_gas_size_reply_shows_only_that_size() -> None:
+    service, _conversations, _messages, _rag, _orders = make_service(
+        product_service=FakeProductService(products=_gas_size_catalog())
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="12kg"),
+        user=None,
+    )
+
+    assert response.user_message.intent == IntentCategory.PRODUCT_INQUIRY.value
+    assert response.products
+    assert {product.size_kg for product in response.products} == {Decimal("12")}
+
+
+@pytest.mark.asyncio
+async def test_unavailable_gas_size_apologizes() -> None:
+    service, _conversations, _messages, _rag, _orders = make_service(
+        product_service=FakeProductService(products=_gas_size_catalog())
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="gas 20kg"),
+        user=None,
+    )
+
+    assert response.assistant_message is not None
+    assert "chỉ có gas loại 6, 12, 45 kg" in response.assistant_message.content
+    assert response.products == []
 
 
 def complete_order_payload(
@@ -1058,6 +1097,67 @@ async def test_chat_order_missing_address_mentions_khu_pho() -> None:
     assert "với Hiệp Bình cần khu phố" not in response.assistant_message.content
     assert "mốc gần nhà" not in response.assistant_message.content
     assert response.products == []
+
+
+@pytest.mark.asyncio
+async def test_order_cancel_keyword_ends_flow() -> None:
+    service, _conversations, messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([{}]),
+        product_service=FakeProductService(products=_water_catalog()),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_order_state_history(
+        messages,
+        conversation.id,
+        slots={"items": [{"product": "Nước Hoàn Hảo 20 lít", "quantity": 1}]},
+    )
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="huỷ đơn"),
+        user=None,
+    )
+
+    assert orders.created_count == 0
+    assert response.assistant_message is not None
+    assert "đã huỷ đơn" in response.assistant_message.content
+    assert "xin thêm" not in response.assistant_message.content
+    state = response.assistant_message.retrieved_documents[0]
+    assert state["status"] == "order_cancelled"
+
+
+@pytest.mark.asyncio
+async def test_offtopic_midorder_distinct_message() -> None:
+    service, _conversations, messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([{}]),
+        product_service=FakeProductService(products=_water_catalog()),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_order_state_history(
+        messages,
+        conversation.id,
+        slots={"items": [{"product": "Nước Hoàn Hảo 20 lít", "quantity": 1}]},
+    )
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="tình hình thế giới"),
+        user=None,
+    )
+
+    assert orders.created_count == 0
+    assert response.assistant_message is not None
+    assert "Qiki chưa rõ ý bạn" in response.assistant_message.content
+    assert "huỷ" in response.assistant_message.content
+    assert response.assistant_message.content != (
+        "Bạn cho Qiki xin thêm tên người nhận, số điện thoại, địa chỉ giao hàng chi tiết "
+        "(số nhà, tên/số đường, khu phố, phường, TP.HCM) và hình thức thanh toán "
+        "để lên đơn nhé."
+    )
+    state = response.assistant_message.retrieved_documents[0]
+    assert state["status"] == "awaiting_missing_slots"
 
 
 @pytest.mark.asyncio
