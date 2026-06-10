@@ -1,0 +1,38 @@
+{
+  "gia dinh": {
+    "zone": "Bình Thạnh",
+    "khu_pho_max": 62
+  },
+  "binh thanh": {
+    "zone": "Bình Thạnh",
+    "khu_pho_max": 53
+  },
+  "binh loi trung": {
+    "zone": "Bình Thạnh",
+    "khu_pho_max": 61
+  },
+  "thanh my tay": {
+    "zone": "Bình Thạnh",
+    "khu_pho_max": 76
+  },
+  "binh quoi": {
+    "zone": "Bình Thạnh",
+    "khu_pho_max": 19
+  },
+  "hiep binh": {
+    "zone": "Thủ Đức",
+    "khu_pho_max": 91
+  },
+  "tam binh": {
+    "zone": "Thủ Đức",
+    "khu_pho_max": 66
+  },
+  "thu duc": {
+    "zone": "Thủ Đức",
+    "khu_pho_max": 52
+  },
+  "linh xuan": {
+    "zone": "Thủ Đức",
+    "khu_pho_max": 63
+  }
+}
