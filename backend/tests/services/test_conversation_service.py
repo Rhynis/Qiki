@@ -807,6 +807,14 @@ def assert_state_item(
         assert item["quantity"] == expected_quantity
 
 
+def assert_state_item_count(state: dict[str, object], expected_count: int) -> None:
+    slots = state["slots"]
+    assert isinstance(slots, dict)
+    items = slots["items"]
+    assert isinstance(items, list)
+    assert len(items) == expected_count
+
+
 async def add_existing_chat_order_history(
     messages: FakeMessageRepository,
     conversation_id: uuid.UUID,
@@ -1210,6 +1218,181 @@ async def test_chat_order_add_second_item_via_them() -> None:
     state = response.assistant_message.retrieved_documents[0]
     assert_state_item(state, "Nước Vihawa 20 lít", 1, index=0)
     assert_state_item(state, "Bình gas Petrolimex 12kg (biển)", 1, index=1)
+
+
+@pytest.mark.asyncio
+async def test_add_different_product_before_contact_keeps_both() -> None:
+    products = _water_catalog() + _substring_brand_catalog()
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PRODUCT_INQUIRY,
+        llm_provider=FakeLLMProvider(
+            [
+                {},
+                {"items": [{"product": "Nước Hoàn Hảo 20 lít", "quantity": 2}]},
+            ]
+        ),
+        product_service=FakeProductService(products=products),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    first = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="đặt 1 nước hoàn hảo"),
+        user=None,
+    )
+    second = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="thêm 1 bình gas saigon petro 12kg"),
+        user=None,
+    )
+
+    assert orders.created_count == 0
+    assert first.assistant_message is not None
+    assert second.assistant_message is not None
+    first_state = first.assistant_message.retrieved_documents[0]
+    assert_state_item(first_state, "Nước Hoàn Hảo 20 lít", 1)
+    state = second.assistant_message.retrieved_documents[0]
+    assert_state_item_count(state, 2)
+    assert_state_item(state, "Nước Hoàn Hảo 20 lít", 1, index=0)
+    assert_state_item(state, "Bình gas Saigon Petro 12kg (xám)", 1, index=1)
+
+
+@pytest.mark.asyncio
+async def test_two_products_one_message_creates_two_items() -> None:
+    products = _water_catalog() + _substring_brand_catalog()
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([{}]),
+        product_service=FakeProductService(products=products),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="đặt 1 bình gas saigon petro 12kg và 1 nước hoàn hảo"),
+        user=None,
+    )
+
+    assert orders.created_count == 0
+    assert response.assistant_message is not None
+    state = response.assistant_message.retrieved_documents[0]
+    assert_state_item_count(state, 2)
+    assert_state_item(state, "Bình gas Saigon Petro 12kg (xám)", 1, index=0)
+    assert_state_item(state, "Nước Hoàn Hảo 20 lít", 1, index=1)
+
+
+@pytest.mark.asyncio
+async def test_two_products_one_message_order_independent() -> None:
+    products = _water_catalog() + _substring_brand_catalog()
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([{}]),
+        product_service=FakeProductService(products=products),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="đặt 1 nước hoàn hảo với 1 bình gas saigon petro 12kg"),
+        user=None,
+    )
+
+    assert orders.created_count == 0
+    assert response.assistant_message is not None
+    state = response.assistant_message.retrieved_documents[0]
+    assert_state_item_count(state, 2)
+    assert_state_item(state, "Nước Hoàn Hảo 20 lít", 1, index=0)
+    assert_state_item(state, "Bình gas Saigon Petro 12kg (xám)", 1, index=1)
+
+
+@pytest.mark.asyncio
+async def test_repeat_same_product_merges_not_duplicates() -> None:
+    products = _water_catalog()
+    service, _conversations, messages, _rag, orders = make_service(
+        category=IntentCategory.PRODUCT_INQUIRY,
+        llm_provider=FakeLLMProvider([{}]),
+        product_service=FakeProductService(products=products),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_order_state_history(
+        messages,
+        conversation.id,
+        slots={"items": [{"product": "Nước Hoàn Hảo 20 lít", "quantity": 1}]},
+    )
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="nước hoàn hảo"),
+        user=None,
+    )
+
+    assert orders.created_count == 0
+    assert response.assistant_message is not None
+    state = response.assistant_message.retrieved_documents[0]
+    assert_state_item_count(state, 1)
+    assert_state_item(state, "Nước Hoàn Hảo 20 lít", 1)
+
+
+def test_infer_skips_generic_token_in_address() -> None:
+    products = _water_catalog() + _substring_brand_catalog()
+
+    slots = ConversationService._infer_order_slots(
+        "tên ABC, sđt 0907654321, giao 15 đường số 5 khu phố 36 P. Hiệp Bình " "TP.HCM, trả cod",
+        products,
+    )
+    matched_product = ConversationService._match_product("saigon petro 12kg", products)
+
+    assert slots.items == ()
+    assert matched_product is not None
+    assert matched_product.name == "Bình gas Saigon Petro 12kg (xám)"
+
+
+@pytest.mark.asyncio
+async def test_water_only_order_address_reaches_summary() -> None:
+    products = _water_catalog() + _substring_brand_catalog()
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider(
+            [
+                {},
+                {
+                    "customer_name": "ABC",
+                    "customer_phone": "0907654321",
+                    "delivery_address": "15 đường số 5, Khu phố 36, Phường Hiệp Bình, TP.HCM",
+                    "payment_method": "cod",
+                    "confirmed": False,
+                },
+            ]
+        ),
+        product_service=FakeProductService(products=products),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    first = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="đặt 1 nước hoàn hảo"),
+        user=None,
+    )
+    second = await service.send_message(
+        conversation.id,
+        SendMessageRequest(
+            content=(
+                "tên ABC, sđt 0907654321, giao 15 đường số 5 khu phố 36 "
+                "P. Hiệp Bình TP.HCM, trả cod"
+            )
+        ),
+        user=None,
+    )
+
+    assert orders.created_count == 0
+    assert first.assistant_message is not None
+    assert second.assistant_message is not None
+    state = second.assistant_message.retrieved_documents[0]
+    assert state["status"] == "awaiting_confirmation"
+    assert "Qiki tóm tắt đơn hàng" in second.assistant_message.content
+    assert "Bạn muốn thêm" not in second.assistant_message.content
+    assert_state_item_count(state, 1)
+    assert_state_item(state, "Nước Hoàn Hảo 20 lít", 1)
 
 
 @pytest.mark.asyncio
