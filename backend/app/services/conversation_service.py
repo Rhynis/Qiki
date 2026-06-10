@@ -1372,19 +1372,19 @@ Tin mới:
         for extracted_item in extracted_slots.items:
             if extracted_item.product:
                 extracted_product = cls._match_product(extracted_item.product, products)
+                mentioned = cls._is_product_mentioned_in_content(
+                    content, extracted_product
+                ) or cls._is_product_mentioned_in_content(content, extracted_item.product)
+                allow_confirmed_history_item = extracted_slots.confirmed and not items
                 if (
                     len(items) == 1
                     and cls._is_bare_category_query(items[0].product)
                     and extracted_product is not None
                     and not cls._is_bare_category_query(extracted_item.product)
+                    and mentioned
                 ):
                     items = ()
-                should_accept_extracted = (
-                    not items
-                    or cls._is_product_mentioned_in_content(content, extracted_product)
-                    or cls._is_product_mentioned_in_content(content, extracted_item.product)
-                )
-                if not should_accept_extracted:
+                if not mentioned and not allow_confirmed_history_item:
                     continue
             items = cls._merge_candidate_items(items, extracted_item, products)
         return ChatOrderSlots(
