@@ -1,9 +1,15 @@
 'use client'
 
-import { MessageCircle, Minus, X } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { MessageCircle, MessageSquarePlus, Minus, X } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { useMessages, useSendMessage, useStartConversation } from '@/lib/hooks/use-conversation'
+import {
+  conversationKeys,
+  useMessages,
+  useSendMessage,
+  useStartConversation,
+} from '@/lib/hooks/use-conversation'
 import { useChatStore } from '@/lib/stores/chat-store'
 import { EscalationNotice } from './escalation-notice'
 import { MessageInput } from './message-input'
@@ -17,6 +23,10 @@ export function ChatWindow() {
   const sessionId = useChatStore((state) => state.sessionId)
   const conversationId = useChatStore((state) => state.conversationId)
   const setConversationId = useChatStore((state) => state.setConversationId)
+  const markActivity = useChatStore((state) => state.markActivity)
+  const resetSession = useChatStore((state) => state.resetSession)
+  const startIfStale = useChatStore((state) => state.startIfStale)
+  const queryClient = useQueryClient()
   const sentAtRef = useRef<number[]>([])
   const startAttemptedRef = useRef(false)
   const rateLimitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -50,6 +60,39 @@ export function ChatWindow() {
     }, waitMs)
   }
 
+  const clearChatQueryState = useCallback(
+    (previousConversationId?: string, previousSessionId?: string, nextSessionId?: string) => {
+      if (previousConversationId) {
+        queryClient.removeQueries({ queryKey: conversationKeys.messages(previousConversationId) })
+        queryClient.removeQueries({ queryKey: conversationKeys.detail(previousConversationId) })
+      }
+      if (previousSessionId) {
+        queryClient.removeQueries({ queryKey: conversationKeys.active(previousSessionId) })
+      }
+      if (nextSessionId) {
+        void queryClient.invalidateQueries({
+          queryKey: conversationKeys.active(nextSessionId),
+        })
+      }
+    },
+    [queryClient]
+  )
+
+  useEffect(() => {
+    const previousConversationId = useChatStore.getState().conversationId
+    const previousSessionId = useChatStore.getState().sessionId
+    startIfStale()
+    const nextSessionId = useChatStore.getState().sessionId
+    if (nextSessionId !== previousSessionId) {
+      startAttemptedRef.current = false
+      startConversation.reset()
+      sendMessage.reset()
+      sentAtRef.current = []
+      clearRateLimitTimer()
+      clearChatQueryState(previousConversationId, previousSessionId, nextSessionId)
+    }
+  }, [clearChatQueryState, sendMessage, startConversation, startIfStale])
+
   useEffect(() => {
     if (!conversationId && !startAttemptedRef.current) {
       startAttemptedRef.current = true
@@ -79,6 +122,20 @@ export function ChatWindow() {
     startConversation.reset()
   }
 
+  function handleNewConversation() {
+    const previousConversationId = conversationId
+    const previousSessionId = sessionId
+    resetSession()
+    const nextSessionId = useChatStore.getState().sessionId
+    startAttemptedRef.current = false
+    sentAtRef.current = []
+    setRateLimited(false)
+    clearRateLimitTimer()
+    startConversation.reset()
+    sendMessage.reset()
+    clearChatQueryState(previousConversationId, previousSessionId, nextSessionId)
+  }
+
   function handleSend(content: string) {
     if (!conversationId) return false
 
@@ -95,6 +152,7 @@ export function ChatWindow() {
 
     sentAtRef.current = [...recentSentAt, now]
     setRateLimited(false)
+    markActivity()
     sendMessage.mutate({
       conversationId,
       data: { content, session_id: sessionId },
@@ -117,7 +175,18 @@ export function ChatWindow() {
             type="button"
             variant="ghost"
             size="icon"
-            className="h-8 w-8 text-white hover:bg-slate-700"
+            className="h-10 w-10 text-primary hover:bg-primary/10 hover:text-primary focus-visible:ring-ring"
+            aria-label="Trò chuyện mới"
+            title="Trò chuyện mới"
+            onClick={handleNewConversation}
+          >
+            <MessageSquarePlus className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 text-white hover:bg-slate-700"
             aria-label="Thu gọn"
             onClick={close}
           >
@@ -127,7 +196,7 @@ export function ChatWindow() {
             type="button"
             variant="ghost"
             size="icon"
-            className="h-8 w-8 text-white hover:bg-slate-700"
+            className="h-10 w-10 text-white hover:bg-slate-700"
             aria-label="Đóng chat"
             onClick={close}
           >
@@ -163,6 +232,7 @@ export function ChatWindow() {
         </div>
       ) : null}
       <MessageInput
+        key={sessionId}
         disabled={!conversationReady || startConversation.isPending || startFailed}
         rateLimited={rateLimited}
         sending={sendMessage.isPending}
