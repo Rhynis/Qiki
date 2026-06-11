@@ -874,6 +874,7 @@ async def add_order_state_history(
     status: str = "awaiting_missing_slots",
     slots: dict[str, object] | None = None,
     metadata_extra: dict[str, object] | None = None,
+    created_at: datetime | None = None,
 ) -> None:
     metadata: dict[str, object] = {"type": "chat_order_state", "status": status}
     if slots:
@@ -889,7 +890,7 @@ async def add_order_state_history(
             "intent_confidence": 0.9,
         }
     )
-    await messages.create(
+    assistant_message = await messages.create(
         {
             "conversation_id": conversation_id,
             "role": "assistant",
@@ -900,6 +901,75 @@ async def add_order_state_history(
             "retrieved_documents": [metadata],
         }
     )
+    if created_at is not None:
+        assistant_message.created_at = created_at
+
+
+@pytest.mark.asyncio
+async def test_stale_order_state_not_in_progress() -> None:
+    service, _conversations, messages, _rag, _orders = make_service()
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    await add_order_state_history(
+        messages,
+        conversation.id,
+        status="awaiting_product_choice",
+        slots=complete_order_slots(),
+        created_at=datetime.now(UTC) - timedelta(hours=2),
+    )
+    history = await messages.get_recent(conversation.id)
+
+    assert ConversationService._is_order_in_progress(history) is False
+    assert ConversationService._find_order_state(history) is None
+
+
+@pytest.mark.asyncio
+async def test_fresh_order_state_in_progress() -> None:
+    service, _conversations, messages, _rag, _orders = make_service()
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    await add_order_state_history(
+        messages,
+        conversation.id,
+        status="awaiting_product_choice",
+        slots=complete_order_slots(),
+        created_at=datetime.now(UTC) - timedelta(minutes=1),
+    )
+    history = await messages.get_recent(conversation.id)
+    state = ConversationService._find_order_state(history)
+
+    assert ConversationService._is_order_in_progress(history) is True
+    assert state is not None
+    assert state["status"] == "awaiting_product_choice"
+
+
+@pytest.mark.asyncio
+async def test_stale_state_message_routes_normally() -> None:
+    service, _conversations, messages, _rag, _orders = make_service(
+        product_service=FakeProductService(products=_gas_size_catalog())
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_order_state_history(
+        messages,
+        conversation.id,
+        status="awaiting_add_or_replace",
+        slots=complete_order_slots(),
+        created_at=datetime.now(UTC) - timedelta(hours=2),
+    )
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="gas"),
+        user=None,
+    )
+
+    assert response.user_message.intent == IntentCategory.PRODUCT_INQUIRY.value
+    assert response.assistant_message is not None
+    assert "gas loại 6, 12, 45 kg" in response.assistant_message.content
+    assert "bao nhiêu kg" in response.assistant_message.content
+    assert "thêm" not in response.assistant_message.content.lower()
+    assert "đổi" not in response.assistant_message.content.lower()
+    assert response.products == []
 
 
 def assert_state_item(
