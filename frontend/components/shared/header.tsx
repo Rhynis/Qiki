@@ -62,13 +62,19 @@ export function Header() {
                 onMouseEnter={openProductMenu}
                 onMouseLeave={scheduleProductMenuClose}
               >
-                <DropdownMenuItem asChild>
+                <DropdownMenuItem
+                  asChild
+                  className="cursor-pointer rounded-md hover:bg-primary/10 hover:text-primary focus:bg-primary/10 focus:text-primary"
+                >
                   <Link href="/products?category=gas" onClick={() => setProductMenuOpen(false)}>
                     <Flame className="h-4 w-4 text-primary" />
                     Gas
                   </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem asChild>
+                <DropdownMenuItem
+                  asChild
+                  className="cursor-pointer rounded-md hover:bg-primary/10 hover:text-primary focus:bg-primary/10 focus:text-primary"
+                >
                   <Link
                     href="/products?category=nuoc_uong"
                     onClick={() => setProductMenuOpen(false)}
