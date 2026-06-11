@@ -426,7 +426,7 @@ class ConversationService:
             skip=0,
             limit=200,
         )
-        order_state = self._find_order_state(history)
+        order_state = self._find_order_state(history, content)
         previous_slots = self._slots_from_order_state(order_state)
         extracted_slots = await self._extract_order_slots(content, history_payload, products)
         inferred_slots = self._infer_order_slots(content, products)
@@ -2636,13 +2636,23 @@ Tin mới:
         return False
 
     @classmethod
-    def _find_order_state(cls, history: Sequence[Message]) -> dict[str, Any] | None:
+    def _find_order_state(
+        cls, history: Sequence[Message], content: str = ""
+    ) -> dict[str, Any] | None:
         for message in reversed(history):
             if message.role != "assistant":
                 continue
             documents = message.retrieved_documents or []
             if not isinstance(documents, list):
                 continue
+            if cls._has_metadata_type(documents, CHAT_ORDER_METADATA_TYPE):
+                # An order was already created. A fresh order intent must not
+                # replay the completed order, so stop here. Only a bare
+                # re-confirmation reuses the prior state, keeping a duplicate
+                # confirmation idempotent on the same order.
+                if cls._is_affirmation(content):
+                    continue
+                return None
             for document in documents:
                 if (
                     isinstance(document, dict)

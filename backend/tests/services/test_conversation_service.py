@@ -1070,6 +1070,83 @@ async def test_chat_order_creates_order_on_confirmation(monkeypatch: pytest.Monk
 
 
 @pytest.mark.asyncio
+async def test_find_order_state_none_after_order_created() -> None:
+    service, _conversations, messages, _rag, _orders = make_service()
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    # Fresh, complete order state from before the order was placed.
+    await add_order_state_history(
+        messages,
+        conversation.id,
+        status="awaiting_confirmation",
+        slots=complete_order_slots(),
+        created_at=datetime.now(UTC) - timedelta(minutes=1),
+    )
+    # Order has since been created -> the prior state must not be reused.
+    await add_existing_chat_order_history(
+        messages,
+        conversation.id,
+        order_number="GB-20260611-001",
+        slots=complete_order_slots(),
+    )
+    history = await messages.get_recent(conversation.id)
+
+    assert ConversationService._is_order_in_progress(history) is False
+    # A new order intent after creation must not reuse the completed order.
+    assert ConversationService._find_order_state(history, "tui muốn đặt thêm") is None
+    assert ConversationService._find_order_state(history) is None
+    # A bare re-confirmation may still replay the prior state (idempotent).
+    reconfirm_state = ConversationService._find_order_state(history, "ok")
+    assert reconfirm_state is not None
+    assert reconfirm_state["status"] == "awaiting_confirmation"
+
+
+@pytest.mark.asyncio
+async def test_order_then_new_order_starts_fresh(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        ConversationService,
+        "_now_vn",
+        staticmethod(lambda: datetime(2026, 6, 8, 9, 0, tzinfo=timezone(timedelta(hours=7)))),
+    )
+    order_service = FakeOrderService()
+    service, _conversations, messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([{"confirmed": True}]),
+        order_service=order_service,
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_order_state_history(
+        messages,
+        conversation.id,
+        status="awaiting_confirmation",
+        slots=complete_order_slots(),
+    )
+
+    created = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Đúng rồi, xác nhận đặt đơn này"),
+        user=None,
+    )
+    assert created.assistant_message is not None
+    assert "Đã ghi nhận đơn" in created.assistant_message.content
+    assert orders.calls == 1
+
+    followup = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="tui muốn đặt thêm"),
+        user=None,
+    )
+
+    # New order starts fresh: the bot asks for the product instead of replaying
+    # the completed order, and no duplicate order is created.
+    assert followup.assistant_message is not None
+    assert "Đã ghi nhận đơn" not in followup.assistant_message.content
+    assert "sản phẩm" in followup.assistant_message.content
+    assert orders.calls == 1
+    assert orders.created_count == 1
+
+
+@pytest.mark.asyncio
 async def test_chat_order_creates_water_order_without_escalation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
