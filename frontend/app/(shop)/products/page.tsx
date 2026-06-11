@@ -2,6 +2,7 @@ import { PageHeader } from '@/components/shared/page-header'
 import { ProductFilters } from '@/components/shop/product-filters'
 import { ProductGrid } from '@/components/shop/product-grid'
 import { ProductPagination } from '@/components/shop/product-pagination'
+import { ProductSort } from '@/components/shop/product-sort'
 import type { ProductCategory, ProductListResponse, ProductSearchParams } from '@/types/product'
 
 type ProductsPageProps = {
@@ -85,9 +86,13 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
     <section className="mx-auto max-w-6xl space-y-6 px-4 py-8">
       <PageHeader title={copy.title} description={copy.description} />
       <ProductFilters key={`${category ?? 'all'}:${params.brand ?? 'all'}`} category={category} />
-      <div className="flex items-center justify-between text-sm text-slate-600">
+      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600">
         <span>{products.total.toLocaleString('vi-VN')} sản phẩm</span>
-        <span>Trang {products.page.toLocaleString('vi-VN')}</span>
+        <div className="flex items-center gap-2">
+          <span className="hidden sm:inline">Trang {products.page.toLocaleString('vi-VN')}</span>
+          <span className="whitespace-nowrap font-medium text-slate-700">Sắp xếp:</span>
+          <ProductSort />
+        </div>
       </div>
       <ProductGrid products={products.items} />
       <ProductPagination page={products.page} limit={products.limit} hasMore={products.has_more} />

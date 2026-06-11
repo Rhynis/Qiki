@@ -11,9 +11,10 @@ import {
 
 const sortOptions = {
   'created_at:desc': 'Mới nhất',
-  'price:asc': 'Giá thấp đến cao',
-  'price:desc': 'Giá cao đến thấp',
+  'price:asc': 'Giá tăng dần',
+  'price:desc': 'Giá giảm dần',
   'name:asc': 'Tên A-Z',
+  'name:desc': 'Tên Z-A',
 }
 
 export function ProductSort() {
@@ -33,7 +34,7 @@ export function ProductSort() {
 
   return (
     <Select value={value in sortOptions ? value : 'created_at:desc'} onValueChange={updateSort}>
-      <SelectTrigger>
+      <SelectTrigger aria-label="Sắp xếp" className="w-[180px]">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

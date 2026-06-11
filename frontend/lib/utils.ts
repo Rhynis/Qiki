@@ -19,10 +19,13 @@ const PROTECTED_PHRASES = [
   'Bình Thạnh',
   'Thủ Đức',
   'Gas Quốc Cường',
+  'trợ lý ảo Qiki',
   'trợ lý ảo',
+  'chuyển khoản ngân hàng',
   'trong giờ mở cửa',
   'giờ mở cửa',
   'trước khi đặt',
+  'hỗ trợ từng bước',
   'từng bước',
 ] as const
 
