@@ -558,6 +558,37 @@ def _color_variant_catalog() -> list[ProductResponse]:
     ]
 
 
+def _inference_collision_catalog() -> list[ProductResponse]:
+    now = datetime.now(UTC)
+    specs = [
+        ("SAOMAI-12KG", "Bình gas Sao Mai 12kg", "Sao Mai", "12", "625000", 50),
+        ("THUDUC-12KG", "Bình gas Thủ Đức 12kg", "Gas Thủ Đức", "12", "625000", 50),
+        ("ELF-6KG-DO", "Bình gas Elf 6kg (đỏ)", "Elf Gas", "6", "350000", 50),
+    ]
+    return [
+        *_water_catalog(),
+        *_color_variant_catalog(),
+        *[
+            ProductResponse(
+                id=uuid.uuid4(),
+                sku=sku,
+                name=name,
+                brand=brand,
+                size_kg=Decimal(size),
+                price=Decimal(price),
+                stock_quantity=stock,
+                description=None,
+                image_url=None,
+                safety_info=None,
+                is_active=True,
+                created_at=now,
+                updated_at=now,
+            )
+            for sku, name, brand, size, price, stock in specs
+        ],
+    ]
+
+
 def _water_catalog() -> list[ProductResponse]:
     now = datetime.now(UTC)
     return [
@@ -1692,6 +1723,61 @@ def test_match_product_still_matches_real_tokens() -> None:
     assert name_substring is None
 
 
+@pytest.mark.parametrize(
+    "name",
+    ["Mai", "Sao", "Đức", "Thủ", "Hoàn", "Hảo", "Vàng", "Bò", "Petro", "Elf", "mai", "duc", "hoan"],
+)
+def test_infer_name_token_collision_empty(name: str) -> None:
+    slots = ConversationService._infer_order_slots(name, _inference_collision_catalog())
+
+    assert slots.items == ()
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "15 đường sao mai phường hiệp bình",
+        "20 đường thủ đức quận bình thạnh",
+        "mai 15 đường 5 khu phố 1 hiệp bình",
+    ],
+)
+def test_infer_address_street_collision_empty(content: str) -> None:
+    slots = ConversationService._infer_order_slots(content, _inference_collision_catalog())
+
+    assert slots.items == ()
+
+
+@pytest.mark.parametrize(
+    ("content", "expected"),
+    [
+        (
+            "1 bình gas saigon petro 12kg",
+            [("Bình gas Saigon Petro 12kg (xanh/vàng/biển)", 1)],
+        ),
+        ("2 sao mai", [("Bình gas Sao Mai 12kg", 2)]),
+        ("1 nước hoàn hảo", [("Nước Hoàn Hảo 20 lít", 1)]),
+        (
+            "đặt 1 bình gas saigon petro 12kg và 1 nước hoàn hảo",
+            [
+                ("Bình gas Saigon Petro 12kg (xanh/vàng/biển)", 1),
+                ("Nước Hoàn Hảo 20 lít", 1),
+            ],
+        ),
+        (
+            "ba nước hoàn hảo và một elf",
+            [("Nước Hoàn Hảo 20 lít", 3), ("Bình gas Elf 6kg (đỏ)", 1)],
+        ),
+    ],
+)
+def test_infer_legit_orders_kept(
+    content: str,
+    expected: list[tuple[str, int]],
+) -> None:
+    slots = ConversationService._infer_order_slots(content, _inference_collision_catalog())
+
+    assert [(item.product, item.quantity) for item in slots.items] == expected
+
+
 @pytest.mark.asyncio
 async def test_water_only_order_address_reaches_summary() -> None:
     products = _water_catalog() + _substring_brand_catalog()
@@ -1821,6 +1907,81 @@ async def test_order_water_then_contact_with_name_van_no_phantom() -> None:
     assert state["status"] != "awaiting_add_or_replace"
     assert_state_item_count(state, 1)
     assert_state_item(state, "Nước Hoàn Hảo 20 lít", 1)
+
+
+@pytest.mark.asyncio
+async def test_order_water_then_contact_collision_no_phantom() -> None:
+    products = _inference_collision_catalog()
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider(
+            [
+                {},
+                {
+                    "customer_name": "Đức",
+                    "customer_phone": "0903026306",
+                    "delivery_address": "15 đường Sao Mai khu phố 1 P. Hiệp Bình TP.HCM",
+                    "payment_method": "cod",
+                },
+            ]
+        ),
+        product_service=FakeProductService(products=products),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="đặt 1 nước hoàn hảo"),
+        user=None,
+    )
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(
+            content=(
+                "tên Đức, sđt 0903026306, giao 15 đường Sao Mai khu phố 1 " "P. Hiệp Bình, cod"
+            )
+        ),
+        user=None,
+    )
+
+    assert orders.created_count == 0
+    assert response.assistant_message is not None
+    assert "Bạn muốn **thêm**" not in response.assistant_message.content
+    state = response.assistant_message.retrieved_documents[0]
+    assert state["status"] != "awaiting_add_or_replace"
+    assert_state_item_count(state, 1)
+    assert_state_item(state, "Nước Hoàn Hảo 20 lít", 1)
+
+
+@pytest.mark.asyncio
+async def test_order_no_quantity_product_via_llm() -> None:
+    products = _inference_collision_catalog()
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider(
+            [
+                {
+                    "items": [{"product": "Bình gas Saigon Petro 12kg"}],
+                    "payment_method": "cod",
+                }
+            ]
+        ),
+        product_service=FakeProductService(products=products),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="đặt gas saigon petro 12kg"),
+        user=None,
+    )
+
+    assert orders.created_count == 0
+    assert response.assistant_message is not None
+    assert "số lượng" in response.assistant_message.content
+    state = response.assistant_message.retrieved_documents[0]
+    assert_state_item_count(state, 1)
+    assert_state_item(state, "Bình gas Saigon Petro 12kg", None)
 
 
 @pytest.mark.asyncio
@@ -2429,7 +2590,7 @@ async def test_brand_size_phrase_overrides_complaint_intent_without_escalation()
 
     response = await service.send_message(
         conversation.id,
-        SendMessageRequest(content="saigon petro 12kg"),
+        SendMessageRequest(content="1 saigon petro 12kg"),
         user=None,
     )
 
@@ -2440,7 +2601,7 @@ async def test_brand_size_phrase_overrides_complaint_intent_without_escalation()
     assert response.assistant_message is not None
     assert "số điện thoại" in response.assistant_message.content
     state = response.assistant_message.retrieved_documents[0]
-    assert_state_item(state, "Bình gas Saigon Petro 12kg (xám)", None)
+    assert_state_item(state, "Bình gas Saigon Petro 12kg (xám)", 1)
 
 
 @pytest.mark.asyncio
@@ -2467,7 +2628,7 @@ async def test_catalog_brand_change_in_order_asks_confirmation_without_escalatio
 
     response = await service.send_message(
         conversation.id,
-        SendMessageRequest(content="à cho đổi qua hoàn hảo đi"),
+        SendMessageRequest(content="à cho đổi qua 1 nước hoàn hảo đi"),
         user=None,
     )
 
@@ -2574,6 +2735,21 @@ async def test_chat_order_parses_name_and_cod_from_short_slot_fill() -> None:
     assert "- Người nhận: **Van**" in response.assistant_message.content
     assert "- Thanh toán: **COD**" in response.assistant_message.content
     assert "tên người nhận" not in response.assistant_message.content
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "thanh toán khi nhận",
+        "thanh toán khi nhận hàng",
+        "trả khi nhận",
+        "nhận hàng trả tiền",
+        "ship cod",
+        "giao trả tiền",
+    ],
+)
+def test_payment_cod_natural_phrasing(content: str) -> None:
+    assert ConversationService._extract_payment_candidate(content) == "cod"
 
 
 @pytest.mark.asyncio

@@ -56,6 +56,19 @@ GENERIC_PRODUCT_MATCH_TOKENS = {
     "uong",
     "kg",
 }
+ADDRESS_MARKER_TOKENS = {
+    "duong",
+    "phuong",
+    "quan",
+    "hem",
+    "ngo",
+    "xa",
+    "ap",
+    "kp",
+    "tphcm",
+    "tp",
+}
+ADDRESS_MARKER_PHRASES = ("khu pho", "thanh pho", "so nha")
 
 
 @dataclass(frozen=True)
@@ -1345,7 +1358,16 @@ Tin mới:
     def _extract_payment_candidate(cls, content: str) -> str | None:
         normalized = cls._normalize_match_text(content)
         tokens = set(normalized.split())
-        if "cod" in tokens or "tien mat" in normalized or "nhan hang" in normalized:
+        if (
+            "cod" in tokens
+            or "tien mat" in normalized
+            or "nhan hang" in normalized
+            or "thanh toan khi nhan" in normalized
+            or "tra khi nhan" in normalized
+            or "ship cod" in normalized
+            or "giao tra tien" in normalized
+            or "nhan hang tra tien" in normalized
+        ):
             return "cod"
         if (
             "ck" in tokens
@@ -1390,6 +1412,8 @@ Tin mới:
     ) -> ChatOrderSlots:
         items: list[ChatOrderItem] = []
         for segment in cls._split_order_item_segments(content):
+            if cls._segment_looks_like_address(segment):
+                continue
             category_item = cls._category_order_item_from_segment(segment)
             if category_item is not None:
                 items = list(cls._merge_candidate_items(tuple(items), category_item, products))
@@ -1398,6 +1422,8 @@ Tin mới:
             quantity = cls._extract_quantity_candidate(segment)
             if matched_product is not None and quantity is None:
                 quantity = cls._extract_leading_quantity_candidate(segment)
+            if matched_product is not None and quantity is None:
+                matched_product = None
             if matched_product is None and quantity is None:
                 continue
             item = ChatOrderItem(
@@ -1408,11 +1434,13 @@ Tin mới:
             )
             items = list(cls._merge_candidate_items(tuple(items), item, products))
 
-        if not items:
+        if not items and not cls._segment_looks_like_address(content):
             matched_product = cls._match_product(content, products)
             quantity = cls._extract_quantity_candidate(content)
             if matched_product is not None and quantity is None:
                 quantity = cls._extract_leading_quantity_candidate(content)
+            if matched_product is not None and quantity is None:
+                matched_product = None
             if matched_product is not None or quantity is not None:
                 items.append(
                     ChatOrderItem(
@@ -1423,6 +1451,14 @@ Tin mới:
                     )
                 )
         return ChatOrderSlots(items=tuple(items))
+
+    @classmethod
+    def _segment_looks_like_address(cls, segment: str) -> bool:
+        normalized = cls._normalize_match_text(segment)
+        tokens = set(normalized.split())
+        return bool(tokens & ADDRESS_MARKER_TOKENS) or any(
+            phrase in normalized for phrase in ADDRESS_MARKER_PHRASES
+        )
 
     @classmethod
     def _split_order_item_segments(cls, content: str) -> tuple[str, ...]:
