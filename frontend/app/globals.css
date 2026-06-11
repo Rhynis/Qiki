@@ -29,6 +29,11 @@
   border-color: hsl(var(--border));
 }
 
+html {
+  /* Giữ chỗ thanh cuộn để mở Radix Select (khoá scroll) không gỡ scrollbar gây giật layout. */
+  scrollbar-gutter: stable;
+}
+
 body {
   background: hsl(var(--background));
   color: hsl(var(--foreground));

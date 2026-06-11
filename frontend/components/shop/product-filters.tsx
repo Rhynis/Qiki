@@ -31,9 +31,6 @@ export function ProductFilters({ category }: ProductFiltersProps) {
   const [brand, setBrand] = useState(searchParams.get('brand') ?? 'all')
   const [size, setSize] = useState(searchParams.get('size_kg') ?? 'all')
   const [inStockOnly, setInStockOnly] = useState(searchParams.get('in_stock_only') === 'true')
-  const [sort, setSort] = useState(
-    `${searchParams.get('sort_by') ?? 'created_at'}:${searchParams.get('sort_order') ?? 'desc'}`
-  )
   const { data: brands = [] } = useProductBrands(category)
 
   function applyFilters() {
@@ -43,7 +40,9 @@ export function ProductFilters({ category }: ProductFiltersProps) {
     if (brand !== 'all') next.set('brand', brand)
     if (category !== 'nuoc_uong' && size !== 'all') next.set('size_kg', size)
     if (inStockOnly) next.set('in_stock_only', 'true')
-    const [sortBy, sortOrder] = sort.split(':')
+    // Sắp xếp do <ProductSort/> quản qua URL — giữ lại khi áp dụng bộ lọc.
+    const sortBy = searchParams.get('sort_by')
+    const sortOrder = searchParams.get('sort_order')
     if (sortBy) next.set('sort_by', sortBy)
     if (sortOrder) next.set('sort_order', sortOrder)
     router.replace(`${pathname}?${next.toString()}`)
@@ -54,7 +53,6 @@ export function ProductFilters({ category }: ProductFiltersProps) {
     setBrand('all')
     setSize('all')
     setInStockOnly(false)
-    setSort('created_at:desc')
     router.replace(category ? `${pathname}?category=${category}` : pathname)
   }
 
@@ -66,8 +64,8 @@ export function ProductFilters({ category }: ProductFiltersProps) {
       <div
         className={
           showSizeFilter
-            ? 'grid gap-4 lg:grid-cols-[1.2fr_1fr_160px_180px]'
-            : 'grid gap-4 lg:grid-cols-[1.2fr_1fr_180px]'
+            ? 'grid gap-4 lg:grid-cols-[1.2fr_1fr_160px]'
+            : 'grid gap-4 lg:grid-cols-[1.2fr_1fr]'
         }
       >
         <div className="space-y-2">
@@ -119,20 +117,6 @@ export function ProductFilters({ category }: ProductFiltersProps) {
             </Select>
           </div>
         ) : null}
-        <div className="space-y-2">
-          <Label>Sắp xếp</Label>
-          <Select value={sort} onValueChange={setSort}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="created_at:desc">Mới nhất</SelectItem>
-              <SelectItem value="price:asc">Giá tăng dần</SelectItem>
-              <SelectItem value="price:desc">Giá giảm dần</SelectItem>
-              <SelectItem value="name:asc">Tên A-Z</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
       </div>
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
         <label className="flex items-center gap-2 text-sm">
