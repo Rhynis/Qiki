@@ -5,7 +5,7 @@ import re
 import unicodedata
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
-from datetime import datetime, time, timedelta, timezone
+from datetime import UTC, datetime, time, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Literal
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
@@ -44,6 +44,7 @@ CHAT_ORDER_METADATA_TYPE = "chat_order"
 CHAT_ORDER_STATE_METADATA_TYPE = "chat_order_state"
 ORDER_CONFIRMATION_PROMPT = "Bạn xác nhận đặt đơn này không?"
 ORDER_CONTEXT_CONFIDENCE = 0.9
+ORDER_STATE_TTL = timedelta(minutes=30)
 VN_TIMEZONE = timezone(timedelta(hours=7))
 GENERIC_PRODUCT_MATCH_TOKENS = {
     "binh",
@@ -2629,7 +2630,9 @@ Tin mới:
                 return False
             if cls._has_metadata_type(documents, CHAT_ORDER_METADATA_TYPE):
                 return False
-            return cls._has_metadata_type(documents, CHAT_ORDER_STATE_METADATA_TYPE)
+            if cls._has_metadata_type(documents, CHAT_ORDER_STATE_METADATA_TYPE):
+                return cls._is_order_state_fresh(message)
+            return False
         return False
 
     @classmethod
@@ -2645,10 +2648,21 @@ Tin mới:
                     isinstance(document, dict)
                     and document.get("type") == CHAT_ORDER_STATE_METADATA_TYPE
                 ):
+                    if not cls._is_order_state_fresh(message):
+                        return None
                     if document.get("status") == "order_cancelled":
                         return None
                     return document
         return None
+
+    @staticmethod
+    def _is_order_state_fresh(message: Message) -> bool:
+        created_at = getattr(message, "created_at", None)
+        if not isinstance(created_at, datetime):
+            return True
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=UTC)
+        return (datetime.now(UTC) - created_at) <= ORDER_STATE_TTL
 
     @classmethod
     def _slots_from_order_state(cls, order_state: dict[str, Any] | None) -> ChatOrderSlots | None:
