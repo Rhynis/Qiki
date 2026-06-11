@@ -10,6 +10,7 @@ import {
   useSendMessage,
   useStartConversation,
 } from '@/lib/hooks/use-conversation'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useChatStore } from '@/lib/stores/chat-store'
 import { EscalationNotice } from './escalation-notice'
 import { MessageInput } from './message-input'
@@ -171,17 +172,21 @@ export function ChatWindow() {
           </div>
         </div>
         <div className="flex gap-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-10 w-10 text-primary hover:bg-primary/10 hover:text-primary focus-visible:ring-ring"
-            aria-label="Trò chuyện mới"
-            title="Trò chuyện mới"
-            onClick={handleNewConversation}
-          >
-            <MessageSquarePlus className="h-4 w-4" />
-          </Button>
+          <Tooltip delayDuration={150}>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-10 w-10 text-primary hover:bg-primary/10 hover:text-primary focus-visible:ring-ring"
+                aria-label="Trò chuyện mới"
+                onClick={handleNewConversation}
+              >
+                <MessageSquarePlus className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Trò chuyện mới</TooltipContent>
+          </Tooltip>
           <Button
             type="button"
             variant="ghost"
