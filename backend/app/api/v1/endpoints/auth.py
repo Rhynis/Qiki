@@ -35,11 +35,7 @@ from app.services.auth_service import (
 
 router = APIRouter()
 settings = get_settings()
-
-# Frontend (Vercel) and backend (Railway) live on different sites, so the auth
-# cookies must be SameSite=None to be sent on cross-site requests. None requires
-# Secure, which holds in production (HTTPS). Locally we stay on lax for same-origin.
-_COOKIE_SAMESITE: Literal["lax", "none"] = "none" if settings.is_production else "lax"
+_COOKIE_SAMESITE: Literal["lax"] = "lax"
 
 
 def _set_auth_cookies(response: Response, result: AuthResult) -> None:

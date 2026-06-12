@@ -15,7 +15,7 @@ export class ApiError extends Error {
 /** Create an Axios instance configured for the GasBot API. */
 function createApiClient(): AxiosInstance {
   const client = axios.create({
-    baseURL: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000',
+    baseURL: '',
     timeout: 30000,
     withCredentials: true,
     headers: { 'Content-Type': 'application/json' },

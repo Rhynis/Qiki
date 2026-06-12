@@ -2,7 +2,7 @@
 
 export const APP_NAME = 'Gas Quốc Cường'
 export const APP_DESCRIPTION = 'Mua gas LPG an toàn tại Bình Thạnh và Thủ Đức'
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
+export const API_BASE_URL = ''
 
 // Address/area strings use plain spaces; wrap them with protectVi() (lib/utils)
 // at render time so proper-noun phrases (Bình Thạnh, Thủ Đức...) don't line-break.
