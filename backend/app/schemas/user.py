@@ -9,17 +9,11 @@ from app.core.input_validation import VietnamesePhoneValidator
 
 
 def validate_password_strength(password: str) -> str:
-    """Validate password complexity for local accounts."""
-    if len(password) < 12:
-        raise ValueError("Password must be at least 12 characters")
-    if not any(char.isupper() for char in password):
-        raise ValueError("Password must include an uppercase letter")
-    if not any(char.islower() for char in password):
-        raise ValueError("Password must include a lowercase letter")
-    if not any(char.isdigit() for char in password):
-        raise ValueError("Password must include a digit")
-    if not any(not char.isalnum() for char in password):
-        raise ValueError("Password must include a special character")
+    """Validate password length for local accounts."""
+    if len(password) < 8:
+        raise ValueError("Password must be at least 8 characters")
+    if len(password) > 128:
+        raise ValueError("Password must be at most 128 characters")
     return password
 
 

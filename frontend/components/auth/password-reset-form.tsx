@@ -87,6 +87,7 @@ export function PasswordResetConfirmForm() {
           className="h-10 w-full rounded-md border px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
           {...register('newPassword')}
         />
+        <p className="text-xs text-slate-500">Mật khẩu tối thiểu 8 ký tự</p>
         {errors.newPassword ? (
           <p className="text-sm text-red-600">{errors.newPassword.message}</p>
         ) : null}
