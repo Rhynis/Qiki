@@ -1,7 +1,7 @@
 'use client'
 
 import { Plus } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { toast } from 'sonner'
 import { LowStockAlert } from '@/components/admin/product/low-stock-alert'
 import { ProductForm } from '@/components/admin/product/product-form'
@@ -27,7 +27,7 @@ import {
 import type { Product, ProductCreateInput, ProductUpdateInput } from '@/types/product'
 
 export default function AdminProductsPage() {
-  const { isAdmin, isLoading, refreshUser } = useAuth()
+  const { isAdmin, isLoading } = useAuth()
   const [createOpen, setCreateOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const productsQuery = useProducts({ limit: 100, sort_by: 'created_at', sort_order: 'desc' })
@@ -35,10 +35,6 @@ export default function AdminProductsPage() {
   const createMutation = useCreateProduct()
   const updateMutation = useUpdateProduct()
   const deleteMutation = useDeleteProduct()
-
-  useEffect(() => {
-    void refreshUser()
-  }, [refreshUser])
 
   async function handleCreate(data: ProductCreateInput | ProductUpdateInput) {
     try {
