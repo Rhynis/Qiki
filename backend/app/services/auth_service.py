@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 ACCESS_TOKEN_COOKIE = "gasbot_access_token"  # noqa: S105
 REFRESH_TOKEN_COOKIE = "gasbot_refresh_token"  # noqa: S105
 ACCESS_TOKEN_COOKIE_PATH = "/"  # noqa: S105
-REFRESH_TOKEN_COOKIE_PATH = "/api/v1/auth"  # noqa: S105
+REFRESH_TOKEN_COOKIE_PATH = "/"  # noqa: S105
 
 LOCKOUT_TTL_SECONDS = 900
 FAILED_LOGIN_TTL_SECONDS = 3600

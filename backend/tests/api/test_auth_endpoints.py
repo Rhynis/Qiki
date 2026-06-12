@@ -108,7 +108,7 @@ async def test_login_returns_tokens(test_client: AsyncClient) -> None:
         for value in set_cookie
     )
     assert any(
-        "gasbot_refresh_token=" in value and "HttpOnly" in value and "Path=/api/v1/auth" in value
+        "gasbot_refresh_token=" in value and "HttpOnly" in value and "Path=/" in value
         for value in set_cookie
     )
     assert all("SameSite=lax" in value for value in set_cookie)
@@ -204,6 +204,23 @@ async def test_logout_revokes_refresh_token(test_client: AsyncClient) -> None:
     assert response.json()["error_code"] == "token_revoked"
 
 
+async def test_logout_deletes_refresh_cookie_at_root_path(test_client: AsyncClient) -> None:
+    await test_client.post("/api/v1/auth/register", json=register_payload())
+    await test_client.post(
+        "/api/v1/auth/login",
+        json={"email": "user@example.com", "password": PASSWORD},
+    )
+
+    response = await test_client.post("/api/v1/auth/logout")
+
+    assert response.status_code == 204
+    set_cookie = response.headers.get_list("set-cookie")
+    assert any(
+        "gasbot_refresh_token=" in value and "Max-Age=0" in value and "Path=/" in value
+        for value in set_cookie
+    )
+
+
 async def test_refresh_endpoint_with_valid_token(test_client: AsyncClient) -> None:
     await test_client.post("/api/v1/auth/register", json=register_payload())
     await test_client.post(
@@ -215,4 +232,9 @@ async def test_refresh_endpoint_with_valid_token(test_client: AsyncClient) -> No
 
     assert response.status_code == 200
     assert response.cookies.get("gasbot_access_token")
+    set_cookie = response.headers.get_list("set-cookie")
+    assert any(
+        "gasbot_refresh_token=" in value and "HttpOnly" in value and "Path=/" in value
+        for value in set_cookie
+    )
     assert "access_token" not in response.json()
