@@ -369,6 +369,23 @@ def make_service(
     return service, conversations, messages, rag, order_service
 
 
+def account_user(
+    full_name: str | None = "Tran Minh Quan",
+    phone: str | None = "0903026306",
+) -> User:
+    return User(
+        id=uuid.uuid4(),
+        email="customer@example.com",
+        hashed_password="hashed",
+        full_name=full_name,
+        phone=phone,
+        role="customer",
+        is_active=True,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+
+
 @pytest.mark.asyncio
 async def test_starts_conversation() -> None:
     service, _conversations, _messages, _rag, _orders = make_service()
@@ -3550,6 +3567,118 @@ async def test_chat_order_requires_explicit_confirmation() -> None:
     assert "Qiki tóm tắt đơn hàng" in response.assistant_message.content
     assert "Bạn xác nhận đặt đơn này không?" in response.assistant_message.content
     assert response.products == []
+
+
+@pytest.mark.asyncio
+async def test_logged_in_order_prefills_name_and_phone() -> None:
+    payload = complete_order_payload(confirmed=False)
+    payload["customer_name"] = None
+    payload["customer_phone"] = None
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([payload]),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Tôi muốn đặt 1 bình Petrolimex 12kg"),
+        user=account_user(),
+    )
+
+    assert orders.calls == 0
+    assert response.assistant_message is not None
+    content = response.assistant_message.content
+    assert "Qiki tóm tắt đơn hàng" in content
+    assert "Người nhận: **Tran Minh Quan**" in content
+    assert "Số điện thoại: **0903026306**" in content
+    assert "tên người nhận" not in content
+    assert "số điện thoại để lên đơn" not in content
+
+
+@pytest.mark.asyncio
+async def test_logged_in_order_still_requires_confirmation() -> None:
+    payload = complete_order_payload(confirmed=True)
+    payload["customer_name"] = None
+    payload["customer_phone"] = None
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([payload, {"confirmed": True}]),
+    )
+    user = account_user()
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    summary = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Tôi muốn đặt 1 bình Petrolimex 12kg"),
+        user=user,
+    )
+
+    assert orders.calls == 0
+    assert summary.assistant_message is not None
+    assert "Bạn xác nhận đặt đơn này không?" in summary.assistant_message.content
+    state = summary.assistant_message.retrieved_documents[0]
+    assert state["status"] == "awaiting_confirmation"
+
+    created = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="ok xác nhận đơn"),
+        user=user,
+    )
+
+    assert orders.calls == 1
+    assert orders.last_user == user
+    assert created.assistant_message is not None
+    assert "Đã ghi nhận đơn" in created.assistant_message.content
+
+
+@pytest.mark.asyncio
+async def test_chat_provided_contact_overrides_account() -> None:
+    payload = complete_order_payload(confirmed=False)
+    payload["customer_name"] = "Le Thi Chat"
+    payload["customer_phone"] = "0911111111"
+    service, _conversations, _messages, _rag, _orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([payload]),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Tôi là Le Thi Chat, số 0911111111, đặt 1 bình 12kg"),
+        user=account_user(full_name="Account Name", phone="0903026306"),
+    )
+
+    assert response.assistant_message is not None
+    content = response.assistant_message.content
+    assert "Người nhận: **Le Thi Chat**" in content
+    assert "Số điện thoại: **0911111111**" in content
+    assert "Account Name" not in content
+    assert "0903026306" not in content
+
+
+@pytest.mark.asyncio
+async def test_anonymous_order_unchanged() -> None:
+    payload = complete_order_payload(confirmed=False)
+    payload["customer_name"] = None
+    payload["customer_phone"] = None
+    service, _conversations, _messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([payload]),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Tôi muốn đặt 1 bình Petrolimex 12kg"),
+        user=None,
+    )
+
+    assert orders.calls == 0
+    assert response.assistant_message is not None
+    assert "tên người nhận" in response.assistant_message.content
+    assert "số điện thoại" in response.assistant_message.content
+    assert "Qiki tóm tắt đơn hàng" not in response.assistant_message.content
 
 
 @pytest.mark.asyncio

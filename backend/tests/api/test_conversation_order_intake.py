@@ -1,7 +1,7 @@
 """Integration tests for chat order intake endpoints."""
 
 import json
-from collections.abc import AsyncIterator, Mapping, Sequence
+from collections.abc import AsyncIterator, Iterator, Mapping, Sequence
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from uuid import uuid4
@@ -11,6 +11,7 @@ from httpx import AsyncClient
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.dependencies.auth import get_current_user_optional
 from app.api.v1.endpoints.conversations import get_intent_classifier
 from app.intent.base import BaseIntentClassifier
 from app.intent.categories import IntentCategory
@@ -20,6 +21,7 @@ from app.llm.dependencies import get_llm_provider
 from app.llm.schemas import LLMResponse
 from app.main import app
 from app.models.order import Order, OrderItem
+from app.models.user import User
 from app.rag.dependencies import get_rag_pipeline
 from app.repositories.product_repository import ProductRepository
 from app.schemas.product import ProductCreate
@@ -97,6 +99,13 @@ class UnusedRAGPipeline:
     """Placeholder RAG pipeline; place-order confirmation should not call RAG."""
 
 
+@pytest.fixture(autouse=True)
+def guest_chat_auth_override() -> Iterator[None]:
+    app.dependency_overrides[get_current_user_optional] = lambda: None
+    yield
+    app.dependency_overrides.pop(get_current_user_optional, None)
+
+
 async def create_catalog_product(session: AsyncSession) -> None:
     """Create a product visible to the real product catalog service."""
     await ProductRepository(session).create(
@@ -144,6 +153,73 @@ async def create_multi_item_catalog(session: AsyncSession) -> None:
         )
     )
     await session.commit()
+
+
+async def test_authenticated_conversation_prefills_contact_from_endpoint_user(
+    test_client: AsyncClient,
+    order_session: AsyncSession,
+) -> None:
+    await order_session.execute(
+        text(
+            "TRUNCATE TABLE messages, conversations, order_items, orders, products, users "
+            "RESTART IDENTITY CASCADE"
+        )
+    )
+    user = User(
+        email="customer@example.com",
+        hashed_password="hashed",
+        full_name="Tran Minh Quan",
+        phone="0903026306",
+        role="customer",
+        is_active=True,
+    )
+    order_session.add(user)
+    await order_session.commit()
+    await order_session.refresh(user)
+    await create_catalog_product(order_session)
+
+    payload = {
+        "product": "Saigon Petro 12kg",
+        "quantity": 1,
+        "customer_name": None,
+        "customer_phone": None,
+        "delivery_address": "15 đường số 5, Khu phố 36, Phường Hiệp Bình, TP. Hồ Chí Minh",
+        "payment_method": "cod",
+        "confirmed": False,
+    }
+
+    app.dependency_overrides[get_current_user_optional] = lambda: user
+    app.dependency_overrides[get_intent_classifier] = lambda: PlaceOrderClassifier()
+    app.dependency_overrides[get_llm_provider] = lambda: JSONLLMProvider(payload)
+    app.dependency_overrides[get_rag_pipeline] = lambda: UnusedRAGPipeline()
+    try:
+        started = await test_client.post(
+            "/api/v1/conversations/start",
+            json={"session_id": "chat-order-auth-user"},
+        )
+        assert started.status_code == 200
+        assert started.json()["user_id"] == str(user.id)
+        conversation_id = started.json()["id"]
+
+        active = await test_client.get(
+            "/api/v1/conversations/active",
+            params={"session_id": "chat-order-auth-user"},
+        )
+        assert active.status_code == 200
+        assert active.json()["id"] == conversation_id
+
+        summary = await test_client.post(
+            f"/api/v1/conversations/{conversation_id}/messages",
+            json={"content": "Đặt 1 bình Saigon Petro 12kg"},
+        )
+
+        assert summary.status_code == 200
+        answer = summary.json()["assistant_message"]["content"]
+        assert "Qiki tóm tắt đơn hàng" in answer
+        assert "Người nhận: **Tran Minh Quan**" in answer
+        assert "Số điện thoại: **0903026306**" in answer
+    finally:
+        app.dependency_overrides.clear()
 
 
 async def test_chat_order_confirm_endpoint_creates_real_order(

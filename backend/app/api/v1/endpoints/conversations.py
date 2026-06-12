@@ -6,7 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.dependencies.auth import get_current_staff
+from app.api.v1.dependencies.auth import get_current_staff, get_current_user_optional
 from app.core.rate_limit import limiter
 from app.db.session import get_db
 from app.intent.base import BaseIntentClassifier
@@ -88,11 +88,12 @@ async def start_conversation(
     request: Request,
     payload: ConversationCreateRequest,
     service: Annotated[ConversationService, Depends(get_conversation_service)],
+    current_user: Annotated[User | None, Depends(get_current_user_optional)] = None,
 ) -> ConversationResponse:
-    """Start a guest conversation."""
+    """Start a customer conversation."""
     del request
     return await service.start_conversation(
-        user=None,
+        user=current_user,
         session_id=payload.session_id,
         initial_message=payload.initial_message,
     )
@@ -105,10 +106,11 @@ async def start_conversation(
 )
 async def get_active_conversation(
     service: Annotated[ConversationService, Depends(get_conversation_service)],
+    current_user: Annotated[User | None, Depends(get_current_user_optional)] = None,
     session_id: Annotated[str | None, Query(max_length=100)] = None,
 ) -> ConversationResponse | None:
-    """Return the active conversation for an anonymous session."""
-    return await service.get_active_conversation(user=None, session_id=session_id)
+    """Return the active conversation for a user or anonymous session."""
+    return await service.get_active_conversation(user=current_user, session_id=session_id)
 
 
 @router.get(
@@ -151,10 +153,11 @@ async def send_message(
     conversation_id: UUID,
     payload: SendMessageRequest,
     service: Annotated[ConversationService, Depends(get_conversation_service)],
+    current_user: Annotated[User | None, Depends(get_current_user_optional)] = None,
 ) -> SendMessageResponse:
     """Send a customer message and return the bot response."""
     del request
-    return await service.send_message(conversation_id, payload, user=None)
+    return await service.send_message(conversation_id, payload, user=current_user)
 
 
 @router.post(
