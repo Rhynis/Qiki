@@ -619,8 +619,10 @@ class ConversationService:
         elif order_state_status == "awaiting_confirmation":
             slots = replace(
                 slots,
-                confirmed=slots.confirmed or self._is_affirmation(content),
+                confirmed=self._is_affirmation(content),
             )
+        else:
+            slots = replace(slots, confirmed=False)
         bare_category_item = next(
             (item for item in slots.items if self._is_bare_category_query(item.product)),
             None,
@@ -1020,7 +1022,10 @@ Tin mới:
                 f"Dạ cửa hàng chỉ có gas loại {size_options} kg thôi ạ. "
                 "Bạn chọn loại nào giúp Qiki nhé."
             )
-        if cls._is_bare_category_query(normalized_query):
+        if requested_size is None and not cls._query_mentions_product_brand(
+            normalized_query,
+            products,
+        ):
             return (
                 f"Cửa hàng Gas Quốc Cường có gas loại {size_options} kg. "
                 "Bạn muốn loại bao nhiêu kg ạ?"
@@ -1041,6 +1046,26 @@ Tin mới:
     @classmethod
     def _format_size_options(cls, sizes: Sequence[Decimal]) -> str:
         return ", ".join(cls._format_decimal(size) for size in sizes)
+
+    @classmethod
+    def _query_mentions_product_brand(
+        cls,
+        normalized_query: str,
+        products: Sequence[ProductResponse],
+    ) -> bool:
+        query_tokens = set(normalized_query.split())
+        for product in products:
+            if product.category != "gas":
+                continue
+            normalized_brand = cls._normalize_match_text(product.brand)
+            brand_tokens = set(normalized_brand.split())
+            distinctive_brand_tokens = brand_tokens - {"gas"}
+            if distinctive_brand_tokens and (
+                bool(distinctive_brand_tokens & query_tokens)
+                or normalized_brand in normalized_query
+            ):
+                return True
+        return False
 
     def _select_card_products(
         self,
@@ -2234,7 +2259,7 @@ Tin mới:
     @classmethod
     def _is_affirmation(cls, content: str) -> bool:
         normalized = cls._normalize_match_text(content)
-        return normalized in {
+        if normalized in {
             "dung",
             "dung r",
             "dung roi",
@@ -2245,7 +2270,18 @@ Tin mới:
             "phai",
             "phai roi",
             "xac nhan",
-        }
+        }:
+            return True
+        return any(
+            phrase in normalized
+            for phrase in (
+                "dung roi",
+                "phai roi",
+                "xac nhan",
+                "dong y",
+                "chot don",
+            )
+        )
 
     @classmethod
     def _missing_order_slots(
