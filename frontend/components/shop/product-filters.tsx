@@ -85,7 +85,7 @@ export function ProductFilters({ category }: ProductFiltersProps) {
         </div>
         <div className="space-y-2">
           <Label>Thương hiệu</Label>
-          <Select value={brand} onValueChange={setBrand}>
+          <Select modal={false} value={brand} onValueChange={setBrand}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -102,7 +102,7 @@ export function ProductFilters({ category }: ProductFiltersProps) {
         {showSizeFilter ? (
           <div className="space-y-2">
             <Label>Kích thước</Label>
-            <Select value={size} onValueChange={setSize}>
+            <Select modal={false} value={size} onValueChange={setSize}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>

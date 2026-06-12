@@ -33,7 +33,11 @@ export function ProductSort() {
   }
 
   return (
-    <Select value={value in sortOptions ? value : 'created_at:desc'} onValueChange={updateSort}>
+    <Select
+      modal={false}
+      value={value in sortOptions ? value : 'created_at:desc'}
+      onValueChange={updateSort}
+    >
       <SelectTrigger aria-label="Sắp xếp" className="w-[180px]">
         <SelectValue />
       </SelectTrigger>

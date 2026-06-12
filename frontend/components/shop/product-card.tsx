@@ -12,8 +12,17 @@ type ProductCardProps = {
 }
 
 export function ProductCard({ product }: ProductCardProps) {
+  const productHref = `/products/${product.id}`
+
   return (
-    <Card className="flex h-full flex-col overflow-hidden">
+    <Card className="group relative flex h-full cursor-pointer flex-col overflow-hidden transition-shadow hover:shadow-md">
+      <Link
+        aria-label={`Xem chi tiết ${product.name}`}
+        className="absolute inset-0 z-10 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        href={productHref}
+      >
+        <span className="sr-only">Xem chi tiết {product.name}</span>
+      </Link>
       <div className="flex aspect-[4/3] items-center justify-center bg-slate-100">
         {product.image_url ? (
           <div
@@ -46,9 +55,9 @@ export function ProductCard({ product }: ProductCardProps) {
           <p className="line-clamp-2 text-sm text-slate-600">{product.description}</p>
         ) : null}
       </CardContent>
-      <div className="p-6 pt-0">
+      <div className="relative z-20 p-6 pt-0">
         <Button asChild className="w-full">
-          <Link href={`/products/${product.id}`}>Xem chi tiết</Link>
+          <Link href={productHref}>Xem chi tiết</Link>
         </Button>
       </div>
     </Card>

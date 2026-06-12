@@ -34,6 +34,17 @@ html {
   scrollbar-gutter: stable;
 }
 
+html[data-non-modal-select-open] body[data-scroll-locked] {
+  margin-right: 0 !important;
+  overflow: auto !important;
+  overscroll-behavior: auto !important;
+  padding-right: 0 !important;
+}
+
+html[data-non-modal-select-open] body {
+  pointer-events: auto !important;
+}
+
 body {
   background: hsl(var(--background));
   color: hsl(var(--foreground));

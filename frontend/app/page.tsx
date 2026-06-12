@@ -161,7 +161,9 @@ export default function HomePage() {
           {trustItems.map((item) => (
             <div className="rounded-lg border bg-white p-5 shadow-sm" key={item.title}>
               <item.icon className="h-6 w-6 text-primary" />
-              <h2 className="mt-4 text-lg font-semibold text-slate-950">{item.title}</h2>
+              <h2 className="mt-4 text-balance text-lg font-semibold text-slate-950">
+                {item.title}
+              </h2>
               {Array.isArray(item.description) ? (
                 <div className="mt-2 space-y-1 text-sm text-slate-600">
                   {item.description.map((line) => (
@@ -180,7 +182,7 @@ export default function HomePage() {
         <div className="mx-auto max-w-6xl px-4 py-12">
           <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
             <div>
-              <h2 className="text-3xl font-semibold text-slate-950">Cách đặt hàng</h2>
+              <h2 className="text-balance text-3xl font-semibold text-slate-950">Cách đặt hàng</h2>
               <p className="mt-2 max-w-2xl text-slate-600">
                 {protectVi(
                   'Quy trình phù hợp cả khách quen gọi đổi bình nhanh và khách mới cần Qiki tư vấn trước khi đặt.'
@@ -205,7 +207,7 @@ export default function HomePage() {
                   </span>
                   <step.icon className="h-5 w-5 text-slate-400" />
                 </div>
-                <h3 className="mt-4 text-lg font-semibold text-slate-950">
+                <h3 className="mt-4 text-balance text-lg font-semibold text-slate-950">
                   {protectVi(step.title)}
                 </h3>
                 <p className="mt-2 text-sm leading-6 text-slate-600">
@@ -221,7 +223,7 @@ export default function HomePage() {
         <div className="rounded-lg border bg-slate-950 p-6 text-white md:flex md:items-center md:justify-between md:gap-8">
           <div>
             <p className="text-sm font-medium text-primary">Cần đổi gas gấp?</p>
-            <h2 className="mt-2 text-2xl font-semibold">
+            <h2 className="mt-2 text-balance text-2xl font-semibold">
               Gọi cửa hàng để kiểm tra tuyến giao gần nhất
             </h2>
             <p className="mt-2 max-w-2xl text-sm text-slate-300">
