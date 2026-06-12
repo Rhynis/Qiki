@@ -723,17 +723,6 @@ class ConversationService:
 
         matched_items = self._match_order_items(slots.items, products)
         matched_order_products = self._matched_order_products(matched_items)
-        normalized_phone = (
-            self._validate_phone(slots.customer_phone) if slots.customer_phone else None
-        )
-        if slots.customer_phone and normalized_phone is None:
-            return result(
-                await order_state_message(
-                    self._format_invalid_phone_question(slots.customer_phone),
-                    "awaiting_missing_slots",
-                    slots,
-                )
-            )
         unmatched_item = next(
             (item for item, product in matched_items if item.product and product is None),
             None,
@@ -762,6 +751,18 @@ class ConversationService:
                     self._format_reusable_contact_question(reusable_contact_slots),
                     "awaiting_reused_contact_confirmation",
                     reused_slots,
+                )
+            )
+        slots = self._merge_order_slots(self._account_default_contact_slots(user), slots)
+        normalized_phone = (
+            self._validate_phone(slots.customer_phone) if slots.customer_phone else None
+        )
+        if slots.customer_phone and normalized_phone is None:
+            return result(
+                await order_state_message(
+                    self._format_invalid_phone_question(slots.customer_phone),
+                    "awaiting_missing_slots",
+                    slots,
                 )
             )
         missing = self._missing_order_slots(slots, matched_items)
@@ -1998,6 +1999,12 @@ Tin mới:
     @staticmethod
     def _has_reusable_contact_slots(slots: ChatOrderSlots) -> bool:
         return bool(slots.customer_name or slots.customer_phone or slots.delivery_address)
+
+    @staticmethod
+    def _account_default_contact_slots(user: User | None) -> ChatOrderSlots | None:
+        if user is None:
+            return None
+        return ChatOrderSlots(customer_name=user.full_name, customer_phone=user.phone)
 
     @classmethod
     def _should_confirm_reusable_contact(
