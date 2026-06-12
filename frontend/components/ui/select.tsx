@@ -6,7 +6,56 @@ import { Check, ChevronDown, ChevronUp } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 
-const Select = SelectPrimitive.Root
+type SelectProps = React.ComponentPropsWithoutRef<typeof SelectPrimitive.Root> & {
+  modal?: boolean
+}
+
+const Select = ({
+  modal = true,
+  open: openProp,
+  defaultOpen,
+  onOpenChange,
+  ...props
+}: SelectProps) => {
+  const isControlled = openProp !== undefined
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(defaultOpen ?? false)
+  const open = isControlled ? openProp : uncontrolledOpen
+
+  const handleOpenChange = React.useCallback(
+    (nextOpen: boolean) => {
+      if (!isControlled) setUncontrolledOpen(nextOpen)
+      onOpenChange?.(nextOpen)
+    },
+    [isControlled, onOpenChange]
+  )
+
+  React.useEffect(() => {
+    if (modal || !open) return
+
+    const root = document.documentElement
+    const previousValue = root.getAttribute('data-non-modal-select-open')
+    root.setAttribute('data-non-modal-select-open', 'true')
+
+    return () => {
+      if (previousValue === null) {
+        root.removeAttribute('data-non-modal-select-open')
+      } else {
+        root.setAttribute('data-non-modal-select-open', previousValue)
+      }
+    }
+  }, [modal, open])
+
+  return (
+    <SelectPrimitive.Root
+      {...props}
+      defaultOpen={isControlled ? undefined : defaultOpen}
+      open={isControlled ? open : undefined}
+      onOpenChange={handleOpenChange}
+    />
+  )
+}
+
+Select.displayName = SelectPrimitive.Root.displayName
 
 const SelectGroup = SelectPrimitive.Group
 
