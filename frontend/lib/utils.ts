@@ -8,9 +8,10 @@ export function cn(...inputs: ClassValue[]) {
 
 const NBSP = String.fromCharCode(160)
 
-// Cụm từ cần giữ nguyên trên một dòng (tên riêng + cụm dễ "rớt nghĩa"). Sắp cụm
-// dài trước cụm ngắn để cụm dài được thay trước (vd "Thành phố Hồ Chí Minh"
-// trước "Hồ Chí Minh", "Hiệp Bình Chánh" trước "Hiệp Bình").
+// Phrases to keep on a single line (proper nouns + phrases that lose meaning when
+// wrapped). Order longer phrases before shorter ones so the longer match is
+// replaced first (e.g. "Thành phố Hồ Chí Minh" before "Hồ Chí Minh",
+// "Hiệp Bình Chánh" before "Hiệp Bình").
 const PROTECTED_PHRASES = [
   'Thành phố Hồ Chí Minh',
   'Hồ Chí Minh',
@@ -30,9 +31,9 @@ const PROTECTED_PHRASES = [
 ] as const
 
 /**
- * Thay khoảng trắng bên trong các cụm tên riêng/cụm cố định bằng non-breaking
- * space để chữ không bị tách dòng giữa chừng (vd "Bình Thạnh" không thành "Bình"
- * / "Thạnh"). Khoảng trắng còn lại giữ nguyên nên câu vẫn xuống dòng bình thường.
+ * Replace spaces inside proper-noun / fixed phrases with a non-breaking space so
+ * the text doesn't break mid-phrase (e.g. "Bình Thạnh" won't split into "Bình"
+ * / "Thạnh"). Remaining spaces are left intact so the sentence still wraps normally.
  */
 export function protectVi(text: string): string {
   return PROTECTED_PHRASES.reduce(
