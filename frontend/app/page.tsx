@@ -84,7 +84,7 @@ export default function HomePage() {
                 Giao nhanh tận nơi {protectVi(SHOP_INFO.deliveryAreaLabel)}
               </div>
               <div className="space-y-4">
-                <h1 className="max-w-3xl text-4xl font-semibold text-white md:text-6xl">
+                <h1 className="max-w-3xl text-4xl font-semibold text-white md:text-5xl">
                   {protectVi('Đặt gas LPG nhanh, ')}
                   <br className="hidden md:block" />
                   {protectVi('rõ giá, có trợ lý ảo Qiki ')}
