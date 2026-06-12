@@ -45,7 +45,7 @@ function parseProductParams(
 }
 
 async function getInitialProducts(params: ProductSearchParams): Promise<ProductListResponse> {
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
+  const apiBaseUrl = process.env.BACKEND_URL ?? 'http://localhost:8000'
   const url = new URL('/api/v1/products', apiBaseUrl)
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== '' && value !== false) {

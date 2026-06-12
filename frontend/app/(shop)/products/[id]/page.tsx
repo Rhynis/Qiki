@@ -9,7 +9,7 @@ type ProductDetailPageProps = {
 }
 
 async function getProduct(productId: string): Promise<Product | null> {
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
+  const apiBaseUrl = process.env.BACKEND_URL ?? 'http://localhost:8000'
   const url = new URL(`/api/v1/products/${productId}`, apiBaseUrl)
 
   try {

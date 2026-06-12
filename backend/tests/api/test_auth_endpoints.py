@@ -111,6 +111,8 @@ async def test_login_returns_tokens(test_client: AsyncClient) -> None:
         "gasbot_refresh_token=" in value and "HttpOnly" in value and "Path=/api/v1/auth" in value
         for value in set_cookie
     )
+    assert all("SameSite=lax" in value for value in set_cookie)
+    assert all("SameSite=none" not in value for value in set_cookie)
 
 
 async def test_login_with_wrong_password_returns_401(test_client: AsyncClient) -> None:
