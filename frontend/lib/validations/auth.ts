@@ -4,11 +4,8 @@ const phoneRegex = /^(\+84|0)[1-9][0-9]{8,9}$/
 
 export const passwordSchema = z
   .string()
-  .min(12, 'Mật khẩu phải có ít nhất 12 ký tự')
-  .regex(/[A-Z]/, 'Mật khẩu phải có chữ hoa')
-  .regex(/[a-z]/, 'Mật khẩu phải có chữ thường')
-  .regex(/[0-9]/, 'Mật khẩu phải có chữ số')
-  .regex(/[^A-Za-z0-9]/, 'Mật khẩu phải có ký tự đặc biệt')
+  .min(8, 'Mật khẩu tối thiểu 8 ký tự')
+  .max(128, 'Mật khẩu tối đa 128 ký tự')
 
 export const loginSchema = z.object({
   email: z.string().min(1, 'Email không được để trống').email('Email không hợp lệ'),

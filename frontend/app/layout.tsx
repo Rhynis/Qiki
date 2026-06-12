@@ -30,7 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <FloatingContact />
             <ChatWidget />
           </div>
-          <Toaster richColors position="top-right" />
+          <Toaster richColors position="bottom-right" />
         </Providers>
       </body>
     </html>

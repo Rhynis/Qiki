@@ -9,13 +9,8 @@ import { useAuth } from '@/lib/hooks/use-auth'
 import { registerSchema, type RegisterFormValues } from '@/lib/validations/auth'
 
 function getPasswordScore(password: string): number {
-  return [
-    password.length >= 12,
-    /[A-Z]/.test(password),
-    /[a-z]/.test(password),
-    /[0-9]/.test(password),
-    /[^A-Za-z0-9]/.test(password),
-  ].filter(Boolean).length
+  if (password.length === 0) return 0
+  return Math.min(5, Math.ceil(password.length / 8))
 }
 
 export function RegisterForm() {
@@ -92,6 +87,7 @@ export function RegisterForm() {
           className="h-10 w-full rounded-md border px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
           {...register('password')}
         />
+        <p className="text-xs text-slate-500">Mật khẩu tối thiểu 8 ký tự</p>
         <div className="grid grid-cols-5 gap-1" aria-hidden="true">
           {Array.from({ length: 5 }).map((_, index) => (
             <span
