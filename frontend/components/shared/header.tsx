@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { ChevronDown, Flame, Phone, ShoppingCart, Droplets } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -15,6 +16,7 @@ import { SHOP_INFO } from '@/lib/constants'
 import { useCartStore } from '@/lib/stores/cart-store'
 
 export function Header() {
+  const router = useRouter()
   const itemCount = useCartStore((state) => state.getItemCount())
   const [productMenuOpen, setProductMenuOpen] = useState(false)
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -63,25 +65,18 @@ export function Header() {
                 onMouseLeave={scheduleProductMenuClose}
               >
                 <DropdownMenuItem
-                  asChild
                   className="cursor-pointer rounded-md hover:bg-primary/10 hover:text-primary focus:bg-primary/10 focus:text-primary"
+                  onSelect={() => router.push('/products?category=gas')}
                 >
-                  <Link href="/products?category=gas" onClick={() => setProductMenuOpen(false)}>
-                    <Flame className="h-4 w-4 text-primary" />
-                    Gas
-                  </Link>
+                  <Flame className="h-4 w-4 text-primary" />
+                  Gas
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  asChild
                   className="cursor-pointer rounded-md hover:bg-primary/10 hover:text-primary focus:bg-primary/10 focus:text-primary"
+                  onSelect={() => router.push('/products?category=nuoc_uong')}
                 >
-                  <Link
-                    href="/products?category=nuoc_uong"
-                    onClick={() => setProductMenuOpen(false)}
-                  >
-                    <Droplets className="h-4 w-4 text-primary" />
-                    Nước Uống
-                  </Link>
+                  <Droplets className="h-4 w-4 text-primary" />
+                  Nước Uống
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

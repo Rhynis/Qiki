@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/select'
 import { useProductBrands } from '@/lib/hooks/use-products'
 import type { ProductCategory } from '@/types/product'
+import { useDropdownOpen } from './product-dropdown-context'
 
 const sizes = ['6', '12', '45']
 
@@ -28,10 +29,29 @@ export function ProductFilters({ category }: ProductFiltersProps) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const [search, setSearch] = useState(searchParams.get('search') ?? '')
+  const [type, setType] = useState<string>(category ?? 'all')
   const [brand, setBrand] = useState(searchParams.get('brand') ?? 'all')
   const [size, setSize] = useState(searchParams.get('size_kg') ?? 'all')
   const [inStockOnly, setInStockOnly] = useState(searchParams.get('in_stock_only') === 'true')
   const { data: brands = [] } = useProductBrands(category)
+  // Single-open: only one of these dropdowns is open at a time (shared context).
+  const typeDropdown = useDropdownOpen('type')
+  const brandDropdown = useDropdownOpen('brand')
+  const sizeDropdown = useDropdownOpen('size')
+
+  function changeType(nextType: string) {
+    setType(nextType)
+    const next = new URLSearchParams(searchParams.toString())
+    if (nextType === 'all') {
+      next.delete('category')
+    } else {
+      next.set('category', nextType)
+    }
+    // Size (kg) only applies to gas — drop it when switching catalog scope.
+    next.delete('size_kg')
+    next.delete('skip')
+    router.replace(`${pathname}?${next.toString()}`)
+  }
 
   function applyFilters() {
     const next = new URLSearchParams()
@@ -40,7 +60,7 @@ export function ProductFilters({ category }: ProductFiltersProps) {
     if (brand !== 'all') next.set('brand', brand)
     if (category !== 'nuoc_uong' && size !== 'all') next.set('size_kg', size)
     if (inStockOnly) next.set('in_stock_only', 'true')
-    // Sắp xếp do <ProductSort/> quản qua URL — giữ lại khi áp dụng bộ lọc.
+    // Sorting is managed by <ProductSort/> via the URL — preserve it when applying filters.
     const sortBy = searchParams.get('sort_by')
     const sortOrder = searchParams.get('sort_order')
     if (sortBy) next.set('sort_by', sortBy)
@@ -56,14 +76,16 @@ export function ProductFilters({ category }: ProductFiltersProps) {
     router.replace(category ? `${pathname}?category=${category}` : pathname)
   }
 
-  const showSizeFilter = category !== 'nuoc_uong'
+  // "Loại" (category) on the general /products page; "Kích thước" only on the gas page.
+  const showTypeFilter = !category
+  const showSizeFilter = category === 'gas'
   const brandOptions = brand !== 'all' && !brands.includes(brand) ? [brand, ...brands] : brands
 
   return (
     <div className="rounded-lg border bg-white p-4">
       <div
         className={
-          showSizeFilter
+          showTypeFilter || showSizeFilter
             ? 'grid gap-4 lg:grid-cols-[1.2fr_1fr_160px]'
             : 'grid gap-4 lg:grid-cols-[1.2fr_1fr]'
         }
@@ -85,7 +107,7 @@ export function ProductFilters({ category }: ProductFiltersProps) {
         </div>
         <div className="space-y-2">
           <Label>Thương hiệu</Label>
-          <Select modal={false} value={brand} onValueChange={setBrand}>
+          <Select modal={false} value={brand} onValueChange={setBrand} {...brandDropdown}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -99,10 +121,25 @@ export function ProductFilters({ category }: ProductFiltersProps) {
             </SelectContent>
           </Select>
         </div>
+        {showTypeFilter ? (
+          <div className="space-y-2">
+            <Label>Loại</Label>
+            <Select modal={false} value={type} onValueChange={changeType} {...typeDropdown}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tất cả</SelectItem>
+                <SelectItem value="gas">Gas</SelectItem>
+                <SelectItem value="nuoc_uong">Nước Uống</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
         {showSizeFilter ? (
           <div className="space-y-2">
             <Label>Kích thước</Label>
-            <Select modal={false} value={size} onValueChange={setSize}>
+            <Select modal={false} value={size} onValueChange={setSize} {...sizeDropdown}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>

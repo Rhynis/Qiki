@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { useDropdownOpen } from './product-dropdown-context'
 
 const sortOptions = {
   'created_at:desc': 'Mới nhất',
@@ -22,6 +23,7 @@ export function ProductSort() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const value = `${searchParams.get('sort_by') ?? 'created_at'}:${searchParams.get('sort_order') ?? 'desc'}`
+  const sortDropdown = useDropdownOpen('sort')
 
   function updateSort(nextValue: string) {
     const [sortBy, sortOrder] = nextValue.split(':')
@@ -37,6 +39,7 @@ export function ProductSort() {
       modal={false}
       value={value in sortOptions ? value : 'created_at:desc'}
       onValueChange={updateSort}
+      {...sortDropdown}
     >
       <SelectTrigger aria-label="Sắp xếp" className="w-[180px]">
         <SelectValue />
