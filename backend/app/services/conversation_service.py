@@ -442,6 +442,8 @@ class ConversationService:
         order_state_status = str(order_state.get("status", "")) if order_state else ""
         base_slots = previous_slots or ChatOrderSlots()
         normalized_content = self._normalize_match_text(content)
+        confirm_resolved_order = False
+        handled_product_choice = False
         if order_state is not None and self._is_order_cancel_request(normalized_content):
             return result(
                 await order_state_message(
@@ -449,7 +451,71 @@ class ConversationService:
                     "order_cancelled",
                 )
             )
-        if order_state_status == "awaiting_product_change_confirmation":
+        if order_state_status == "awaiting_product_choice":
+            pending_item = self._pending_item_from_state(order_state) or next(
+                (item for item in base_slots.items if self._is_incomplete_add_item(item)),
+                None,
+            )
+            if pending_item and self._is_incomplete_add_item(pending_item):
+                if self._is_cancel_add_request(normalized_content):
+                    slots = self._drop_incomplete_add_items(base_slots)
+                    handled_product_choice = True
+                elif self._is_affirmation(content):
+                    slots = self._drop_incomplete_add_items(base_slots)
+                    confirm_resolved_order = True
+                    handled_product_choice = True
+                else:
+                    picked_product = (
+                        self._match_product(content, products)
+                        if self._query_mentions_product_brand(normalized_content, products)
+                        else None
+                    )
+                    if picked_product is not None:
+                        resolved_item = ChatOrderItem(
+                            product=self._format_product_display_name(picked_product),
+                            quantity=pending_item.quantity,
+                        )
+                        slots = self._append_order_items(
+                            self._drop_incomplete_add_items(base_slots),
+                            (resolved_item,),
+                            products,
+                        )
+                        handled_product_choice = True
+                    else:
+                        requested_size = self._extract_gas_size_choice(
+                            normalized_content,
+                            products,
+                        )
+                        if requested_size is not None:
+                            size_products = self._gas_products_for_size(products, requested_size)
+                            if not size_products:
+                                return result(
+                                    await order_state_message(
+                                        self._gas_size_inquiry_message(
+                                            f"gas {normalized_content}",
+                                            products,
+                                        )
+                                        or "Dạ bạn chọn loại gas 6, 12 hoặc 45 kg giúp Qiki nhé.",
+                                        "awaiting_product_choice",
+                                        base_slots,
+                                        {"pending_item": self._items_to_metadata((pending_item,))},
+                                    )
+                                )
+                            return result(
+                                await order_state_message(
+                                    (
+                                        f"Dạ Qiki gửi các lựa chọn gas "
+                                        f"{self._format_decimal(requested_size)} kg bên dưới nhé."
+                                    ),
+                                    "awaiting_product_choice",
+                                    base_slots,
+                                    {"pending_item": self._items_to_metadata((pending_item,))},
+                                ),
+                                size_products,
+                            )
+        if handled_product_choice:
+            slots = self._merge_order_slots(slots, contact_slots)
+        elif order_state_status == "awaiting_product_change_confirmation":
             previous_items = self._previous_items_from_state(order_state, previous_slots)
             original_slots = replace(base_slots, items=previous_items, confirmed=False)
             pending_item = self._pending_item_from_state(order_state) or self._pending_change_item(
@@ -619,8 +685,10 @@ class ConversationService:
         elif order_state_status == "awaiting_confirmation":
             slots = replace(
                 slots,
-                confirmed=self._is_affirmation(content),
+                confirmed=self._is_affirmation(content) or confirm_resolved_order,
             )
+        elif confirm_resolved_order:
+            slots = replace(slots, confirmed=True)
         else:
             slots = replace(slots, confirmed=False)
         bare_category_item = next(
@@ -628,11 +696,27 @@ class ConversationService:
             None,
         )
         if bare_category_item:
+            if self._is_bare_gas_item(bare_category_item):
+                inquiry_message = self._gas_size_inquiry_message("gas", products)
+                if inquiry_message:
+                    return result(
+                        await order_state_message(
+                            inquiry_message,
+                            "awaiting_product_choice",
+                            slots,
+                            {
+                                "pending_item": self._items_to_metadata(
+                                    (bare_category_item,),
+                                )
+                            },
+                        )
+                    )
             return result(
                 await order_state_message(
                     self._format_category_product_question(bare_category_item.product or ""),
                     "awaiting_product_choice",
                     slots,
+                    {"pending_item": self._items_to_metadata((bare_category_item,))},
                 ),
                 category_cards(bare_category_item.product),
             )
@@ -1044,6 +1128,29 @@ Tin mới:
         return Decimal(match.group(1))
 
     @classmethod
+    def _extract_gas_size_choice(
+        cls,
+        normalized_query: str,
+        products: Sequence[ProductResponse],
+    ) -> Decimal | None:
+        requested_size = cls._extract_gas_size_query(normalized_query)
+        if requested_size is not None:
+            return requested_size
+        match = re.fullmatch(r"(?:loai\s*)?([1-9][0-9]?)", normalized_query)
+        if not match:
+            return None
+        return Decimal(match.group(1))
+
+    @staticmethod
+    def _gas_products_for_size(
+        products: Sequence[ProductResponse],
+        size: Decimal,
+    ) -> list[ProductResponse]:
+        return [
+            product for product in products if product.category == "gas" and product.size_kg == size
+        ]
+
+    @classmethod
     def _format_size_options(cls, sizes: Sequence[Decimal]) -> str:
         return ", ".join(cls._format_decimal(size) for size in sizes)
 
@@ -1138,6 +1245,18 @@ Tin mới:
             return False
         normalized = cls._normalize_match_text(query)
         return normalized in {"nuoc", "nuoc uong", "gas", "binh gas"}
+
+    @classmethod
+    def _is_bare_gas_item(cls, item: ChatOrderItem) -> bool:
+        normalized = cls._normalize_match_text(item.product or "")
+        return (
+            cls._is_bare_category_query(normalized)
+            and cls._category_filter_from_query(normalized) == "gas"
+        )
+
+    @classmethod
+    def _is_incomplete_add_item(cls, item: ChatOrderItem) -> bool:
+        return item.product is None or cls._is_bare_gas_item(item)
 
     @classmethod
     def _format_category_product_question(cls, query: str) -> str:
@@ -1501,12 +1620,18 @@ Tin mới:
     @classmethod
     def _category_order_item_from_segment(cls, segment: str) -> ChatOrderItem | None:
         normalized = cls._normalize_match_text(segment)
+        quantity = cls._extract_leading_quantity_candidate(normalized)
+        if quantity is not None:
+            normalized = re.sub(r"^\s*[1-9][0-9]?\b", "", normalized, count=1).strip()
         tokens = [
             token
             for token in normalized.split()
             if token
             not in {
+                "a",
                 "dat",
+                "di",
+                "khi",
                 "mua",
                 "lay",
                 "cho",
@@ -1514,13 +1639,19 @@ Tin mới:
                 "minh",
                 "can",
                 "muon",
+                "luon",
+                "nhe",
+                "nua",
+                "them",
+                "voi",
             }
         ]
         category_text = " ".join(tokens)
         if not cls._is_bare_category_query(category_text):
             return None
-        product = "nước uống" if "nuoc" in set(tokens) else category_text
-        return ChatOrderItem(product=product)
+        category = cls._category_filter_from_query(category_text)
+        product = "nước uống" if category == "nuoc_uong" else "gas"
+        return ChatOrderItem(product=product, quantity=quantity)
 
     @classmethod
     def _combine_current_message_slots(
@@ -1916,6 +2047,11 @@ Tin mới:
         return replace(slots, items=tuple(items), confirmed=False)
 
     @classmethod
+    def _drop_incomplete_add_items(cls, slots: ChatOrderSlots) -> ChatOrderSlots:
+        items = tuple(item for item in slots.items if not cls._is_incomplete_add_item(item))
+        return replace(slots, items=items, confirmed=False)
+
+    @classmethod
     def _pending_item_from_state(cls, order_state: dict[str, Any] | None) -> ChatOrderItem | None:
         if order_state is None:
             return None
@@ -2015,6 +2151,23 @@ Tin mới:
                 "cong them",
                 "co them",
                 "va ",
+            }
+        )
+
+    @staticmethod
+    def _is_cancel_add_request(normalized: str) -> bool:
+        return any(
+            phrase in normalized
+            for phrase in {
+                "thoi khong them",
+                "thoi ko them",
+                "khong them nua",
+                "ko them nua",
+                "khoi them",
+                "khong lay them",
+                "ko lay them nua",
+                "khong lay them nua",
+                "khoi lay them",
             }
         )
 

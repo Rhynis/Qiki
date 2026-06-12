@@ -639,6 +639,77 @@ def _gas_size_catalog() -> list[ProductResponse]:
     return [*_substring_brand_catalog(), _multi_catalog()[2]]
 
 
+def _prod_gas_catalog() -> list[ProductResponse]:
+    now = datetime.now(UTC)
+    specs = [
+        (
+            "SP-12KG-XAM",
+            "Bình gas Saigon Petro 12kg (xám)",
+            "Saigon Petro",
+            "12",
+            "605000",
+            50,
+        ),
+        (
+            "SP-12KG-XANH",
+            "Bình gas Saigon Petro 12kg (xanh/vàng/biển)",
+            "Saigon Petro",
+            "12",
+            "665000",
+            50,
+        ),
+        (
+            "SP-45KG-BO",
+            "Bình gas Saigon Petro 45kg (bò)",
+            "Saigon Petro",
+            "45",
+            "2250000",
+            20,
+        ),
+        ("VT-12KG-XAM", "Bình gas VT 12kg (xám)", "VT Gas", "12", "605000", 50),
+        ("ELF-12KG-DO", "Bình gas Elf 12kg (đỏ)", "Elf Gas", "12", "710000", 50),
+        ("ELF-6KG-DO", "Bình gas Elf 6kg (đỏ)", "Elf Gas", "6", "350000", 50),
+        (
+            "PLX-12KG-BIEN",
+            "Bình gas Petrolimex 12kg (biển)",
+            "Petrolimex",
+            "12",
+            "675000",
+            50,
+        ),
+        ("SAOMAI-12KG", "Bình gas Sao Mai 12kg", "Sao Mai", "12", "625000", 50),
+        ("THUDUC-12KG", "Bình gas Thủ Đức 12kg", "Gas Thủ Đức", "12", "625000", 50),
+        (
+            "THUDUC-6KG-NHUA",
+            "Bình gas Thủ Đức 6kg (vỏ nhựa)",
+            "Gas Thủ Đức",
+            "6",
+            "320000",
+            50,
+        ),
+    ]
+    return [
+        ProductResponse(
+            id=uuid.uuid4(),
+            sku=sku,
+            name=name,
+            brand=brand,
+            size_kg=Decimal(size),
+            category="gas",
+            unit="kg",
+            price=Decimal(price),
+            stock_quantity=stock,
+            description=None,
+            image_url=None,
+            safety_info=None,
+            is_active=True,
+            created_at=now,
+            updated_at=now,
+        )
+        for sku, name, brand, size, price, stock in specs
+    ]
+
+
 @pytest.mark.asyncio
 async def test_product_cards_filtered_for_specific_product() -> None:
     service, _conversations, _messages, _rag, _orders = make_service(
@@ -905,6 +976,16 @@ def complete_order_slots(
     if delivery_notes:
         slots["delivery_notes"] = delivery_notes
     return slots
+
+
+def complete_water_confirmation_slots() -> dict[str, object]:
+    return {
+        "items": [{"product": "Nước Hoàn Hảo 20 lít", "quantity": 1}],
+        "customer_name": "Vân",
+        "customer_phone": "0903026306",
+        "delivery_address": "15 đường số 5, Khu phố 36, Phường Hiệp Bình, TP.HCM",
+        "payment_method": "bank_transfer",
+    }
 
 
 async def add_order_state_history(
@@ -1809,6 +1890,225 @@ async def test_chat_order_add_second_item_via_them() -> None:
 
 
 @pytest.mark.asyncio
+async def test_add_one_gas_asks_size_not_missing_product() -> None:
+    products = _water_catalog() + _prod_gas_catalog()
+    service, _conversations, messages, _rag, orders = make_service(
+        category=IntentCategory.PRODUCT_INQUIRY,
+        llm_provider=FakeLLMProvider([{}]),
+        product_service=FakeProductService(products=products),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_order_state_history(
+        messages,
+        conversation.id,
+        status="awaiting_confirmation",
+        slots=complete_water_confirmation_slots(),
+    )
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="thêm 1 bình gas đi"),
+        user=None,
+    )
+
+    assert orders.created_count == 0
+    assert response.assistant_message is not None
+    assert "gas loại 6, 12, 45 kg" in response.assistant_message.content
+    assert "bao nhiêu kg" in response.assistant_message.content
+    assert "xin thêm sản phẩm" not in response.assistant_message.content
+    assert response.products == []
+    state = response.assistant_message.retrieved_documents[0]
+    assert state["status"] == "awaiting_product_choice"
+    assert_state_item(state, "Nước Hoàn Hảo 20 lít", 1, index=0)
+    assert_state_item(state, "gas", 1, index=1)
+
+
+@pytest.mark.asyncio
+async def test_gas_size_reply_filters_cards_to_that_size() -> None:
+    products = _water_catalog() + _prod_gas_catalog()
+    service, _conversations, messages, _rag, _orders = make_service(
+        category=IntentCategory.PRODUCT_INQUIRY,
+        llm_provider=FakeLLMProvider([{}]),
+        product_service=FakeProductService(products=products),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_order_state_history(
+        messages,
+        conversation.id,
+        status="awaiting_confirmation",
+        slots=complete_water_confirmation_slots(),
+    )
+
+    await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="thêm 1 bình gas đi"),
+        user=None,
+    )
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="12kg"),
+        user=None,
+    )
+
+    assert response.assistant_message is not None
+    assert response.products
+    assert {product.size_kg for product in response.products} == {Decimal("12")}
+    assert all(product.size_kg == Decimal("12") for product in response.products)
+
+
+@pytest.mark.asyncio
+async def test_add_gas_resolves_into_order() -> None:
+    products = _water_catalog() + _prod_gas_catalog()
+    service, _conversations, messages, _rag, orders = make_service(
+        category=IntentCategory.PRODUCT_INQUIRY,
+        llm_provider=FakeLLMProvider([{}]),
+        product_service=FakeProductService(products=products),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_order_state_history(
+        messages,
+        conversation.id,
+        status="awaiting_confirmation",
+        slots=complete_water_confirmation_slots(),
+    )
+
+    await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="thêm 2 bình gas đi"),
+        user=None,
+    )
+    await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="12kg"),
+        user=None,
+    )
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="VT 12kg"),
+        user=None,
+    )
+
+    assert orders.created_count == 0
+    assert response.assistant_message is not None
+    assert "Qiki tóm tắt đơn hàng" in response.assistant_message.content
+    assert "Nước Hoàn Hảo 20 lít" in response.assistant_message.content
+    assert "Bình gas VT 12kg (xám)" in response.assistant_message.content
+    state = response.assistant_message.retrieved_documents[0]
+    assert_state_item_count(state, 2)
+    assert_state_item(state, "Nước Hoàn Hảo 20 lít", 1, index=0)
+    assert_state_item(state, "Bình gas VT 12kg (xám)", 2, index=1)
+
+
+@pytest.mark.asyncio
+async def test_cancel_add_keeps_original_order() -> None:
+    products = _water_catalog() + _prod_gas_catalog()
+    service, _conversations, messages, _rag, orders = make_service(
+        category=IntentCategory.PRODUCT_INQUIRY,
+        llm_provider=FakeLLMProvider([{}]),
+        product_service=FakeProductService(products=products),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_order_state_history(
+        messages,
+        conversation.id,
+        status="awaiting_confirmation",
+        slots=complete_water_confirmation_slots(),
+    )
+
+    await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="thêm 1 bình gas đi"),
+        user=None,
+    )
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="thôi không thêm nữa"),
+        user=None,
+    )
+
+    assert orders.created_count == 0
+    assert response.assistant_message is not None
+    assert "Qiki tóm tắt đơn hàng" in response.assistant_message.content
+    assert "Nước Hoàn Hảo 20 lít" in response.assistant_message.content
+    assert "thiếu sản phẩm" not in response.assistant_message.content
+    assert "huỷ đơn" not in response.assistant_message.content
+    state = response.assistant_message.retrieved_documents[0]
+    assert_state_item_count(state, 1)
+    assert_state_item(state, "Nước Hoàn Hảo 20 lít", 1)
+
+
+@pytest.mark.asyncio
+async def test_confirm_with_incomplete_add_creates_original_order() -> None:
+    products = _water_catalog() + _prod_gas_catalog()
+    service, _conversations, messages, _rag, orders = make_service(
+        category=IntentCategory.PRODUCT_INQUIRY,
+        llm_provider=FakeLLMProvider([{}]),
+        product_service=FakeProductService(products=products),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_order_state_history(
+        messages,
+        conversation.id,
+        status="awaiting_confirmation",
+        slots=complete_water_confirmation_slots(),
+    )
+
+    await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="thêm 1 bình gas đi"),
+        user=None,
+    )
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="ok xác nhận đơn"),
+        user=None,
+    )
+
+    assert orders.created_count == 1
+    assert response.assistant_message is not None
+    assert "Đã ghi nhận đơn" in response.assistant_message.content
+    assert "thiếu sản phẩm" not in response.assistant_message.content
+    assert len(orders.last_checkout.items) == 1
+    assert orders.last_checkout.items[0].product_id == products[0].id
+
+
+@pytest.mark.asyncio
+async def test_bare_gas_add_asks_size_not_card_dump() -> None:
+    products = _water_catalog() + _prod_gas_catalog()
+    service, _conversations, messages, _rag, orders = make_service(
+        category=IntentCategory.PRODUCT_INQUIRY,
+        llm_provider=FakeLLMProvider([{}]),
+        product_service=FakeProductService(products=products),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_order_state_history(
+        messages,
+        conversation.id,
+        status="awaiting_confirmation",
+        slots=complete_water_confirmation_slots(),
+    )
+
+    first = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="gas"),
+        user=None,
+    )
+    second = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="thêm"),
+        user=None,
+    )
+
+    assert orders.created_count == 0
+    assert first.assistant_message is not None
+    assert "thêm" in first.assistant_message.content
+    assert second.assistant_message is not None
+    assert "gas loại 6, 12, 45 kg" in second.assistant_message.content
+    assert "bao nhiêu kg" in second.assistant_message.content
+    assert second.products == []
+
+
+@pytest.mark.asyncio
 async def test_add_different_product_before_contact_keeps_both() -> None:
     products = _water_catalog() + _substring_brand_catalog()
     service, _conversations, _messages, _rag, orders = make_service(
@@ -1958,6 +2258,34 @@ def test_match_product_still_matches_real_tokens() -> None:
     assert size_product is not None
     assert size_product.name == "Bình gas Saigon Petro 12kg (xanh/vàng/biển)"
     assert name_substring is None
+
+
+@pytest.mark.parametrize(
+    ("segment", "expected_quantity"),
+    [
+        ("1 bình gas", 1),
+        ("thêm gas", None),
+        ("bình gas đi", None),
+        ("2 bình gas", 2),
+        ("1 bình gas nhé", 1),
+    ],
+)
+def test_category_order_item_from_segment_handles_bare_gas_add(
+    segment: str,
+    expected_quantity: int | None,
+) -> None:
+    item = ConversationService._category_order_item_from_segment(segment)
+
+    assert item == ChatOrderItem(product="gas", quantity=expected_quantity)
+
+
+def test_infer_order_slots_bare_gas_add_has_no_phantom_item() -> None:
+    slots = ConversationService._infer_order_slots(
+        "thêm 1 bình gas đi",
+        _water_catalog() + _prod_gas_catalog(),
+    )
+
+    assert slots.items == (ChatOrderItem(product="gas", quantity=1),)
 
 
 @pytest.mark.parametrize(
