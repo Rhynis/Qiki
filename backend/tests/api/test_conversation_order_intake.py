@@ -205,7 +205,7 @@ async def test_chat_order_confirm_endpoint_creates_real_order(
         assert response.status_code == 200
         body = response.json()
         answer = body["assistant_message"]["content"]
-        # Câu xác nhận đổi theo giờ VN (trong giờ vs ngoài giờ); kiểm phần bất biến.
+        # Confirmation sentence varies by VN business hours (open vs closed); assert the invariant part.
         assert "Đã ghi nhận đơn" in answer
         assert "xác nhận" in answer
         response_order_number = body["assistant_message"]["retrieved_documents"][0]["order_number"]

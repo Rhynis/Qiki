@@ -7,8 +7,8 @@ export type OpeningStatus = {
 }
 
 /**
- * Tính trạng thái mở/đóng cửa theo giờ Việt Nam (UTC+7), không phụ thuộc múi giờ
- * trình duyệt. Khung giờ: T2-T6 mở 06:30, T7-CN mở 07:30, đóng 20:00.
+ * Compute the open/closed status in Vietnam time (UTC+7), independent of the
+ * browser timezone. Hours: Mon-Fri open 06:30, Sat-Sun open 07:30, close 20:00.
  */
 export function getOpeningStatus(): OpeningStatus {
   const vietnamTime = new Date(Date.now() + 7 * 60 * 60 * 1000)
@@ -21,7 +21,7 @@ export function getOpeningStatus(): OpeningStatus {
   return { isOpen: minutes >= opensAt && minutes < closesAt }
 }
 
-/** Trả về trạng thái mở/đóng cửa, tự cập nhật mỗi phút. */
+/** Return the open/closed status, refreshing every minute. */
 export function useOpeningStatus(): OpeningStatus | null {
   const [status, setStatus] = useState<OpeningStatus | null>(null)
 

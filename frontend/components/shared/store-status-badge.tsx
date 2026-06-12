@@ -28,8 +28,8 @@ const BADGE_STYLES = {
 } as const
 
 /**
- * Huy hiệu trạng thái cửa hàng (mở/ngoài giờ) dùng chung cho footer (light) và
- * hero card nền tối (dark). Đồng bộ với giờ mở cửa thật qua useOpeningStatus.
+ * Store status badge (open/closed) shared by the footer (light) and the dark
+ * hero card (dark). Stays in sync with the real opening hours via useOpeningStatus.
  */
 export function StoreStatusBadge({ variant = 'light', className }: StoreStatusBadgeProps) {
   const status = useOpeningStatus()

@@ -4,8 +4,8 @@ import { useState } from 'react'
 import { SHOP_INFO } from '@/lib/constants'
 
 /**
- * Bản đồ cửa hàng. Iframe bị tắt pointer-events đến khi người dùng bấm vào, để
- * tránh map "nuốt" thao tác cuộn trang khi con trỏ đi ngang qua (scroll-trap).
+ * Store map. The iframe has pointer-events disabled until the user clicks it, to
+ * keep the map from "swallowing" page scroll when the cursor passes over it (scroll-trap).
  */
 export function StoreMap() {
   const [active, setActive] = useState(false)

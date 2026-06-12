@@ -30,7 +30,7 @@
 }
 
 html {
-  /* Giữ chỗ thanh cuộn để mở Radix Select (khoá scroll) không gỡ scrollbar gây giật layout. */
+  /* Reserve the scrollbar gutter so opening a Radix Select (scroll lock) doesn't remove the scrollbar and shift the layout. */
   scrollbar-gutter: stable;
 }
 
