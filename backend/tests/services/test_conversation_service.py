@@ -5,6 +5,7 @@ import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -1475,6 +1476,8 @@ async def test_chat_order_missing_address_mentions_khu_pho() -> None:
     assert orders.calls == 0
     assert response.assistant_message is not None
     assert "khu phố" in response.assistant_message.content
+    assert "thành phố" not in response.assistant_message.content.lower()
+    assert "TP.HCM" not in response.assistant_message.content
     assert "với Hiệp Bình cần khu phố" not in response.assistant_message.content
     assert "mốc gần nhà" not in response.assistant_message.content
     assert response.products == []
@@ -1739,11 +1742,89 @@ async def test_offtopic_midorder_distinct_message() -> None:
     assert "huỷ" in response.assistant_message.content
     assert response.assistant_message.content != (
         "Bạn cho Qiki xin thêm tên người nhận, số điện thoại, địa chỉ giao hàng chi tiết "
-        "(số nhà, tên/số đường, khu phố, phường, TP.HCM) và hình thức thanh toán "
+        "(số nhà, tên/số đường, khu phố, phường) và hình thức thanh toán "
         "để lên đơn nhé."
     )
     state = response.assistant_message.retrieved_documents[0]
     assert state["status"] == "awaiting_missing_slots"
+
+
+@pytest.mark.asyncio
+async def test_binh_loi_trung_address_accepted() -> None:
+    service, _conversations, messages, _rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider(
+            [
+                {
+                    "customer_name": "Nick",
+                    "delivery_address": "15 đường 5, khu phố 32",
+                    "payment_method": "bank_transfer",
+                }
+            ]
+        ),
+        product_service=FakeProductService(products=_water_catalog()),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_order_state_history(
+        messages,
+        conversation.id,
+        slots={
+            "items": [{"product": "Nước Hoàn Hảo 20 lít", "quantity": 1}],
+            "customer_name": "Vân",
+            "customer_phone": "0903026306",
+        },
+    )
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="nick 15 đường 5, khu phố 32 phường bình lợi trung ck"),
+        user=None,
+    )
+
+    assert orders.created_count == 0
+    assert response.assistant_message is not None
+    assert "chỉ giao trong khu vực Bình Thạnh và Thủ Đức" not in response.assistant_message.content
+    assert "Qiki tóm tắt đơn hàng" in response.assistant_message.content
+    state = response.assistant_message.retrieved_documents[0]
+    slots = state["slots"]
+    assert "bình lợi trung" in slots["delivery_address"]
+    assert slots["payment_method"] == "bank_transfer"
+    assert slots["customer_name"] == "Nick"
+
+
+def test_bot_address_reply_has_no_moi() -> None:
+    template = Path("app/llm/prompts/templates/system_chatbot_vi.txt").read_text(encoding="utf-8")
+
+    assert "Địa chỉ:" in template
+    assert "địa chỉ mới" not in template.lower()
+
+
+@pytest.mark.asyncio
+async def test_ambiguous_delivery_time_asks_am_pm() -> None:
+    service, _conversations, messages, _rag, orders = make_service(
+        category=IntentCategory.COMPLAINT,
+        llm_provider=FakeLLMProvider([{}]),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_order_state_history(
+        messages,
+        conversation.id,
+        status="awaiting_confirmation",
+        slots=complete_water_confirmation_slots(),
+    )
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="giao 9-10h ko cần gọi lại"),
+        user=None,
+    )
+
+    assert response.conversation.status == "active"
+    assert orders.created_count == 0
+    assert response.assistant_message is not None
+    assert "sáng" in response.assistant_message.content
+    assert "tối" in response.assistant_message.content
+    assert "nhân viên" not in response.assistant_message.content
 
 
 @pytest.mark.asyncio
@@ -3002,7 +3083,9 @@ async def test_chat_order_reuses_previous_contact_by_asking_confirmation() -> No
 
 
 @pytest.mark.asyncio
-async def test_reused_contact_reorder_shows_summary(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_payment_ck_after_reused_contact_completes_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         ConversationService,
         "_now_vn",
@@ -3062,6 +3145,7 @@ async def test_reused_contact_reorder_shows_summary(monkeypatch: pytest.MonkeyPa
     )
 
     assert orders.calls == 1
+    assert orders.last_checkout.payment_method == "bank_transfer"
     assert created.assistant_message is not None
     assert "Đã ghi nhận đơn" in created.assistant_message.content
 
@@ -3570,7 +3654,7 @@ async def test_chat_order_requires_explicit_confirmation() -> None:
 
 
 @pytest.mark.asyncio
-async def test_logged_in_order_prefills_name_and_phone() -> None:
+async def test_logged_in_order_confirms_account_name_and_phone() -> None:
     payload = complete_order_payload(confirmed=False)
     payload["customer_name"] = None
     payload["customer_phone"] = None
@@ -3589,11 +3673,11 @@ async def test_logged_in_order_prefills_name_and_phone() -> None:
     assert orders.calls == 0
     assert response.assistant_message is not None
     content = response.assistant_message.content
-    assert "Qiki tóm tắt đơn hàng" in content
-    assert "Người nhận: **Tran Minh Quan**" in content
-    assert "Số điện thoại: **0903026306**" in content
-    assert "tên người nhận" not in content
-    assert "số điện thoại để lên đơn" not in content
+    assert "tên người nhận là **Tran Minh Quan** (theo tài khoản)" in content
+    assert "số **0903026306**" in content
+    assert "phải không" in content
+    state = response.assistant_message.retrieved_documents[0]
+    assert state["status"] == "awaiting_account_contact_confirmation"
 
 
 @pytest.mark.asyncio
@@ -3608,17 +3692,28 @@ async def test_logged_in_order_still_requires_confirmation() -> None:
     user = account_user()
     conversation = await service.start_conversation(user=None, session_id="abc")
 
-    summary = await service.send_message(
+    account_confirmation = await service.send_message(
         conversation.id,
         SendMessageRequest(content="Tôi muốn đặt 1 bình Petrolimex 12kg"),
         user=user,
     )
 
     assert orders.calls == 0
+    assert account_confirmation.assistant_message is not None
+    assert "theo tài khoản" in account_confirmation.assistant_message.content
+    state = account_confirmation.assistant_message.retrieved_documents[0]
+    assert state["status"] == "awaiting_account_contact_confirmation"
+
+    summary = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="ok xác nhận đơn"),
+        user=user,
+    )
+
+    assert orders.calls == 0
     assert summary.assistant_message is not None
+    assert "Qiki tóm tắt đơn hàng" in summary.assistant_message.content
     assert "Bạn xác nhận đặt đơn này không?" in summary.assistant_message.content
-    state = summary.assistant_message.retrieved_documents[0]
-    assert state["status"] == "awaiting_confirmation"
 
     created = await service.send_message(
         conversation.id,
@@ -3655,6 +3750,38 @@ async def test_chat_provided_contact_overrides_account() -> None:
     assert "Số điện thoại: **0911111111**" in content
     assert "Account Name" not in content
     assert "0903026306" not in content
+
+
+@pytest.mark.asyncio
+async def test_explicit_name_after_account_confirmation_overrides_account() -> None:
+    payload = complete_order_payload(confirmed=False)
+    payload["customer_name"] = None
+    payload["customer_phone"] = None
+    service, _conversations, _messages, _rag, _orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([payload, {}]),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    confirmation = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Tôi muốn đặt 1 bình Petrolimex 12kg"),
+        user=account_user(full_name="Van", phone="0903026306"),
+    )
+    assert confirmation.assistant_message is not None
+    assert "tên người nhận là **Van** (theo tài khoản)" in confirmation.assistant_message.content
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="tên Nick"),
+        user=account_user(full_name="Van", phone="0903026306"),
+    )
+
+    assert response.assistant_message is not None
+    content = response.assistant_message.content
+    assert "Qiki tóm tắt đơn hàng" in content
+    assert "Người nhận: **Nick**" in content
+    assert "Người nhận: **Van**" not in content
 
 
 @pytest.mark.asyncio
@@ -3833,6 +3960,35 @@ async def test_human_handoff_skips_rag_for_complaint() -> None:
     assert response.conversation.status == "escalated"
     assert response.assistant_message is not None
     assert "nhân viên" in response.assistant_message.content
+    assert rag.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_keu_nhan_vien_during_order_routes_to_handoff() -> None:
+    service, _conversations, messages, rag, orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        product_service=FakeProductService(products=_water_catalog()),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+    await add_order_state_history(
+        messages,
+        conversation.id,
+        status="awaiting_confirmation",
+        slots=complete_water_confirmation_slots(),
+    )
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="kêu nhân viên cho tui"),
+        user=None,
+    )
+
+    assert response.user_message.intent == IntentCategory.COMPLAINT.value
+    assert response.conversation.status == "escalated"
+    assert orders.created_count == 0
+    assert response.assistant_message is not None
+    assert "nhân viên" in response.assistant_message.content
+    assert "Qiki tóm tắt đơn hàng" not in response.assistant_message.content
     assert rag.calls == 0
 
 
