@@ -42,6 +42,9 @@ from app.services.routing_service import RoutingDecision, RoutingService
 
 CHAT_ORDER_METADATA_TYPE = "chat_order"
 CHAT_ORDER_STATE_METADATA_TYPE = "chat_order_state"
+# Structured note for staff follow-up (call-back / delivery time) stored in a
+# message's retrieved_documents, surfaced as-is via the admin conversation payload.
+CHAT_FOLLOWUP_NOTE_METADATA_TYPE = "chat_followup_note"
 ORDER_CONFIRMATION_PROMPT = "Bạn xác nhận đặt đơn này không?"
 ORDER_CONTEXT_CONFIDENCE = 0.9
 ORDER_STATE_TTL = timedelta(minutes=30)
@@ -71,6 +74,8 @@ ADDRESS_MARKER_TOKENS = {
 }
 ADDRESS_MARKER_PHRASES = ("khu pho", "thanh pho", "so nha")
 AMBIGUOUS_DELIVERY_PERIODS = {"sang", "trua", "chieu", "toi", "dem"}
+# Accent-stripped buổi keyword -> display label for follow-up time windows.
+FOLLOWUP_PERIOD_LABELS = {"sang": "sáng", "trua": "trưa", "chieu": "chiều", "toi": "tối"}
 
 
 @dataclass(frozen=True)
@@ -249,6 +254,16 @@ class ConversationService:
 
         should_ask_clarification = self._should_ask_intent_clarification(intent)
 
+        # Capture a call-back / delivery-time follow-up for staff before falling
+        # through to handoff/RAG, but never while an order is being handled.
+        followup_note: dict[str, Any] | None = None
+        if (
+            intent.category != IntentCategory.SAFETY_EMERGENCY
+            and not self._is_order_in_progress(history)
+            and not self._find_existing_chat_order(history)
+        ):
+            followup_note = self._detect_followup_request(request.content, intent.category)
+
         product_cards: list[ProductCardResponse] = []
         product_inquiry_message: str | None = None
         if intent.category == IntentCategory.PRODUCT_INQUIRY and not should_ask_clarification:
@@ -270,6 +285,10 @@ class ConversationService:
                 user,
                 intent.category,
                 intent.confidence,
+            )
+        elif followup_note is not None:
+            assistant_message = await self._create_followup_message(
+                conversation, followup_note, intent
             )
         elif routing.requires_human:
             assistant_message = await self._create_handoff_message(conversation, routing)
@@ -938,7 +957,7 @@ class ConversationService:
             user,
             self._chat_order_idempotency_key(conversation.id, slots),
         )
-        metadata = [
+        metadata: list[dict[str, Any]] = [
             {
                 "type": CHAT_ORDER_METADATA_TYPE,
                 "order_id": str(order.id),
@@ -952,6 +971,9 @@ class ConversationService:
                 ),
             }
         ]
+        delivery_note = self._order_delivery_followup_note(slots.delivery_notes)
+        if delivery_note:
+            metadata.append(delivery_note)
         return result(
             await self._create_assistant_message(
                 conversation,
@@ -1562,6 +1584,195 @@ Tin mới:
         if not (1 <= start <= 12 and 1 <= end <= 12):
             return None
         return f"{start}-{end}h"
+
+    # --- Staff follow-up notes (call-back / delivery time) --------------------
+
+    @classmethod
+    def _detect_followup_request(
+        cls, content: str, intent_category: IntentCategory
+    ) -> dict[str, Any] | None:
+        """Detect a call-back / delivery-time follow-up and build a structured note.
+
+        Returns None when the message is not a follow-up request. A call-back or a
+        decline phrase is a strong signal (fires regardless of intent); a bare
+        delivery time only fires when the turn is not an order placement, so real
+        orders are not intercepted.
+        """
+        normalized = cls._normalize_match_text(content)
+        tokens = set(normalized.split())
+        declined = cls._is_callback_decline(normalized)
+        wants_callback = cls._mentions_callback(normalized)
+        mentions_delivery = "giao" in tokens
+        window_text, period = cls._extract_followup_window(content)
+
+        if declined:
+            note_type = "delivery_window" if mentions_delivery and window_text else "callback"
+            return cls._build_followup_note(note_type, window_text, period, declined=True)
+        if wants_callback and window_text:
+            return cls._build_followup_note("callback", window_text, period, declined=False)
+        if mentions_delivery and window_text and intent_category != IntentCategory.PLACE_ORDER:
+            return cls._build_followup_note("delivery_window", window_text, period, declined=False)
+        return None
+
+    @staticmethod
+    def _mentions_callback(normalized: str) -> bool:
+        return any(
+            phrase in normalized
+            for phrase in (
+                "goi lai",
+                "goi cho",
+                "goi minh",
+                "goi tui",
+                "goi em",
+                "goi gium",
+                "goi giup",
+                "call lai",
+                "lien he lai",
+            )
+        )
+
+    @staticmethod
+    def _is_callback_decline(normalized: str) -> bool:
+        return any(
+            phrase in normalized
+            for phrase in (
+                "khong can goi",
+                "khoi goi",
+                "dung goi",
+                "khong goi lai",
+                "khong phai goi",
+                "khong can lien he",
+            )
+        )
+
+    @classmethod
+    def _extract_followup_window(cls, content: str) -> tuple[str | None, str | None]:
+        """Return (window_text, period) for a time window — e.g. ("7-8h sáng mai", "sáng").
+
+        period is the buổi (sáng/trưa/chiều/tối) when stated, else None (ambiguous).
+        """
+        decomposed = unicodedata.normalize("NFD", content.lower().replace("đ", "d"))
+        ascii_text = "".join(char for char in decomposed if unicodedata.category(char) != "Mn")
+
+        hours_text: str | None = None
+        range_match = re.search(
+            r"\b(\d{1,2})\s*(?:h|gio?)?\s*(?:-|den)\s*(\d{1,2})\s*h?\b", ascii_text
+        )
+        if range_match:
+            start, end = int(range_match.group(1)), int(range_match.group(2))
+            if 1 <= start <= 24 and 1 <= end <= 24:
+                hours_text = f"{start}-{end}h"
+        if hours_text is None:
+            single = re.search(r"\b(\d{1,2})\s*h(\d{2})?\b", ascii_text)
+            if single:
+                hour = int(single.group(1))
+                if 1 <= hour <= 24:
+                    minutes = single.group(2)
+                    hours_text = f"{hour}h{minutes}" if minutes else f"{hour}h"
+        if hours_text is None:
+            return None, None
+
+        tokens = set(ascii_text.split())
+        period = next(
+            (label for key, label in FOLLOWUP_PERIOD_LABELS.items() if key in tokens), None
+        )
+        day = "mai" if "mai" in tokens else None
+        parts = [hours_text]
+        if period:
+            parts.append(period)
+        if day:
+            parts.append(day)
+        return " ".join(parts), period
+
+    @classmethod
+    def _build_followup_note(
+        cls,
+        note_type: str,
+        window_text: str | None,
+        period: str | None,
+        declined: bool,
+    ) -> dict[str, Any]:
+        note: dict[str, Any] = {
+            "type": CHAT_FOLLOWUP_NOTE_METADATA_TYPE,
+            "note_type": note_type,
+            "declined_callback": declined,
+        }
+        if window_text:
+            note["time_window"] = window_text
+        if period:
+            note["period"] = period
+        note["staff_reminder"] = cls._format_followup_reminder(note_type, window_text, declined)
+        return note
+
+    @staticmethod
+    def _format_followup_reminder(note_type: str, window_text: str | None, declined: bool) -> str:
+        if note_type == "delivery_window" and window_text:
+            base = f"Giao {window_text}"
+            return f"{base} (khách không cần gọi lại)" if declined else base
+        if declined:
+            return "Khách không cần gọi lại"
+        if window_text:
+            return f"Gọi lại {window_text}"
+        return "Khách yêu cầu gọi lại"
+
+    @classmethod
+    def _format_followup_reply(cls, note: dict[str, Any]) -> str:
+        window = note.get("time_window")
+        period = note.get("period")
+        declined = bool(note.get("declined_callback"))
+        if note.get("note_type") == "delivery_window":
+            if window and not period:
+                return (
+                    f"Dạ Qiki ghi nhận giao khoảng **{window}** — bạn muốn buổi sáng hay "
+                    "buổi tối ạ? Nhân viên sẽ giao đúng khung giờ."
+                )
+            note_text = f"giao **{window}**" if window else "khung giờ giao bạn đề xuất"
+            tail = " Qiki sẽ không gọi lại nữa nhé." if declined else ""
+            return (
+                f"Dạ Qiki đã ghi chú {note_text}, nhân viên sẽ giao đúng khung giờ.{tail} "
+                "Cảm ơn bạn!"
+            )
+        if declined:
+            return "Dạ Qiki đã ghi nhận bạn không cần gọi lại ạ. Cảm ơn bạn!"
+        if window and not period:
+            return (
+                f"Dạ Qiki ghi nhận gọi lại khoảng **{window}** — bạn muốn buổi sáng hay "
+                "buổi tối ạ?"
+            )
+        window_text = f"**{window}**" if window else "sớm nhất"
+        return (
+            f"Dạ Qiki đã ghi chú gọi lại {window_text}, nhân viên sẽ gọi lại cho bạn. Cảm ơn bạn!"
+        )
+
+    async def _create_followup_message(
+        self,
+        conversation: Conversation,
+        note: dict[str, Any],
+        intent: IntentResult,
+    ) -> Message:
+        """Persist a follow-up acknowledgement carrying the structured note + flag."""
+        return await self.message_repository.create(
+            {
+                "conversation_id": conversation.id,
+                "role": "assistant",
+                "content": self._format_followup_reply(note),
+                "intent": intent.category.value,
+                "intent_confidence": intent.confidence,
+                "latency_ms": 0,
+                "retrieved_documents": [note],
+                "flagged_for_review": True,
+            }
+        )
+
+    @classmethod
+    def _order_delivery_followup_note(cls, delivery_notes: str | None) -> dict[str, Any] | None:
+        """Build a structured delivery-window note from an order's delivery_notes."""
+        if not delivery_notes:
+            return None
+        window_text, period = cls._extract_followup_window(delivery_notes)
+        return cls._build_followup_note(
+            "delivery_window", window_text or delivery_notes.strip(), period, declined=False
+        )
 
     @classmethod
     def _extract_payment_candidate(cls, content: str) -> str | None:

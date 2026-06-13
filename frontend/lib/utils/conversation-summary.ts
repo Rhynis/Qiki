@@ -37,6 +37,29 @@ function lastMessage(conversation: Conversation): Message | undefined {
   return messages[messages.length - 1]
 }
 
+export type FollowupNote = {
+  noteType: 'callback' | 'delivery_window'
+  staffReminder: string
+  declinedCallback: boolean
+}
+
+/** Latest staff follow-up note (call-back / delivery window) from message metadata. */
+export function conversationFollowupNote(conversation: Conversation): FollowupNote | null {
+  for (const message of sortedMessages(conversation).reverse()) {
+    for (const doc of message.retrieved_documents ?? []) {
+      if (!doc || doc.type !== 'chat_followup_note') continue
+      const reminder = typeof doc.staff_reminder === 'string' ? doc.staff_reminder : null
+      if (!reminder) continue
+      return {
+        noteType: doc.note_type === 'delivery_window' ? 'delivery_window' : 'callback',
+        staffReminder: reminder,
+        declinedCallback: doc.declined_callback === true,
+      }
+    }
+  }
+  return null
+}
+
 /** First Vietnamese phone number found in any message, normalised to 0xxxxxxxxx. */
 export function conversationPhone(conversation: Conversation): string | null {
   for (const message of conversation.messages) {

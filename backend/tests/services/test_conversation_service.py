@@ -4074,3 +4074,63 @@ async def test_staff_can_send_and_resolve() -> None:
     assert staff_message.role == "staff"
     assert resolved.status == "resolved"
     assert resolved.satisfaction_rating == 5
+
+
+def _followup_note(documents: list[dict[str, object]] | None) -> dict[str, object] | None:
+    for document in documents or []:
+        if isinstance(document, dict) and document.get("type") == "chat_followup_note":
+            return document
+    return None
+
+
+@pytest.mark.asyncio
+async def test_callback_request_stored_as_note() -> None:
+    service, _conversations, messages, rag, _orders = make_service(
+        category=IntentCategory.GENERAL_INFO
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Gọi lại cho tui khoảng 7-8h sáng mai nhé"),
+        user=None,
+    )
+
+    assert response.assistant_message is not None
+    note = _followup_note(response.assistant_message.retrieved_documents)
+    assert note is not None
+    assert note["note_type"] == "callback"
+    assert note["time_window"] == "7-8h sáng mai"
+    assert note["period"] == "sáng"
+    assert note["declined_callback"] is False
+    assert note["staff_reminder"] == "Gọi lại 7-8h sáng mai"
+    # Flagged for staff follow-up and stored on the persisted message (admin payload).
+    assert response.assistant_message.flagged_for_review is True
+    stored = messages.items[response.assistant_message.id]
+    assert _followup_note(stored.retrieved_documents) is not None
+    assert rag.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_decline_callback_records_delivery_window() -> None:
+    service, _conversations, messages, rag, _orders = make_service(
+        category=IntentCategory.GENERAL_INFO
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Không cần gọi lại, giao 9-10h sáng nhé"),
+        user=None,
+    )
+
+    assert response.assistant_message is not None
+    note = _followup_note(response.assistant_message.retrieved_documents)
+    assert note is not None
+    assert note["note_type"] == "delivery_window"
+    assert note["time_window"] == "9-10h sáng"
+    assert note["declined_callback"] is True
+    assert note["staff_reminder"] == "Giao 9-10h sáng (khách không cần gọi lại)"
+    assert response.assistant_message.flagged_for_review is True
+    assert "giao" in response.assistant_message.content.lower()
+    assert rag.calls == 0

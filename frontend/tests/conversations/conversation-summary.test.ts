@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  conversationFollowupNote,
   conversationIntent,
   conversationLastActivity,
   conversationPhone,
@@ -98,5 +99,34 @@ describe('conversation summary', () => {
     expect(relativeTime('2026-06-13T09:30:00.000Z', now)).toBe('30 phút trước')
     expect(relativeTime('2026-06-13T07:00:00.000Z', now)).toBe('3 giờ trước')
     expect(relativeTime('2026-06-11T10:00:00.000Z', now)).toBe('2 ngày trước')
+  })
+
+  it('extracts the latest staff follow-up note from message metadata', () => {
+    const convo = conversation([
+      message({ role: 'user', content: 'gọi lại 7-8h sáng mai' }),
+      message({
+        role: 'assistant',
+        content: 'Dạ Qiki đã ghi chú gọi lại.',
+        retrieved_documents: [
+          {
+            type: 'chat_followup_note',
+            note_type: 'callback',
+            time_window: '7-8h sáng mai',
+            declined_callback: false,
+            staff_reminder: 'Gọi lại 7-8h sáng mai',
+          },
+        ],
+      }),
+    ])
+    const note = conversationFollowupNote(convo)
+    expect(note).not.toBeNull()
+    expect(note?.noteType).toBe('callback')
+    expect(note?.staffReminder).toBe('Gọi lại 7-8h sáng mai')
+    expect(note?.declinedCallback).toBe(false)
+  })
+
+  it('returns null when there is no follow-up note', () => {
+    const convo = conversation([message({ role: 'user', content: 'giá gas bao nhiêu' })])
+    expect(conversationFollowupNote(convo)).toBeNull()
   })
 })

@@ -1,6 +1,6 @@
 'use client'
 
-import { CheckCircle2, SendHorizonal } from 'lucide-react'
+import { CheckCircle2, PhoneCall, SendHorizonal } from 'lucide-react'
 import { FormEvent, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -14,6 +14,7 @@ import {
   useSendStaffMessage,
 } from '@/lib/hooks/use-conversation'
 import { cn } from '@/lib/utils'
+import { conversationFollowupNote } from '@/lib/utils/conversation-summary'
 import { EmergencyBanner } from '@/components/chat/emergency-banner'
 
 type ChatDetailStaffProps = {
@@ -27,6 +28,12 @@ export function ChatDetailStaff({ conversationId }: ChatDetailStaffProps) {
   const sendStaffMessage = useSendStaffMessage()
   const resolveConversation = useResolveConversation()
   const hasEmergency = messages.data?.items.some((message) => message.is_emergency)
+  const followup = conversation.data
+    ? conversationFollowupNote({
+        ...conversation.data,
+        messages: messages.data?.items ?? conversation.data.messages,
+      })
+    : null
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -60,6 +67,13 @@ export function ChatDetailStaff({ conversationId }: ChatDetailStaffProps) {
       </div>
 
       {hasEmergency ? <EmergencyBanner /> : null}
+
+      {followup ? (
+        <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 p-3 text-sm font-medium text-primary">
+          <PhoneCall className="h-4 w-4 shrink-0" />
+          {followup.staffReminder}
+        </div>
+      ) : null}
 
       <Card>
         <CardHeader>
