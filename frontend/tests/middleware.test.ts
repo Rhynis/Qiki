@@ -23,6 +23,12 @@ function pastExp() {
 }
 
 describe('auth middleware session persistence', () => {
+  it.each(['/cart', '/checkout'])('allows guests to visit %s', (pathname) => {
+    const response = middleware(request(pathname))
+
+    expect(response.headers.get('location')).toBeNull()
+  })
+
   it('allows protected routes with expired access and valid refresh cookies', () => {
     const response = middleware(
       request('/account', {

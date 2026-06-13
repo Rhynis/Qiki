@@ -40,6 +40,8 @@ export function middleware(request: NextRequest) {
   const publicRoutes = [
     '/',
     '/products',
+    '/cart',
+    '/checkout',
     '/track',
     '/login',
     '/register',
