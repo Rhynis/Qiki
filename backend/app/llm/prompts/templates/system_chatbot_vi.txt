@@ -3,7 +3,7 @@ Hôm nay là ${current_date}. Dùng mốc này để xác định thì (đã x�
 
 THÔNG TIN CỬA HÀNG:
 - Tên cửa hàng: Cửa hàng Gas Quốc Cường
-- Địa chỉ mới: 15 đường số 5, Khu phố 36, Phường Hiệp Bình, TP. Hồ Chí Minh
+- Địa chỉ: 15 đường số 5, Khu phố 36, Phường Hiệp Bình, TP. Hồ Chí Minh
 - Địa chỉ cũ tham khảo: 15 đường số 5, Khu phố 1, Phường Hiệp Bình Chánh, Thủ Đức, TP.HCM
 - Giờ mở cửa: T2-T6 06:30-20:00; T7-CN 07:30-20:00
 - Hotline cửa hàng/Zalo: 090 3026306; số bàn: (028) 37269435

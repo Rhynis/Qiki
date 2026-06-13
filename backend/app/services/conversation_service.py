@@ -70,6 +70,7 @@ ADDRESS_MARKER_TOKENS = {
     "tp",
 }
 ADDRESS_MARKER_PHRASES = ("khu pho", "thanh pho", "so nha")
+AMBIGUOUS_DELIVERY_PERIODS = {"sang", "trua", "chieu", "toi", "dem"}
 
 
 @dataclass(frozen=True)
@@ -188,6 +189,12 @@ class ConversationService:
         history_payload = self._history_to_payload(history)
         intent = await self.intent_classifier.classify(request.content, history_payload)
         intent = self._apply_order_context_intent(intent, history)
+        if (
+            intent.category != IntentCategory.SAFETY_EMERGENCY
+            and self._extract_ambiguous_delivery_time_window(request.content)
+            and self._is_order_in_progress(history)
+        ):
+            intent = self._order_context_intent(intent, "ambiguous_delivery_time")
         if intent.category != IntentCategory.SAFETY_EMERGENCY and self._is_explicit_human_request(
             request.content
         ):
@@ -444,11 +451,23 @@ class ConversationService:
         normalized_content = self._normalize_match_text(content)
         confirm_resolved_order = False
         handled_product_choice = False
+        ambiguous_time_window = self._extract_ambiguous_delivery_time_window(content)
         if order_state is not None and self._is_order_cancel_request(normalized_content):
             return result(
                 await order_state_message(
                     "Dạ Qiki đã huỷ đơn. Khi nào cần đặt lại bạn cứ nhắn Qiki nhé.",
                     "order_cancelled",
+                )
+            )
+        if order_state is not None and ambiguous_time_window:
+            return result(
+                await order_state_message(
+                    (
+                        f"Bạn muốn giao khoảng **{ambiguous_time_window}** "
+                        "buổi sáng hay buổi tối ạ?"
+                    ),
+                    "awaiting_missing_slots",
+                    base_slots,
                 )
             )
         if order_state_status == "awaiting_product_choice":
@@ -680,7 +699,10 @@ class ConversationService:
         slots = self._with_phone_candidate(slots, content)
         slots = self._with_order_cues(slots, content)
         slots = self._with_delivery_time_candidate(slots, content)
-        if order_state_status == "awaiting_reused_contact_confirmation":
+        if order_state_status in {
+            "awaiting_reused_contact_confirmation",
+            "awaiting_account_contact_confirmation",
+        }:
             slots = replace(slots, confirmed=False)
         elif order_state_status == "awaiting_confirmation":
             slots = replace(
@@ -751,6 +773,21 @@ class ConversationService:
                     self._format_reusable_contact_question(reusable_contact_slots),
                     "awaiting_reused_contact_confirmation",
                     reused_slots,
+                )
+            )
+        account_contact_slots = self._account_default_contact_slots(user)
+        if self._should_confirm_account_contact(
+            order_state,
+            slots,
+            matched_items,
+            account_contact_slots,
+        ):
+            account_slots = self._merge_order_slots(slots, account_contact_slots)
+            return result(
+                await order_state_message(
+                    self._format_account_contact_question(account_contact_slots),
+                    "awaiting_account_contact_confirmation",
+                    account_slots,
                 )
             )
         slots = self._merge_order_slots(self._account_default_contact_slots(user), slots)
@@ -951,7 +988,7 @@ Các trường:
 - customer_name: tên khách, hoặc null
 - customer_phone: số điện thoại, hoặc null
 - delivery_address: địa chỉ giao hàng đầy đủ gồm số nhà, tên/số đường, khu phố,
-  phường, TP.HCM; hoặc null
+  phường; hoặc null. Không hỏi khách thành phố, mặc định là TP.HCM.
 - delivery_notes: khung giờ giao khách đề xuất, hoặc null
 - payment_method: "cod" hoặc "bank_transfer", hoặc null
 - confirmed: true nếu khách xác nhận rõ đơn Qiki đã tóm tắt ở lượt trước; ngược lại false
@@ -1365,6 +1402,12 @@ Tin mới:
                 "chuyen nhan vien",
                 "chuyen nguoi that",
                 "can nhan vien",
+                "keu nhan vien",
+                "keu nguoi",
+                "noi chuyen voi nhan vien",
+                "gap nguoi",
+                "can gap nguoi",
+                "muon gap nhan vien",
             }
         )
 
@@ -1478,7 +1521,8 @@ Tin mới:
     @classmethod
     def _with_order_cues(cls, slots: ChatOrderSlots, content: str) -> ChatOrderSlots:
         payment_method = slots.payment_method or cls._extract_payment_candidate(content)
-        customer_name = slots.customer_name or cls._extract_name_candidate(content, payment_method)
+        explicit_name = cls._extract_name_candidate(content, payment_method)
+        customer_name = explicit_name or slots.customer_name
         return replace(slots, customer_name=customer_name, payment_method=payment_method)
 
     @classmethod
@@ -1499,6 +1543,25 @@ Tin mới:
             if match:
                 return match.group(1).strip(" .,;:!?")
         return None
+
+    @classmethod
+    def _extract_ambiguous_delivery_time_window(cls, content: str) -> str | None:
+        normalized = cls._normalize_match_text(content)
+        if set(normalized.split()) & AMBIGUOUS_DELIVERY_PERIODS:
+            return None
+        decomposed = unicodedata.normalize("NFD", content.lower().replace("đ", "d"))
+        raw = "".join(char for char in decomposed if unicodedata.category(char) != "Mn")
+        match = re.search(
+            r"\b(\d{1,2})\s*(?:h|g(?:io)?)?\s*(?:-|den)\s*(\d{1,2})\s*h?\b",
+            raw,
+        )
+        if not match:
+            return None
+        start = int(match.group(1))
+        end = int(match.group(2))
+        if not (1 <= start <= 12 and 1 <= end <= 12):
+            return None
+        return f"{start}-{end}h"
 
     @classmethod
     def _extract_payment_candidate(cls, content: str) -> str | None:
@@ -1527,6 +1590,12 @@ Tin mới:
 
     @classmethod
     def _extract_name_candidate(cls, content: str, payment_method: str | None) -> str | None:
+        explicit_name = cls._extract_explicit_name_candidate(content)
+        if explicit_name is not None:
+            return explicit_name
+        leading_name = cls._extract_leading_name_before_address(content)
+        if leading_name is not None:
+            return leading_name
         if payment_method is None:
             return None
         text = re.sub(r"\+?\d[\d\s.-]{1,}\d", " ", content)
@@ -1541,6 +1610,56 @@ Tin mới:
             return None
         return " ".join(name_words).title()
 
+    @classmethod
+    def _extract_explicit_name_candidate(cls, content: str) -> str | None:
+        match = re.search(
+            r"\b(?:tên|ten|mình tên|minh ten|tôi tên|toi ten|người nhận|nguoi nhan)\s+"
+            r"([A-Za-zÀ-ỹ][A-Za-zÀ-ỹ\s'.-]{0,40})",
+            content,
+            flags=re.IGNORECASE,
+        )
+        if not match:
+            return None
+        candidate = cls._clean_name_candidate(match.group(1))
+        return candidate.title() if candidate else None
+
+    @classmethod
+    def _extract_leading_name_before_address(cls, content: str) -> str | None:
+        address = cls._extract_delivery_address_candidate(content)
+        if not address:
+            return None
+        address_index = content.lower().find(address.lower())
+        if address_index <= 0:
+            return None
+        prefix = content[:address_index].strip(" ,.;:-")
+        prefix = re.sub(r"\+?\d[\d\s.-]{1,}\d", " ", prefix)
+        prefix = re.sub(r"\b(?:tên|ten|mình|minh|tôi|toi|là|la)\b", " ", prefix, flags=re.I)
+        candidate = cls._clean_name_candidate(prefix)
+        return candidate.title() if candidate else None
+
+    @classmethod
+    def _clean_name_candidate(cls, value: str) -> str | None:
+        words = re.findall(r"[A-Za-zÀ-ỹ]+", value)
+        ignored = {
+            "ok",
+            "okay",
+            "giao",
+            "dat",
+            "dathang",
+            "don",
+            "dia",
+            "chi",
+            "sdt",
+            "so",
+            "phone",
+        }
+        name_words = [
+            word.strip() for word in words if cls._normalize_match_text(word) not in ignored
+        ]
+        if not name_words or len(name_words) > 3:
+            return None
+        return " ".join(name_words)
+
     @staticmethod
     def _extract_phone_candidate(content: str) -> str | None:
         for match in re.finditer(r"\+?\d[\d\s.-]{1,}\d", content):
@@ -1549,6 +1668,43 @@ Tin mới:
             if len(digits) >= 3:
                 return "+" + digits if candidate.startswith("+") else digits
         return None
+
+    @classmethod
+    def _extract_delivery_address_candidate(cls, content: str) -> str | None:
+        text = content
+        match = re.search(
+            r"(?P<address>\b\d+[A-Za-zÀ-ỹ0-9\s,./-]*?"
+            r"(?:đường|duong|hẻm|hem|khu\s*phố|khu\s*pho|kp\.?|phường|phuong|p\.)"
+            r"[A-Za-zÀ-ỹ0-9\s,./-]*)",
+            text,
+            flags=re.IGNORECASE,
+        )
+        if not match:
+            marker_match = re.search(
+                r"\b(?:địa chỉ|dia chi)\s+(.+)$",
+                text,
+                flags=re.IGNORECASE,
+            )
+            if not marker_match:
+                return None
+            candidate = marker_match.group(1)
+        else:
+            candidate = match.group("address")
+        candidate = cls._strip_trailing_payment_words(candidate)
+        candidate = re.sub(r"\s+", " ", candidate).strip(" ,.;:-")
+        return candidate or None
+
+    @staticmethod
+    def _strip_trailing_payment_words(value: str) -> str:
+        return re.sub(
+            r"\s*(?:,|\.|;|-)?\s*"
+            r"(?:ck|cod|cash|banking|bank|chuyển khoản|chuyen khoan|tiền mặt|tien mat|"
+            r"thanh toán khi nhận|thanh toan khi nhan|trả khi nhận|tra khi nhan|ship cod)"
+            r"\s*$",
+            "",
+            value,
+            flags=re.IGNORECASE,
+        ).strip()
 
     @classmethod
     def _infer_order_slots(
@@ -1684,11 +1840,36 @@ Tin mới:
             items=items,
             customer_name=extracted_slots.customer_name,
             customer_phone=extracted_slots.customer_phone,
-            delivery_address=extracted_slots.delivery_address,
+            delivery_address=cls._select_delivery_address(
+                extracted_slots.delivery_address,
+                cls._extract_delivery_address_candidate(content),
+            ),
             delivery_notes=extracted_slots.delivery_notes,
             payment_method=extracted_slots.payment_method,
             confirmed=extracted_slots.confirmed,
         )
+
+    @classmethod
+    def _select_delivery_address(
+        cls,
+        extracted_address: str | None,
+        inferred_address: str | None,
+    ) -> str | None:
+        if not inferred_address:
+            return extracted_address
+        if not extracted_address:
+            return inferred_address
+        extracted_zone = resolve_ward_delivery_zone(extracted_address)
+        inferred_zone = resolve_ward_delivery_zone(inferred_address)
+        if inferred_zone is not None and extracted_zone is None:
+            return inferred_address
+        if (
+            inferred_zone is not None
+            and extracted_zone is not None
+            and len(inferred_address) > len(extracted_address)
+        ):
+            return inferred_address
+        return extracted_address
 
     @classmethod
     def _merge_candidate_items(
@@ -2005,6 +2186,38 @@ Tin mới:
         if user is None:
             return None
         return ChatOrderSlots(customer_name=user.full_name, customer_phone=user.phone)
+
+    @classmethod
+    def _should_confirm_account_contact(
+        cls,
+        order_state: dict[str, Any] | None,
+        slots: ChatOrderSlots,
+        matched_items: Sequence[tuple[ChatOrderItem, ProductResponse | None]],
+        account_slots: ChatOrderSlots | None,
+    ) -> bool:
+        return (
+            order_state is None
+            and bool(matched_items)
+            and all(
+                product is not None and item.quantity is not None for item, product in matched_items
+            )
+            and account_slots is not None
+            and cls._has_reusable_contact_slots(account_slots)
+            and not slots.customer_name
+            and not slots.customer_phone
+        )
+
+    @classmethod
+    def _format_account_contact_question(cls, slots: ChatOrderSlots | None) -> str:
+        if slots is None:
+            return "Bạn cho Qiki xin tên người nhận và số điện thoại để lên đơn nhé."
+        parts: list[str] = []
+        if slots.customer_name:
+            parts.append(f"tên người nhận là **{slots.customer_name}** (theo tài khoản)")
+        if slots.customer_phone:
+            parts.append(f"số **{cls._format_phone_display(slots.customer_phone)}**")
+        detail = ", ".join(parts) if parts else "thông tin tài khoản"
+        return f"Dạ {detail} phải không ạ? Nếu khác bạn cho Qiki biết nhé."
 
     @classmethod
     def _should_confirm_reusable_contact(
@@ -2459,9 +2672,7 @@ Tin mới:
         if not slots.customer_phone:
             missing.append("số điện thoại")
         if not slots.delivery_address:
-            missing.append(
-                "địa chỉ giao hàng chi tiết (số nhà, tên/số đường, khu phố, phường, " "TP.HCM)"
-            )
+            missing.append("địa chỉ giao hàng chi tiết (số nhà, tên/số đường, khu phố, phường)")
         if not slots.payment_method:
             missing.append("hình thức thanh toán")
         return missing

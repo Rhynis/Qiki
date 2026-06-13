@@ -208,9 +208,19 @@ async def test_authenticated_conversation_prefills_contact_from_endpoint_user(
         assert active.status_code == 200
         assert active.json()["id"] == conversation_id
 
-        summary = await test_client.post(
+        account_confirmation = await test_client.post(
             f"/api/v1/conversations/{conversation_id}/messages",
             json={"content": "Đặt 1 bình Saigon Petro 12kg"},
+        )
+
+        assert account_confirmation.status_code == 200
+        answer = account_confirmation.json()["assistant_message"]["content"]
+        assert "tên người nhận là **Tran Minh Quan** (theo tài khoản)" in answer
+        assert "số **0903026306**" in answer
+
+        summary = await test_client.post(
+            f"/api/v1/conversations/{conversation_id}/messages",
+            json={"content": "ok"},
         )
 
         assert summary.status_code == 200
