@@ -10,6 +10,26 @@ from typing import Literal
 
 WARD_PREFIX_PATTERN = re.compile(r"\b(?:phường|phuong|p\.?|p)\s+", re.IGNORECASE)
 KHU_PHO_PATTERN = re.compile(r"\b(?:khu\s*pho|kp\.?)\s*(?:so\s*)?(\d{1,3})\b")
+CONFLICTING_DISTRICT_PATTERN = re.compile(
+    r"\b(?:quan|q)\.?\s*(?!binh thanh\b)(?:\d{1,2}|[a-z]+(?:\s+[a-z]+){0,3})\b"
+)
+CONFLICTING_DISTRICT_PHRASES = {
+    "go vap",
+    "tan binh",
+    "tan phu",
+    "phu nhuan",
+    "quan 1",
+    "quan 3",
+    "quan 4",
+    "quan 5",
+    "quan 6",
+    "quan 7",
+    "quan 8",
+    "quan 10",
+    "quan 11",
+    "quan 12",
+    "thu duc",
+}
 
 KHU_PHO_WARD_DISPLAY = {
     "gia dinh": "Gia Định",
@@ -66,6 +86,10 @@ def resolve_ward_delivery_zone(text: str) -> WardDeliveryZoneMatch | None:
     wards = _load_ward_delivery_zone_map()
     direct = wards.get(normalized_text)
     if direct:
+        if normalized_text.isdigit() and not _numbered_ward_has_safe_binh_thanh_context(
+            normalized_text
+        ):
+            return None
         return WardDeliveryZoneMatch(
             ward=direct.ward_display,
             delivery_zone=direct.delivery_zone,
@@ -74,6 +98,10 @@ def resolve_ward_delivery_zone(text: str) -> WardDeliveryZoneMatch | None:
     text_without_prefixes = _strip_ward_prefixes(normalized_text)
     direct_without_prefix = wards.get(text_without_prefixes)
     if direct_without_prefix:
+        if text_without_prefixes.isdigit() and not _numbered_ward_has_safe_binh_thanh_context(
+            normalized_text
+        ):
+            return None
         return WardDeliveryZoneMatch(
             ward=direct_without_prefix.ward_display,
             delivery_zone=direct_without_prefix.delivery_zone,
@@ -86,7 +114,9 @@ def resolve_ward_delivery_zone(text: str) -> WardDeliveryZoneMatch | None:
     )
     for ward, config in sorted_wards:
         if ward.isdigit():
-            if _contains_numbered_ward(normalized_text, ward):
+            if _contains_numbered_ward(
+                normalized_text, ward
+            ) and _numbered_ward_has_safe_binh_thanh_context(normalized_text):
                 return WardDeliveryZoneMatch(
                     ward=config.ward_display,
                     delivery_zone=config.delivery_zone,
@@ -217,6 +247,14 @@ def _contains_phrase(text: str, phrase: str) -> bool:
 
 def _contains_numbered_ward(text: str, ward_number: str) -> bool:
     return (
-        re.search(rf"\bphường\s+{re.escape(ward_number)}\b", text) is not None
+        re.search(rf"\bphuong\s+{re.escape(ward_number)}\b", text) is not None
         or re.search(rf"\bp\.?\s*{re.escape(ward_number)}\b", text) is not None
     )
+
+
+def _numbered_ward_has_safe_binh_thanh_context(text: str) -> bool:
+    if not _contains_phrase(text, "binh thanh"):
+        return False
+    if CONFLICTING_DISTRICT_PATTERN.search(text):
+        return False
+    return not any(_contains_phrase(text, phrase) for phrase in CONFLICTING_DISTRICT_PHRASES)

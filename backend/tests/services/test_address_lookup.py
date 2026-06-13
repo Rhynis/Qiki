@@ -9,12 +9,17 @@ from app.services.address_lookup import (
 
 
 def test_resolve_binh_thanh_numbered_ward_returns_binh_thanh() -> None:
-    assert resolve_delivery_zone_from_ward("phường 25") == "Bình Thạnh"
+    assert resolve_delivery_zone_from_ward("phường 25, quận Bình Thạnh") == "Bình Thạnh"
 
 
 def test_resolve_thu_duc_wards_return_thu_duc() -> None:
     assert resolve_delivery_zone_from_ward("Hiệp Bình Chánh") == "Thủ Đức"
     assert resolve_delivery_zone_from_ward("Linh Đông") == "Thủ Đức"
+
+
+def test_linh_chieu_in_thu_duc() -> None:
+    assert resolve_delivery_zone_from_ward("linh chiểu") == "Thủ Đức"
+    assert resolve_delivery_zone_from_ward("phường linh chiểu") == "Thủ Đức"
 
 
 def test_resolve_new_hiep_binh_ward_returns_thu_duc() -> None:
@@ -45,7 +50,6 @@ def test_removed_thu_duc_wards_are_out_of_area() -> None:
     for ward in (
         "Thảo Điền",
         "An Phú",
-        "Linh Chiểu",
         "Cát Lái",
         "Thủ Thiêm",
         "Tăng Nhơn Phú A",
@@ -84,3 +88,22 @@ def test_validate_khu_pho_range() -> None:
 
 def test_old_ward_alias_skips_khu_pho_validation() -> None:
     assert validate_khu_pho("15 đường số 5, Phường Hiệp Bình Chánh").status == "ok"
+
+
+def test_numbered_ward_with_binh_thanh_context_in() -> None:
+    assert resolve_delivery_zone_from_ward("12 Nguyễn X, Phường 12, Bình Thạnh") == "Bình Thạnh"
+
+
+def test_inline_numbered_ward_binh_thanh_in() -> None:
+    assert (
+        resolve_delivery_zone_from_ward("15 Điện Biên Phủ, P. 25, quận Bình Thạnh") == "Bình Thạnh"
+    )
+
+
+def test_numbered_ward_conflicting_district_out() -> None:
+    assert resolve_delivery_zone_from_ward("Phường 7, Quận 7") is None
+    assert resolve_delivery_zone_from_ward("Phường 12, Gò Vấp") is None
+
+
+def test_bare_numbered_ward_no_district_not_binh_thanh() -> None:
+    assert resolve_delivery_zone_from_ward("Phường 12") is None
