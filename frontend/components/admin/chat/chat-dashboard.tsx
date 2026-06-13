@@ -1,6 +1,6 @@
 'use client'
 
-import { AlertTriangle, Flag, MessageSquareText, RefreshCw, Search } from 'lucide-react'
+import { AlertTriangle, Flag, MessageSquareText, PhoneCall, RefreshCw, Search } from 'lucide-react'
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
@@ -11,6 +11,7 @@ import { useStaffConversations } from '@/lib/hooks/use-conversation'
 import { cn } from '@/lib/utils'
 import {
   type ChatFilter,
+  conversationFollowupNote,
   conversationHasEmergency,
   conversationHasFlag,
   conversationIntent,
@@ -126,6 +127,7 @@ export function ChatDashboard() {
             const hasEmergency = conversationHasEmergency(conversation)
             const hasFlag = conversationHasFlag(conversation)
             const intent = conversationIntent(conversation)
+            const followup = conversationFollowupNote(conversation)
             return (
               <Link
                 key={conversation.id}
@@ -145,6 +147,12 @@ export function ChatDashboard() {
                         </Badge>
                       ) : null}
                     </div>
+                    {followup ? (
+                      <Badge className="gap-1 bg-primary/10 text-xs font-medium text-primary hover:bg-primary/10">
+                        <PhoneCall className="h-3 w-3" />
+                        {followup.staffReminder}
+                      </Badge>
+                    ) : null}
                     <p className="truncate text-sm text-slate-600">
                       {conversationLastText(conversation)}
                     </p>
