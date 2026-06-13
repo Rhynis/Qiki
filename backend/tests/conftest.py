@@ -21,6 +21,9 @@ os.environ["JWT_SECRET_KEY"] = "test_secret_key_at_least_32_characters_long"
 os.environ["REDIS_URL"] = "redis://localhost:6379/0"
 os.environ["ENVIRONMENT"] = "development"
 os.environ["DEBUG"] = "false"
+# DeepEval (tests/eval) ships a pytest plugin; keep it offline + deterministic in CI.
+os.environ.setdefault("DEEPEVAL_TELEMETRY_OPT_OUT", "YES")
+os.environ.setdefault("ERROR_REPORTING", "0")
 
 
 @pytest.fixture(scope="session")

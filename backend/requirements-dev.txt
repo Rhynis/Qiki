@@ -10,3 +10,5 @@ ruff==0.3.0
 mypy==1.8.0
 pip-audit==2.7.0
 types-passlib
+# Dev/test only — conversation eval suite (tests/eval). Kept out of the runtime image.
+deepeval==4.0.6
