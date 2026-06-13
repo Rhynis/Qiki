@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { formatNumber } from '@/lib/utils/format'
 import { productSchema } from '@/lib/validations/product'
 import type {
   Product,
@@ -85,9 +86,15 @@ function normalizeText(value: string): string | null {
   return trimmed ? trimmed : null
 }
 
+/** Display the stored integer price with thousands separators (blur/display only). */
+function formatPriceDisplay(raw: string): string {
+  return raw ? formatNumber(Number(raw)) : ''
+}
+
 export function ProductForm({ product, isSubmitting = false, onSubmit }: ProductFormProps) {
   const [form, setForm] = useState<ProductFormState>(() => initialState(product))
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [priceFocused, setPriceFocused] = useState(false)
 
   function updateField(field: keyof ProductFormState, value: string | boolean) {
     setForm((current) => {
@@ -199,8 +206,12 @@ export function ProductForm({ product, isSubmitting = false, onSubmit }: Product
         <FieldError label="Giá" error={errors.price}>
           <Input
             inputMode="numeric"
-            value={form.price}
-            onChange={(event) => updateField('price', event.target.value)}
+            // Raw integer while editing (no separators fighting the cursor),
+            // formatted with thousands separators on blur. Submits a clean integer.
+            value={priceFocused ? form.price : formatPriceDisplay(form.price)}
+            onFocus={() => setPriceFocused(true)}
+            onBlur={() => setPriceFocused(false)}
+            onChange={(event) => updateField('price', event.target.value.replace(/\D/g, ''))}
           />
         </FieldError>
         <FieldError label="Tồn kho" error={errors.stock_quantity}>

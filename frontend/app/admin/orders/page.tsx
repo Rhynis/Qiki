@@ -1,18 +1,20 @@
 'use client'
 
 import { useState } from 'react'
+import { OrderDetailDialog } from '@/components/admin/order/order-detail-dialog'
 import { OrderStatusUpdater } from '@/components/admin/order/order-status-updater'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/shared/page-header'
 import { useAdminOrders } from '@/lib/hooks/use-orders'
 import { formatDate, formatPhone, formatPrice } from '@/lib/utils/format'
-import type { OrderSearchParams, OrderStatus } from '@/types/order'
+import type { Order, OrderSearchParams, OrderStatus } from '@/types/order'
 
 export default function AdminOrdersPage() {
   const [status, setStatus] = useState<OrderStatus | ''>('')
   const [search, setSearch] = useState('')
   const [applied, setApplied] = useState<OrderSearchParams>({ limit: 50 })
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const { data, isLoading } = useAdminOrders(applied)
 
   return (
@@ -65,8 +67,12 @@ export default function AdminOrdersPage() {
               </tr>
             ) : null}
             {data?.items.map((order) => (
-              <tr key={order.id} className="border-t">
-                <td className="p-3 font-medium">{order.order_number}</td>
+              <tr
+                key={order.id}
+                className="cursor-pointer border-t transition hover:bg-slate-50"
+                onClick={() => setSelectedOrder(order)}
+              >
+                <td className="p-3 font-medium text-primary">{order.order_number}</td>
                 <td className="p-3">
                   <p>{order.customer_name}</p>
                   <p className="text-slate-600">{formatPhone(order.customer_phone)}</p>
@@ -74,7 +80,7 @@ export default function AdminOrdersPage() {
                 <td className="p-3">{formatDate(order.created_at)}</td>
                 <td className="p-3">{formatPrice(order.total_amount)}</td>
                 <td className="p-3">{order.status}</td>
-                <td className="p-3">
+                <td className="p-3" onClick={(event) => event.stopPropagation()}>
                   <OrderStatusUpdater order={order} />
                 </td>
               </tr>
@@ -82,6 +88,13 @@ export default function AdminOrdersPage() {
           </tbody>
         </table>
       </div>
+      <OrderDetailDialog
+        order={selectedOrder}
+        open={selectedOrder !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelectedOrder(null)
+        }}
+      />
     </section>
   )
 }
