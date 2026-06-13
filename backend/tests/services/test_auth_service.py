@@ -4,6 +4,7 @@ from typing import Any
 
 import pytest
 
+from app.core.config import Settings
 from app.core.exceptions import ConflictException, UnauthorizedException, ValidationException
 from app.core.security import decode_token
 from app.services import auth_service as auth_module
@@ -13,6 +14,24 @@ pytestmark = pytest.mark.asyncio
 
 PASSWORD = "StrongPass123!"
 NEW_PASSWORD = "NewStrongPass123!"
+
+
+class RecordingEmailService:
+    """Record outgoing email payloads for assertions."""
+
+    def __init__(self) -> None:
+        self.messages: list[dict[str, str]] = []
+
+    async def send_email(
+        self,
+        *,
+        to: str,
+        subject: str,
+        html: str,
+        text: str,
+    ) -> bool:
+        self.messages.append({"to": to, "subject": subject, "html": html, "text": text})
+        return True
 
 
 @pytest.fixture(autouse=True)
@@ -198,6 +217,60 @@ async def test_password_reset_flow_end_to_end(
     assert await auth_service.reset_password("reset-token", NEW_PASSWORD) is True
     assert await mock_redis.get("password_reset:reset-token") is None
     assert await auth_service.login_user("user@example.com", NEW_PASSWORD)
+
+
+async def test_password_reset_sends_email_with_token_link(
+    fake_user_repository: Any,
+    mock_redis: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    email_service = RecordingEmailService()
+    settings = Settings(FRONTEND_URL="https://frontend.test")
+    auth_service = AuthService(
+        fake_user_repository,
+        mock_redis,
+        email_service=email_service,
+        settings=settings,
+    )
+    await auth_service.register_user("user@example.com", PASSWORD)
+    monkeypatch.setattr(auth_module, "generate_password_reset_token", lambda: "reset-token")
+
+    assert await auth_service.request_password_reset("user@example.com") is True
+
+    assert email_service.messages == [
+        {
+            "to": "user@example.com",
+            "subject": "Đặt lại mật khẩu Gas Quốc Cường",
+            "html": (
+                "<p>Dạ chào bạn,</p>"
+                "<p>Gas Quốc Cường nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn.</p>"
+                '<p><a href="https://frontend.test/reset-password?token=reset-token">'
+                "Đặt lại mật khẩu</a></p>"
+                "<p>Liên kết này có hiệu lực trong 60 phút. "
+                "Nếu bạn không yêu cầu, vui lòng bỏ qua email này.</p>"
+            ),
+            "text": (
+                "Dạ chào bạn,\n\n"
+                "Gas Quốc Cường nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn.\n"
+                "Vui lòng mở liên kết sau để đặt lại mật khẩu: "
+                "https://frontend.test/reset-password?token=reset-token\n\n"
+                "Liên kết này có hiệu lực trong 60 phút. "
+                "Nếu bạn không yêu cầu, vui lòng bỏ qua email này."
+            ),
+        }
+    ]
+
+
+async def test_password_reset_unknown_email_does_not_send_email(
+    fake_user_repository: Any,
+    mock_redis: Any,
+) -> None:
+    email_service = RecordingEmailService()
+    auth_service = AuthService(fake_user_repository, mock_redis, email_service=email_service)
+
+    assert await auth_service.request_password_reset("missing@example.com") is True
+
+    assert email_service.messages == []
 
 
 async def test_password_reset_logs_fingerprint_not_raw_token(
