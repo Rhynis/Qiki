@@ -3,6 +3,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/lib/hooks/use-auth'
@@ -18,6 +19,7 @@ function getSafeRedirectPath(value: string | null): string {
 export function LoginForm() {
   const searchParams = useSearchParams()
   const { login, isLoading } = useAuth()
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const {
     register,
     handleSubmit,
@@ -25,10 +27,20 @@ export function LoginForm() {
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '' },
+    mode: 'onChange',
   })
 
   const onSubmit = async (values: LoginFormValues) => {
-    await login(values.email, values.password, getSafeRedirectPath(searchParams.get('redirectTo')))
+    setSubmitError(null)
+    try {
+      await login(
+        values.email,
+        values.password,
+        getSafeRedirectPath(searchParams.get('redirectTo'))
+      )
+    } catch (caught) {
+      setSubmitError(caught instanceof Error ? caught.message : 'Đăng nhập thất bại')
+    }
   }
 
   return (
@@ -69,6 +81,7 @@ export function LoginForm() {
         </Link>
       </div>
 
+      {submitError ? <p className="text-center text-sm text-red-600">{submitError}</p> : null}
       <Button className="w-full" disabled={isLoading || isSubmitting} type="submit">
         {isLoading || isSubmitting ? 'Đang đăng nhập...' : 'Đăng nhập'}
       </Button>

@@ -7,8 +7,10 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           <p className="text-sm text-slate-500">Mua gas LPG an toàn, nhanh chóng</p>
         </div>
         {children}
-        <p className="mt-6 text-center text-xs text-slate-500">
-          Bảo mật tài khoản bằng mật khẩu mạnh và không chia sẻ thông tin đăng nhập.
+        <p className="mx-auto mt-6 max-w-72 text-balance text-center text-xs text-slate-500">
+          Bảo mật tài khoản bằng mật khẩu mạnh
+          <br />
+          và không chia sẻ thông tin đăng nhập.
         </p>
       </div>
     </div>

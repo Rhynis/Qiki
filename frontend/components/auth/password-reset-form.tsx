@@ -3,11 +3,12 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import * as authApi from '@/lib/api/auth'
 import {
+  passwordHelpText,
   passwordResetRequestSchema,
   passwordResetSchema,
   type PasswordResetRequestValues,
@@ -15,6 +16,8 @@ import {
 } from '@/lib/validations/auth'
 
 export function PasswordResetRequestForm() {
+  const [formMessage, setFormMessage] = useState<string | null>(null)
+  const [formError, setFormError] = useState<string | null>(null)
   const {
     register,
     handleSubmit,
@@ -22,11 +25,18 @@ export function PasswordResetRequestForm() {
   } = useForm<PasswordResetRequestValues>({
     resolver: zodResolver(passwordResetRequestSchema),
     defaultValues: { email: '' },
+    mode: 'onChange',
   })
 
   const onSubmit = async (values: PasswordResetRequestValues) => {
-    await authApi.requestPasswordReset(values.email)
-    toast.success('Nếu email tồn tại, hướng dẫn đặt lại mật khẩu đã được gửi.')
+    setFormMessage(null)
+    setFormError(null)
+    try {
+      await authApi.requestPasswordReset(values.email)
+      setFormMessage('Nếu email tồn tại, hướng dẫn đặt lại mật khẩu đã được gửi.')
+    } catch (caught) {
+      setFormError(caught instanceof Error ? caught.message : 'Không thể gửi hướng dẫn')
+    }
   }
 
   return (
@@ -43,6 +53,8 @@ export function PasswordResetRequestForm() {
         />
         {errors.email ? <p className="text-sm text-red-600">{errors.email.message}</p> : null}
       </div>
+      {formMessage ? <p className="text-sm text-emerald-700">{formMessage}</p> : null}
+      {formError ? <p className="text-sm text-red-600">{formError}</p> : null}
       <Button className="w-full" disabled={isSubmitting} type="submit">
         {isSubmitting ? 'Đang gửi...' : 'Gửi hướng dẫn'}
       </Button>
@@ -55,6 +67,8 @@ export function PasswordResetRequestForm() {
 
 export function PasswordResetConfirmForm() {
   const searchParams = useSearchParams()
+  const [formMessage, setFormMessage] = useState<string | null>(null)
+  const [formError, setFormError] = useState<string | null>(null)
   const {
     register,
     handleSubmit,
@@ -66,11 +80,18 @@ export function PasswordResetConfirmForm() {
       newPassword: '',
       confirmNewPassword: '',
     },
+    mode: 'onChange',
   })
 
   const onSubmit = async (values: PasswordResetValues) => {
-    await authApi.resetPassword(values.token ?? '', values.newPassword)
-    toast.success('Mật khẩu đã được cập nhật. Vui lòng đăng nhập.')
+    setFormMessage(null)
+    setFormError(null)
+    try {
+      await authApi.resetPassword(values.token ?? '', values.newPassword)
+      setFormMessage('Mật khẩu đã được cập nhật. Vui lòng đăng nhập.')
+    } catch (caught) {
+      setFormError(caught instanceof Error ? caught.message : 'Không thể cập nhật mật khẩu')
+    }
   }
 
   return (
@@ -87,7 +108,7 @@ export function PasswordResetConfirmForm() {
           className="h-10 w-full rounded-md border px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
           {...register('newPassword')}
         />
-        <p className="text-xs text-slate-500">Mật khẩu tối thiểu 8 ký tự</p>
+        <p className="text-xs text-slate-500">{passwordHelpText}</p>
         {errors.newPassword ? (
           <p className="text-sm text-red-600">{errors.newPassword.message}</p>
         ) : null}
@@ -107,6 +128,8 @@ export function PasswordResetConfirmForm() {
           <p className="text-sm text-red-600">{errors.confirmNewPassword.message}</p>
         ) : null}
       </div>
+      {formMessage ? <p className="text-sm text-emerald-700">{formMessage}</p> : null}
+      {formError ? <p className="text-sm text-red-600">{formError}</p> : null}
       <Button className="w-full" disabled={isSubmitting} type="submit">
         {isSubmitting ? 'Đang cập nhật...' : 'Cập nhật mật khẩu'}
       </Button>

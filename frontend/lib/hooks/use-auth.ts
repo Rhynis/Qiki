@@ -40,7 +40,6 @@ export function useAuth() {
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : 'Đăng nhập thất bại'
       setError(message)
-      toast.error(message)
       throw caught
     } finally {
       setLoading(false)
@@ -61,7 +60,6 @@ export function useAuth() {
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : 'Đăng ký thất bại'
       setError(message)
-      toast.error(message)
       throw caught
     } finally {
       setLoading(false)
