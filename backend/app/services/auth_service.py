@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import html
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -11,6 +12,7 @@ from uuid import UUID
 
 from redis.asyncio import Redis
 
+from app.core.config import Settings, get_settings
 from app.core.exceptions import ConflictException, UnauthorizedException, ValidationException
 from app.core.security import (
     create_access_token,
@@ -22,6 +24,7 @@ from app.core.security import (
 )
 from app.models.user import User
 from app.schemas.user import UserCreate
+from app.services.email_service import EmailService
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +51,19 @@ class UserRepositoryProtocol(Protocol):
     async def update(self, user_id: UUID, data: dict[str, object]) -> User | None: ...
 
 
+class EmailServiceProtocol(Protocol):
+    """Email delivery protocol used by AuthService."""
+
+    async def send_email(
+        self,
+        *,
+        to: str,
+        subject: str,
+        html: str,
+        text: str,
+    ) -> bool: ...
+
+
 @dataclass(frozen=True)
 class AuthResult:
     """Internal authentication result with raw tokens for cookie setting."""
@@ -61,9 +77,17 @@ class AuthResult:
 class AuthService:
     """User authentication and token lifecycle service."""
 
-    def __init__(self, user_repository: UserRepositoryProtocol, redis: Redis) -> None:
+    def __init__(
+        self,
+        user_repository: UserRepositoryProtocol,
+        redis: Redis,
+        email_service: EmailServiceProtocol | None = None,
+        settings: Settings | None = None,
+    ) -> None:
         self.user_repository = user_repository
         self.redis = redis
+        self.settings = settings or get_settings()
+        self.email_service = email_service or EmailService(self.settings)
 
     async def register_user(
         self,
@@ -185,6 +209,7 @@ class AuthService:
             "password_reset_token_created",
             extra={"reset_token_fingerprint": token_fingerprint},
         )
+        await self._send_password_reset_email(user.email, token)
         return True  # pragma: no cover
 
     async def reset_password(self, token: str, new_password: str) -> bool:
@@ -257,6 +282,35 @@ class AuthService:
         if isinstance(value, bytes):  # pragma: no cover
             return value.decode()
         return str(value)
+
+    async def _send_password_reset_email(self, email: str, token: str) -> None:
+        reset_link = f"{self.settings.FRONTEND_URL.rstrip('/')}/reset-password?token={token}"
+        ttl_minutes = max(1, PASSWORD_RESET_TTL_SECONDS // 60)
+        escaped_link = html.escape(reset_link, quote=True)
+        subject = "Đặt lại mật khẩu Gas Quốc Cường"
+        text = (
+            "Dạ chào bạn,\n\n"
+            "Gas Quốc Cường nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn.\n"
+            f"Vui lòng mở liên kết sau để đặt lại mật khẩu: {reset_link}\n\n"
+            f"Liên kết này có hiệu lực trong {ttl_minutes} phút. "
+            "Nếu bạn không yêu cầu, vui lòng bỏ qua email này."
+        )
+        html_body = (
+            "<p>Dạ chào bạn,</p>"
+            "<p>Gas Quốc Cường nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn.</p>"
+            f'<p><a href="{escaped_link}">Đặt lại mật khẩu</a></p>'
+            f"<p>Liên kết này có hiệu lực trong {ttl_minutes} phút. "
+            "Nếu bạn không yêu cầu, vui lòng bỏ qua email này.</p>"
+        )
+        try:
+            await self.email_service.send_email(
+                to=email,
+                subject=subject,
+                html=html_body,
+                text=text,
+            )
+        except Exception:
+            logger.exception("password_reset_email_send_failed")
 
     async def _get(self, key: str) -> object:
         return await self.redis.get(key)
