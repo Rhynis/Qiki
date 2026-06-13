@@ -66,4 +66,6 @@ jobs:
       - run: pytest --cov --cov-fail-under=70
       - run: pytest tests/eval -v
       - run: python -m scripts.run_evaluation --suite safety
-      - run: pip-audit --strict
+      # GHSA-8rrh-rw8j-w5fx: dev/build-only `wheel` (deepeval transitive, not in the
+      # runtime image); the fix needs packaging>=24 which runtime langfuse pins out.
+      - run: pip-audit --strict --ignore-vuln GHSA-8rrh-rw8j-w5fx
