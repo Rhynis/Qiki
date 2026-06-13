@@ -2,6 +2,7 @@
 
 import { create } from 'zustand'
 import type { Order, PaymentMethod, VatInfo } from '@/types/order'
+import { DELIVERY_CITY } from '@/utils/vietnamese-address'
 
 export type CheckoutStep = 1 | 2 | 3 | 4
 
@@ -41,8 +42,8 @@ const initialForm: CheckoutFormState = {
   customer_email: '',
   delivery_address: '',
   delivery_ward: '',
-  delivery_district: 'Quan 1',
-  delivery_city: 'TP. Hồ Chí Minh',
+  delivery_district: '',
+  delivery_city: DELIVERY_CITY,
   delivery_notes: '',
   has_different_recipient: false,
   different_recipient_name: '',

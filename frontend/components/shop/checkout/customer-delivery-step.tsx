@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -9,7 +9,11 @@ import { Textarea } from '@/components/ui/textarea'
 import { useAuth } from '@/lib/hooks/use-auth'
 import { useCheckoutStore } from '@/lib/stores/checkout-store'
 import { customerDeliverySchema } from '@/lib/validations/order'
-import { getDistricts, getWards, vietnameseAddresses } from '@/utils/vietnamese-address'
+import {
+  deliveryWardGroups,
+  getDeliveryZoneByWard,
+  vietnameseAddresses,
+} from '@/utils/vietnamese-address'
 
 function issueMap(error: unknown): Record<string, string> {
   if (!error || typeof error !== 'object' || !('issues' in error)) return {}
@@ -24,11 +28,6 @@ export function CustomerDeliveryStep({ onNext }: { onNext: () => void }) {
   const updateForm = useCheckoutStore((state) => state.updateForm)
   const previousStep = useCheckoutStore((state) => state.previousStep)
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const districts = useMemo(() => getDistricts(form.delivery_city), [form.delivery_city])
-  const wards = useMemo(
-    () => getWards(form.delivery_city, form.delivery_district),
-    [form.delivery_city, form.delivery_district]
-  )
 
   useEffect(() => {
     if (!user) return
@@ -87,7 +86,7 @@ export function CustomerDeliveryStep({ onNext }: { onNext: () => void }) {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="delivery_city">Tỉnh/thành</Label>
           <select
@@ -97,7 +96,7 @@ export function CustomerDeliveryStep({ onNext }: { onNext: () => void }) {
             onChange={(event) =>
               updateForm({
                 delivery_city: event.target.value,
-                delivery_district: getDistricts(event.target.value)[0]?.name ?? '',
+                delivery_district: '',
                 delivery_ward: '',
               })
             }
@@ -110,42 +109,34 @@ export function CustomerDeliveryStep({ onNext }: { onNext: () => void }) {
           </select>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="delivery_district">Quận/huyện</Label>
-          <select
-            id="delivery_district"
-            className="h-10 w-full rounded-md border bg-white px-3 text-sm"
-            value={form.delivery_district}
-            onChange={(event) =>
-              updateForm({ delivery_district: event.target.value, delivery_ward: '' })
-            }
-          >
-            {districts.map((district) => (
-              <option key={district.name} value={district.name}>
-                {district.name}
-              </option>
-            ))}
-          </select>
-          {errors.delivery_district ? (
-            <p className="text-sm text-red-700">{errors.delivery_district}</p>
-          ) : null}
-        </div>
-        <div className="space-y-2">
           <Label htmlFor="delivery_ward">Phường/xã</Label>
           <select
             id="delivery_ward"
             className="h-10 w-full rounded-md border bg-white px-3 text-sm"
             value={form.delivery_ward}
-            onChange={(event) => updateForm({ delivery_ward: event.target.value })}
+            onChange={(event) =>
+              updateForm({
+                delivery_ward: event.target.value,
+                delivery_district: getDeliveryZoneByWard(event.target.value) ?? '',
+              })
+            }
           >
             <option value="">Chọn phường/xã</option>
-            {wards.map((ward) => (
-              <option key={ward.name} value={ward.name}>
-                {ward.name}
-              </option>
+            {deliveryWardGroups.map((group) => (
+              <optgroup key={group.name} label={group.name}>
+                {group.wards.map((ward) => (
+                  <option key={ward.name} value={ward.name}>
+                    {ward.name}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
+          {errors.delivery_ward ? (
+            <p className="text-sm text-red-700">{errors.delivery_ward}</p>
+          ) : null}
         </div>
-        <div className="space-y-2 md:col-span-3">
+        <div className="space-y-2 md:col-span-2">
           <Label htmlFor="delivery_address">Địa chỉ</Label>
           <Input
             id="delivery_address"
@@ -156,7 +147,7 @@ export function CustomerDeliveryStep({ onNext }: { onNext: () => void }) {
             <p className="text-sm text-red-700">{errors.delivery_address}</p>
           ) : null}
         </div>
-        <div className="space-y-2 md:col-span-3">
+        <div className="space-y-2 md:col-span-2">
           <Label htmlFor="delivery_notes">Ghi chú giao hàng</Label>
           <Textarea
             id="delivery_notes"
