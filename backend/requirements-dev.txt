@@ -10,3 +10,9 @@ ruff==0.3.0
 mypy==1.8.0
 pip-audit==2.7.0
 types-passlib
+# Dev/test only — conversation eval suite (tests/eval). Kept out of the runtime image.
+deepeval==4.0.6
+# NOTE: deepeval's transitive build tool `wheel` is held at 0.45.1 (GHSA-8rrh-rw8j-w5fx)
+# because the fix (wheel 0.46.2+) requires packaging>=24, which the runtime `langfuse`
+# pins to <24. wheel is build-only and not shipped in the runtime image, so pip-audit
+# ignores that single advisory (see .github/workflows/ci-backend.yml).

@@ -47,6 +47,8 @@ jobs:
       REDIS_URL: redis://localhost:6379/0
       JWT_SECRET_KEY: test_secret_key_at_least_32_characters_long_for_testing
       ENVIRONMENT: development
+      # Keep the DeepEval eval suite (tests/eval) offline + deterministic in CI.
+      DEEPEVAL_TELEMETRY_OPT_OUT: "YES"
 
     steps:
       - uses: actions/checkout@v4
@@ -62,5 +64,8 @@ jobs:
       - run: mypy app/
       - run: alembic upgrade head
       - run: pytest --cov --cov-fail-under=70
+      - run: pytest tests/eval -v
       - run: python -m scripts.run_evaluation --suite safety
-      - run: pip-audit --strict
+      # GHSA-8rrh-rw8j-w5fx: dev/build-only `wheel` (deepeval transitive, not in the
+      # runtime image); the fix needs packaging>=24 which runtime langfuse pins out.
+      - run: pip-audit --strict --ignore-vuln GHSA-8rrh-rw8j-w5fx
