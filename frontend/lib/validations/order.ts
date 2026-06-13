@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { DELIVERY_CITY, isAllowedDeliveryWard } from '@/utils/vietnamese-address'
 
 const phoneRegex = /^(\+84|0)[1-9][0-9]{8,9}$/
 const taxCodeRegex = /^[0-9]{10}(-[0-9]{3})?$/
@@ -19,9 +20,14 @@ export const customerDeliverySchema = z
     customer_phone: z.string().trim().regex(phoneRegex, 'Số điện thoại Việt Nam không hợp lệ'),
     customer_email: z.string().trim().email('Email không hợp lệ').or(z.literal('')).optional(),
     delivery_address: z.string().trim().min(5, 'Địa chỉ giao hàng quá ngắn'),
-    delivery_ward: z.string().trim().optional(),
-    delivery_district: z.string().trim().min(1, 'Chọn quận/huyện'),
-    delivery_city: z.string().trim().min(1, 'Chọn tỉnh/thành'),
+    delivery_ward: z
+      .string()
+      .trim()
+      .refine(isAllowedDeliveryWard, 'Chọn phường/xã trong khu vực giao hàng'),
+    delivery_district: z.string().trim().optional(),
+    delivery_city: z.literal(DELIVERY_CITY, {
+      errorMap: () => ({ message: 'Chọn TP. Hồ Chí Minh' }),
+    }),
     delivery_notes: z.string().trim().optional(),
     has_different_recipient: z.boolean(),
     different_recipient_name: z.string().trim().optional(),

@@ -11,6 +11,7 @@ import { useCartStore } from '@/lib/stores/cart-store'
 import { useCheckoutStore } from '@/lib/stores/checkout-store'
 import { formatPrice } from '@/lib/utils/format'
 import type { CheckoutRequest } from '@/types/order'
+import { getDeliveryZoneByWard } from '@/utils/vietnamese-address'
 
 function optionalText(value: string) {
   const trimmed = value.trim()
@@ -28,6 +29,7 @@ export function ConfirmStep() {
   const resetCheckout = useCheckoutStore((state) => state.resetCheckout)
   const createOrder = useCreateOrder()
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
+  const deliveryZone = getDeliveryZoneByWard(form.delivery_ward)
 
   const payload: CheckoutRequest = {
     items: items.map((item) => ({
@@ -40,7 +42,7 @@ export function ConfirmStep() {
     customer_email: optionalText(form.customer_email),
     delivery_address: form.delivery_address,
     delivery_ward: optionalText(form.delivery_ward),
-    delivery_district: optionalText(form.delivery_district),
+    delivery_district: deliveryZone,
     delivery_city: form.delivery_city,
     delivery_notes: optionalText(form.delivery_notes),
     different_recipient_name: form.has_different_recipient
@@ -89,11 +91,7 @@ export function ConfirmStep() {
           <div>
             <p className="text-slate-600">Giao đến</p>
             <p className="font-medium">{form.delivery_address}</p>
-            <p>
-              {[form.delivery_ward, form.delivery_district, form.delivery_city]
-                .filter(Boolean)
-                .join(', ')}
-            </p>
+            <p>{[form.delivery_ward, form.delivery_city].filter(Boolean).join(', ')}</p>
           </div>
         </div>
       </div>

@@ -1,5 +1,6 @@
 export interface WardOption {
   name: string
+  zone: 'Bình Thạnh' | 'Thủ Đức'
 }
 
 export interface DistrictOption {
@@ -7,56 +8,60 @@ export interface DistrictOption {
   wards: WardOption[]
 }
 
-export interface ProvinceOption {
-  name: string
-  districts: DistrictOption[]
+export interface DeliveryWardGroup {
+  name: WardOption['zone']
+  wards: WardOption[]
 }
 
-export const vietnameseAddresses: ProvinceOption[] = [
+export interface ProvinceOption {
+  name: string
+  wards: WardOption[]
+}
+
+export const DELIVERY_CITY = 'TP. Hồ Chí Minh'
+
+export const deliveryWardGroups: DeliveryWardGroup[] = [
   {
-    name: 'TP. Hồ Chí Minh',
-    districts: [
-      {
-        name: 'Quan 1',
-        wards: [
-          { name: 'Phuong Ben Thanh' },
-          { name: 'Phuong Da Kao' },
-          { name: 'Phuong Tan Dinh' },
-        ],
-      },
-      {
-        name: 'Quan 3',
-        wards: [{ name: 'Phuong Vo Thi Sau' }, { name: 'Phuong 9' }, { name: 'Phuong 12' }],
-      },
-      {
-        name: 'Quan 7',
-        wards: [{ name: 'Phuong Tan Phu' }, { name: 'Phuong Tan Quy' }, { name: 'Phuong Phu My' }],
-      },
-      {
-        name: 'Thu Duc',
-        wards: [
-          { name: 'Phuong Linh Trung' },
-          { name: 'Phuong Thao Dien' },
-          { name: 'Phuong Hiep Binh Chanh' },
-        ],
-      },
+    name: 'Bình Thạnh',
+    wards: [
+      { name: 'Bình Quới', zone: 'Bình Thạnh' },
+      { name: 'Bình Lợi Trung', zone: 'Bình Thạnh' },
+      { name: 'Gia Định', zone: 'Bình Thạnh' },
+      { name: 'Thạnh Mỹ Tây', zone: 'Bình Thạnh' },
+      { name: 'Bình Thạnh', zone: 'Bình Thạnh' },
     ],
   },
   {
-    name: 'Dong Nai',
-    districts: [
-      {
-        name: 'Bien Hoa',
-        wards: [{ name: 'Phuong Tan Phong' }, { name: 'Phuong Long Binh' }],
-      },
+    name: 'Thủ Đức',
+    wards: [
+      { name: 'Hiệp Bình', zone: 'Thủ Đức' },
+      { name: 'Tam Bình', zone: 'Thủ Đức' },
+      { name: 'Thủ Đức', zone: 'Thủ Đức' },
+      { name: 'Linh Xuân', zone: 'Thủ Đức' },
     ],
   },
 ]
 
-export function getDistricts(city: string): DistrictOption[] {
-  return vietnameseAddresses.find((province) => province.name === city)?.districts ?? []
+export const vietnameseAddresses: ProvinceOption[] = [
+  {
+    name: DELIVERY_CITY,
+    wards: deliveryWardGroups.flatMap((group) => group.wards),
+  },
+]
+
+export function getDistricts(_city: string): DistrictOption[] {
+  return []
 }
 
-export function getWards(city: string, district: string): WardOption[] {
-  return getDistricts(city).find((item) => item.name === district)?.wards ?? []
+export function getWards(city: string, _district = ''): WardOption[] {
+  if (city !== DELIVERY_CITY) return []
+  return deliveryWardGroups.flatMap((group) => group.wards)
+}
+
+export function getDeliveryZoneByWard(ward: string): string | null {
+  return getWards(DELIVERY_CITY).find((item) => item.name === ward)?.zone ?? null
+}
+
+export function isAllowedDeliveryWard(ward: string): boolean {
+  return getDeliveryZoneByWard(ward) !== null
 }
