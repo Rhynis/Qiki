@@ -39,6 +39,25 @@ def test_outside_delivery_zone_returns_none() -> None:
     assert resolve_delivery_zone_from_ward("Bến Nghé") is None
 
 
+def test_removed_thu_duc_wards_are_out_of_area() -> None:
+    # Thủ Đức delivery wards were narrowed to the real served set; the wards below
+    # were dropped and must no longer resolve to a delivery zone.
+    for ward in (
+        "Thảo Điền",
+        "An Phú",
+        "Linh Chiểu",
+        "Cát Lái",
+        "Thủ Thiêm",
+        "Tăng Nhơn Phú A",
+    ):
+        assert resolve_delivery_zone_from_ward(ward) is None
+
+
+def test_kept_thu_duc_wards_still_resolve() -> None:
+    for ward in ("Bình Thọ", "Trường Thọ", "Linh Tây", "Tam Phú", "Hiệp Bình Phước"):
+        assert resolve_delivery_zone_from_ward(ward) == "Thủ Đức"
+
+
 def test_unknown_ward_returns_none() -> None:
     assert resolve_delivery_zone_from_ward("Phường Không Có Trong Bảng") is None
 
