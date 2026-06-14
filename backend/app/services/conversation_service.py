@@ -2051,9 +2051,12 @@ Tin mới:
             items=items,
             customer_name=extracted_slots.customer_name,
             customer_phone=extracted_slots.customer_phone,
-            delivery_address=cls._select_delivery_address(
-                extracted_slots.delivery_address,
-                cls._extract_delivery_address_candidate(content),
+            delivery_address=cls._sanitize_delivery_address(
+                cls._select_delivery_address(
+                    extracted_slots.delivery_address,
+                    cls._extract_delivery_address_candidate(content),
+                ),
+                content,
             ),
             delivery_notes=extracted_slots.delivery_notes,
             payment_method=extracted_slots.payment_method,
@@ -2081,6 +2084,51 @@ Tin mới:
         ):
             return inferred_address
         return extracted_address
+
+    @classmethod
+    def _sanitize_delivery_address(cls, address: str | None, content: str) -> str | None:
+        """Drop non-address fragments a single-message order leaks into the address.
+
+        When the captured address still carries the product, a "tên <name>" segment,
+        the phone number, or a payment cue, prefer the address segment isolated from
+        the message. A clean address (e.g. from the multi-turn flow) is unchanged.
+        """
+        if not address or not cls._address_has_non_address_noise(address):
+            return address
+        segment = cls._address_segment_from_content(content)
+        if segment and not cls._address_has_non_address_noise(segment):
+            return segment
+        return address
+
+    @classmethod
+    def _address_segment_from_content(cls, content: str) -> str | None:
+        """Join the comma/semicolon/newline parts of a message that look like an address."""
+        parts = [
+            part.strip(" .;:-")
+            for part in re.split(r"[,\n;]+", content)
+            if cls._segment_looks_like_address(part)
+        ]
+        if not parts:
+            return None
+        joined = cls._strip_trailing_payment_words(", ".join(part for part in parts if part))
+        return re.sub(r"\s+", " ", joined).strip(" ,.;:-") or None
+
+    @classmethod
+    def _address_has_non_address_noise(cls, address: str) -> bool:
+        """Detect order fragments (name/phone/payment/product) inside an address blob.
+
+        Vietnamese place names contain "Bình" (Bình Thạnh, Bình Lợi Trung), so product
+        noise is detected via gas/kg/lít tokens, never via "binh".
+        """
+        normalized = cls._normalize_match_text(address)
+        tokens = set(normalized.split())
+        if {"ten", "sdt"} & tokens:
+            return True
+        if re.search(r"\d{9,}", re.sub(r"[\s.\-]", "", address)):
+            return True
+        if {"ck", "cod", "cash", "banking", "bank", "gas", "kg", "lit"} & tokens:
+            return True
+        return any(phrase in normalized for phrase in ("chuyen khoan", "tien mat", "thanh toan"))
 
     @classmethod
     def _merge_candidate_items(
