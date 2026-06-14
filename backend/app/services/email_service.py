@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
+from email.message import EmailMessage
 
+import aiosmtplib
 import httpx
 
 from app.core.config import Settings, get_settings
@@ -15,12 +17,17 @@ RESEND_EMAILS_URL = "https://api.resend.com/emails"
 
 
 class EmailService:
-    """Send transactional emails through Resend."""
+    """Send transactional emails through Gmail SMTP or Resend, selected by config."""
 
     def __init__(self, settings: Settings | None = None) -> None:
         resolved_settings = settings or get_settings()
+        self.provider = resolved_settings.EMAIL_PROVIDER
         self.api_key = resolved_settings.RESEND_API_KEY
         self.email_from = resolved_settings.EMAIL_FROM
+        self.smtp_host = resolved_settings.SMTP_HOST
+        self.smtp_port = resolved_settings.SMTP_PORT
+        self.smtp_username = resolved_settings.SMTP_USERNAME
+        self.smtp_password = resolved_settings.SMTP_PASSWORD
         self.timeout = 10.0
 
     async def send_email(
@@ -31,8 +38,53 @@ class EmailService:
         html: str,
         text: str,
     ) -> bool:
-        """Send one transactional email, returning whether delivery was requested."""
+        """Send one transactional email, returning whether delivery was requested.
+
+        Dispatches to the configured provider. Missing credentials or send errors
+        are logged and turned into ``False`` so a caller (e.g. password reset) never
+        crashes.
+        """
         recipients = [to] if isinstance(to, str) else list(to)
+        if self.provider == "smtp":
+            return await self._send_via_smtp(recipients, subject, html, text)
+        return await self._send_via_resend(recipients, subject, html, text)
+
+    async def _send_via_smtp(
+        self, recipients: list[str], subject: str, html: str, text: str
+    ) -> bool:
+        if not (self.smtp_username and self.smtp_password):
+            logger.info("email_send_skipped_missing_smtp_credentials", extra={"subject": subject})
+            return False
+
+        message = EmailMessage()
+        message["From"] = self.email_from
+        message["To"] = ", ".join(recipients)
+        message["Subject"] = subject
+        message.set_content(text)
+        message.add_alternative(html, subtype="html")
+
+        try:
+            await aiosmtplib.send(
+                message,
+                recipients=recipients,
+                hostname=self.smtp_host,
+                port=self.smtp_port,
+                username=self.smtp_username,
+                password=self.smtp_password,
+                start_tls=True,
+                timeout=self.timeout,
+            )
+        except (aiosmtplib.SMTPException, OSError):
+            logger.exception(
+                "email_send_failed",
+                extra={"subject": subject, "recipient_count": len(recipients)},
+            )
+            return False
+        return True
+
+    async def _send_via_resend(
+        self, recipients: list[str], subject: str, html: str, text: str
+    ) -> bool:
         if not self.api_key:
             logger.info("email_send_skipped_missing_api_key", extra={"subject": subject})
             return False
