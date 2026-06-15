@@ -1,0 +1,56 @@
+# Render Blueprint for the Gasbot backend (free plan, Docker).
+# Shares ONE Upstash Redis + ONE Supabase Postgres with the other hosts (Railway/Oracle).
+# Secrets are `sync: false` — set them in the Render dashboard; copy the SAME values used on
+# the other hosts. JWT_SECRET_KEY MUST be identical across all hosts (HS256 tokens), or
+# switching BACKEND_URL between hosts logs everyone out. See docs/HOSTING.md.
+services:
+  - type: web
+    name: gasbot-backend
+    runtime: docker
+    repo: https://github.com/Rhynis/Gas-Rag-bot
+    branch: main
+    dockerfilePath: backend/Dockerfile
+    dockerContext: backend
+    plan: free
+    region: singapore
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # Non-secret defaults
+      - key: ENVIRONMENT
+        value: production
+      - key: LLM_PROVIDER
+        value: gemini
+      - key: EMAIL_PROVIDER
+        value: smtp
+      # Shared infra + secrets — set in the dashboard, identical across hosts
+      - key: DATABASE_URL # Supabase pooler URL (postgresql+asyncpg://...)
+        sync: false
+      - key: REDIS_URL # Upstash rediss://... (TLS)
+        sync: false
+      - key: JWT_SECRET_KEY # MUST match every host
+        sync: false
+      - key: FRONTEND_URL # https://gas-rag-bot-rhynis-projects.vercel.app
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_USE_VERTEX
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: JINA_API_KEY
+        sync: false
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
