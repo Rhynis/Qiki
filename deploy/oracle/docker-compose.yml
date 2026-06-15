@@ -1,0 +1,24 @@
+# Oracle Cloud (or any VPS) deployment for the Gasbot backend.
+# Run from the repo root via deploy/oracle/deploy.sh. Reads secrets from deploy/oracle/.env
+# (git-ignored — never commit it). The backend binds to localhost only; nginx terminates TLS
+# and reverse-proxies to it. Shares the SAME Upstash Redis + Supabase + JWT_SECRET_KEY as the
+# other hosts (see docs/HOSTING.md).
+services:
+  backend:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    image: gasbot-backend:latest
+    container_name: gasbot-backend
+    restart: always
+    env_file:
+      - .env
+    environment:
+      PORT: "8000"
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "sh", "-c", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
