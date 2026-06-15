@@ -36,6 +36,20 @@ export const test = base.extend({
         body: payload === undefined ? '' : JSON.stringify(payload),
       })
     })
+
+    // Wait for client hydration after each navigation so we never fill inputs or
+    // submit forms before React attaches handlers (a real race on slow WebKit CI).
+    const originalGoto = page.goto.bind(page)
+    page.goto = (async (url, options) => {
+      const response = await originalGoto(url, options)
+      await page.waitForFunction(
+        () => document.documentElement.dataset.hydrated === 'true',
+        undefined,
+        { timeout: 15_000 }
+      )
+      return response
+    }) as typeof page.goto
+
     await use(page)
   },
 })
