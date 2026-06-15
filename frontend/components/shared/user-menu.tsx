@@ -16,11 +16,11 @@ export function UserMenu() {
 
   if (!isAuthenticated || !user) {
     return (
-      <div className="flex items-center gap-2">
-        <Button asChild size="sm" variant="ghost">
+      <div className="flex items-center gap-1 sm:gap-2">
+        <Button asChild size="sm" variant="ghost" className="px-2 sm:px-3">
           <Link href="/login">Đăng nhập</Link>
         </Button>
-        <Button asChild size="sm">
+        <Button asChild size="sm" className="hidden px-2 sm:inline-flex sm:px-3">
           <Link href="/register">Đăng ký</Link>
         </Button>
       </div>

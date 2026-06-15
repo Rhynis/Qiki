@@ -8,6 +8,8 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./tests/setup.ts'],
     globals: true,
+    // Playwright owns e2e/**; keep those specs out of the vitest (unit) run.
+    exclude: ['node_modules/**', 'dist/**', '.next/**', 'e2e/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'json-summary'],
