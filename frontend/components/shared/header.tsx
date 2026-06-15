@@ -39,11 +39,11 @@ export function Header() {
 
   return (
     <header className="border-b bg-white">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
-        <Link href="/" className="text-lg font-semibold text-slate-950">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-4 sm:px-4">
+        <Link href="/" className="text-base font-semibold text-slate-950 sm:text-lg">
           Gas Quốc Cường
         </Link>
-        <nav className="flex items-center gap-3 text-sm">
+        <nav className="flex items-center gap-1.5 text-sm sm:gap-3">
           <div
             className="flex items-center"
             onMouseEnter={openProductMenu}

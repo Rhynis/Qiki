@@ -13,6 +13,13 @@ const eslintConfig = [
       'no-console': ['warn', { allow: ['warn', 'error'] }],
     },
   },
+  {
+    // Playwright's `await use(fixture)` is not a React hook; the rule misfires.
+    files: ['e2e/**'],
+    rules: {
+      'react-hooks/rules-of-hooks': 'off',
+    },
+  },
 ]
 
 export default eslintConfig

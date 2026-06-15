@@ -56,3 +56,9 @@ gasbot_build_plan*.md
 
 # TypeScript build cache
 frontend/tsconfig.tsbuildinfo
+
+# Playwright E2E output
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
+frontend/.playwright/
