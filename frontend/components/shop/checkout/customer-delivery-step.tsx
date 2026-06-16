@@ -34,7 +34,7 @@ export function CustomerDeliveryStep({ onNext }: { onNext: () => void }) {
     updateForm({
       customer_name: form.customer_name || user.full_name || '',
       customer_phone: form.customer_phone || user.phone || '',
-      customer_email: form.customer_email || user.email,
+      customer_email: form.customer_email || user.email || '',
     })
   }, [form.customer_email, form.customer_name, form.customer_phone, updateForm, user])
 

@@ -27,7 +27,7 @@ export function UserMenu() {
     )
   }
 
-  const initial = (user.full_name ?? user.email).charAt(0).toUpperCase()
+  const initial = (user.full_name ?? user.email ?? user.phone ?? '?').charAt(0).toUpperCase()
 
   return (
     <details className="relative">

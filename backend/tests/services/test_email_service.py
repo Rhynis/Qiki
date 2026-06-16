@@ -7,7 +7,7 @@ import aiosmtplib
 import pytest
 
 from app.core.config import Settings
-from app.services.email_service import EmailService
+from app.services.email_service import EmailService, render_email_otp
 
 pytestmark = pytest.mark.asyncio
 
@@ -99,6 +99,16 @@ async def test_email_service_smtp_noop_without_credentials(
 
     assert result is False
     assert called is False
+
+
+async def test_render_email_otp_includes_code_and_expiry() -> None:
+    subject, text, html = render_email_otp("123456", ttl_minutes=10)
+
+    assert subject == "Mã xác minh email Gas Quốc Cường"
+    assert "123456" in text
+    assert "123456" in html
+    assert "10 phút" in text
+    assert "10 phút" in html
 
 
 async def test_email_service_smtp_failure_does_not_raise(

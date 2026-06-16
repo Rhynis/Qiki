@@ -83,6 +83,7 @@ class UserResponse(UserBase):
     id: UUID
     role: str
     is_active: bool
+    email_verified: bool = False
     created_at: datetime
 
 
@@ -151,3 +152,34 @@ class PasswordResetConfirm(BaseModel):
     @classmethod
     def validate_new_password(cls, value: str) -> str:
         return validate_password_strength(value)
+
+
+class EmailOtpRequest(BaseModel):
+    """Request an email-verification OTP for the given email."""
+
+    email: EmailStr
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return value.lower()
+
+
+class EmailOtpVerify(BaseModel):
+    """Submit an email-verification OTP code."""
+
+    email: EmailStr
+    code: str
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return value.lower()
+
+    @field_validator("code")
+    @classmethod
+    def validate_code(cls, value: str) -> str:
+        normalized = value.strip()
+        if not (len(normalized) == 6 and normalized.isdigit()):
+            raise ValueError("OTP code must be 6 digits")
+        return normalized

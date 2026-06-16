@@ -287,3 +287,56 @@ async def test_refresh_endpoint_with_valid_token(test_client: AsyncClient) -> No
         for value in set_cookie
     )
     assert "access_token" not in response.json()
+
+
+async def test_email_otp_request_returns_generic_message(test_client: AsyncClient) -> None:
+    await test_client.post("/api/v1/auth/register", json=register_payload())
+
+    response = await test_client.post(
+        "/api/v1/auth/email/otp-request",
+        json={"email": "user@example.com"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["detail"] == "Nếu email hợp lệ, mã xác minh đã được gửi."
+
+
+async def test_email_otp_request_unknown_email_is_generic(test_client: AsyncClient) -> None:
+    response = await test_client.post(
+        "/api/v1/auth/email/otp-request",
+        json={"email": "missing@example.com"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["detail"] == "Nếu email hợp lệ, mã xác minh đã được gửi."
+
+
+async def test_email_otp_verify_succeeds_with_correct_code(
+    test_client: AsyncClient, mock_redis: Any
+) -> None:
+    register = await test_client.post("/api/v1/auth/register", json=register_payload())
+    user_id = register.json()["id"]
+    await test_client.post("/api/v1/auth/email/otp-request", json={"email": "user@example.com"})
+    code = await mock_redis.get(f"email_otp:{user_id}")
+
+    response = await test_client.post(
+        "/api/v1/auth/email/otp-verify",
+        json={"email": "user@example.com", "code": code},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"verified": True}
+    assert await mock_redis.get(f"email_otp:{user_id}") is None
+
+
+async def test_email_otp_verify_wrong_code_returns_400(test_client: AsyncClient) -> None:
+    await test_client.post("/api/v1/auth/register", json=register_payload())
+    await test_client.post("/api/v1/auth/email/otp-request", json={"email": "user@example.com"})
+
+    response = await test_client.post(
+        "/api/v1/auth/email/otp-verify",
+        json={"email": "user@example.com", "code": "000000"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error_code"] == "invalid_email_otp"
