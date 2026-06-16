@@ -26,7 +26,7 @@ export function LoginForm() {
     formState: { errors, isSubmitting },
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: '', password: '' },
+    defaultValues: { identifier: '', password: '' },
     mode: 'onChange',
   })
 
@@ -34,7 +34,7 @@ export function LoginForm() {
     setSubmitError(null)
     try {
       await login(
-        values.email,
+        values.identifier,
         values.password,
         getSafeRedirectPath(searchParams.get('redirectTo'))
       )
@@ -46,16 +46,18 @@ export function LoginForm() {
   return (
     <form className="space-y-5" onSubmit={handleSubmit(onSubmit)}>
       <div className="space-y-2">
-        <label className="text-sm font-medium" htmlFor="email">
-          Email
+        <label className="text-sm font-medium" htmlFor="identifier">
+          Số điện thoại
         </label>
         <input
-          id="email"
-          autoComplete="email"
+          id="identifier"
+          autoComplete="username"
           className="h-10 w-full rounded-md border px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-          {...register('email')}
+          {...register('identifier')}
         />
-        {errors.email ? <p className="text-sm text-red-600">{errors.email.message}</p> : null}
+        {errors.identifier ? (
+          <p className="text-sm text-red-600">{errors.identifier.message}</p>
+        ) : null}
       </div>
 
       <div className="space-y-2">

@@ -18,7 +18,7 @@ class UserRepository:
     async def create(self, data: UserCreate, hashed_password: str) -> User:
         """Create a new user."""
         user = User(
-            email=data.email.lower(),
+            email=data.email.lower() if data.email else None,
             hashed_password=hashed_password,
             full_name=data.full_name,
             phone=data.phone,

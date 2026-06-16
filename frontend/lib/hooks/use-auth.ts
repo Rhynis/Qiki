@@ -28,10 +28,10 @@ export function useAuth() {
     }
   }, [clearAuth, setError, setLoading, setSession, setUser])
 
-  const login = async (email: string, password: string, redirectTo = '/') => {
+  const login = async (identifier: string, password: string, redirectTo = '/') => {
     setLoading(true)
     try {
-      const result = await authApi.login(email, password)
+      const result = await authApi.login(identifier, password)
       setUser(result.user)
       setSession({ tokenType: result.token_type })
       setError(null)
@@ -50,7 +50,7 @@ export function useAuth() {
     setLoading(true)
     try {
       await authApi.register({
-        email: data.email,
+        email: data.email ? data.email : undefined,
         password: data.password,
         full_name: data.full_name,
         phone: data.phone,

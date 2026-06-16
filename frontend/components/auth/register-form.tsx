@@ -70,7 +70,7 @@ export function RegisterForm() {
 
       <div className="space-y-2">
         <label className="text-sm font-medium" htmlFor="email">
-          Email
+          Email (không bắt buộc)
         </label>
         <input
           id="email"
