@@ -4,7 +4,8 @@ export type UserRole = 'customer' | 'staff' | 'admin'
 
 export interface User {
   id: string
-  email: string
+  email: string | null
+  email_verified: boolean
   full_name: string | null
   phone: string | null
   role: UserRole
@@ -69,4 +70,12 @@ export async function resetPassword(token: string, newPassword: string): Promise
     token,
     new_password: newPassword,
   })
+}
+
+export async function requestEmailOtp(email: string): Promise<void> {
+  await apiClient.post('/api/v1/auth/email/otp-request', { email })
+}
+
+export async function verifyEmailOtp(email: string, code: string): Promise<void> {
+  await apiClient.post('/api/v1/auth/email/otp-verify', { email, code })
 }

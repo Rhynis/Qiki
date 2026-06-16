@@ -1,9 +1,19 @@
 'use client'
 
-import { ClipboardList, KeyRound, Mail, Phone, ShieldCheck, UserRound } from 'lucide-react'
+import {
+  BadgeCheck,
+  ClipboardList,
+  KeyRound,
+  Mail,
+  Phone,
+  ShieldAlert,
+  ShieldCheck,
+  UserRound,
+} from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { EmailOtpVerification } from '@/components/auth/email-otp-verification'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/shared/page-header'
 import { useAuth } from '@/lib/hooks/use-auth'
@@ -57,7 +67,7 @@ export default function AccountPage() {
     },
     {
       label: 'Email',
-      value: user.email,
+      value: displayValue(user.email),
       icon: Mail,
     },
     {
@@ -91,6 +101,29 @@ export default function AccountPage() {
             )
           })}
         </div>
+
+        {user.email ? (
+          <div className="mt-6 rounded-lg border bg-slate-50 p-4">
+            <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
+              {user.email_verified ? (
+                <span className="inline-flex items-center gap-1.5 text-emerald-700">
+                  <BadgeCheck className="h-4 w-4" />
+                  Email đã xác minh
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 text-amber-700">
+                  <ShieldAlert className="h-4 w-4" />
+                  Email chưa xác minh
+                </span>
+              )}
+            </div>
+            {!user.email_verified ? (
+              <div className="mt-3">
+                <EmailOtpVerification email={user.email} onVerified={() => void refreshUser()} />
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="mt-6 flex flex-col gap-3 sm:flex-row">
           <Button asChild>

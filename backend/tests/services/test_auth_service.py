@@ -380,3 +380,137 @@ async def test_password_reset_unknown_email_returns_success(auth_service: AuthSe
 async def test_reset_password_rejects_invalid_token(auth_service: AuthService) -> None:
     with pytest.raises(ValidationException):
         await auth_service.reset_password("missing-token", NEW_PASSWORD)
+
+
+# --- Email OTP verification ---------------------------------------------------
+
+
+def _otp_auth_service(
+    fake_user_repository: Any, mock_redis: Any
+) -> tuple[AuthService, RecordingEmailService]:
+    email_service = RecordingEmailService()
+    service = AuthService(fake_user_repository, mock_redis, email_service=email_service)
+    return service, email_service
+
+
+async def test_request_email_otp_emails_six_digit_code(
+    fake_user_repository: Any, mock_redis: Any
+) -> None:
+    service, email_service = _otp_auth_service(fake_user_repository, mock_redis)
+    user = await service.register_user(
+        phone="0901234567", password=PASSWORD, email="user@example.com"
+    )
+
+    assert await service.request_email_otp(user) is True
+
+    stored_code = await mock_redis.get(f"email_otp:{user.id}")
+    assert stored_code is not None and len(stored_code) == 6 and stored_code.isdigit()
+    assert len(email_service.messages) == 1
+    message = email_service.messages[0]
+    assert message["to"] == "user@example.com"
+    assert stored_code in message["text"]
+    assert stored_code in message["html"]
+
+
+async def test_verify_email_otp_sets_flag_and_is_single_use(
+    fake_user_repository: Any, mock_redis: Any
+) -> None:
+    service, _ = _otp_auth_service(fake_user_repository, mock_redis)
+    user = await service.register_user(
+        phone="0901234567", password=PASSWORD, email="user@example.com"
+    )
+    await service.request_email_otp(user)
+    code = await mock_redis.get(f"email_otp:{user.id}")
+
+    assert await service.verify_email_otp(user, code) is True
+    assert user.email_verified is True
+    assert await mock_redis.get(f"email_otp:{user.id}") is None
+    # Single-use: the same code cannot be replayed.
+    assert await service.verify_email_otp(user, code) is False
+
+
+async def test_verify_email_otp_wrong_code_fails(
+    fake_user_repository: Any, mock_redis: Any
+) -> None:
+    service, _ = _otp_auth_service(fake_user_repository, mock_redis)
+    user = await service.register_user(
+        phone="0901234567", password=PASSWORD, email="user@example.com"
+    )
+    await service.request_email_otp(user)
+
+    assert await service.verify_email_otp(user, "000000") is False
+    assert user.email_verified is False
+    assert await mock_redis.get(f"email_otp:{user.id}") is not None
+
+
+async def test_verify_email_otp_without_code_fails(
+    fake_user_repository: Any, mock_redis: Any
+) -> None:
+    service, _ = _otp_auth_service(fake_user_repository, mock_redis)
+    user = await service.register_user(
+        phone="0901234567", password=PASSWORD, email="user@example.com"
+    )
+
+    # No OTP requested/expired -> nothing in Redis.
+    assert await service.verify_email_otp(user, "123456") is False
+    assert user.email_verified is False
+
+
+async def test_request_email_otp_resend_is_rate_limited(
+    fake_user_repository: Any, mock_redis: Any
+) -> None:
+    service, email_service = _otp_auth_service(fake_user_repository, mock_redis)
+    user = await service.register_user(
+        phone="0901234567", password=PASSWORD, email="user@example.com"
+    )
+
+    sent = [
+        await service.request_email_otp(user) for _ in range(auth_module.EMAIL_OTP_RESEND_LIMIT)
+    ]
+    assert all(sent)
+    # One past the limit is refused without sending.
+    assert await service.request_email_otp(user) is False
+    assert len(email_service.messages) == auth_module.EMAIL_OTP_RESEND_LIMIT
+
+
+async def test_request_email_otp_skipped_without_email(
+    fake_user_repository: Any, mock_redis: Any
+) -> None:
+    service, email_service = _otp_auth_service(fake_user_repository, mock_redis)
+    user = await service.register_user(phone="0901234567", password=PASSWORD)
+
+    assert await service.request_email_otp(user) is False
+    assert email_service.messages == []
+
+
+async def test_send_email_verification_unknown_email_is_silent(
+    fake_user_repository: Any, mock_redis: Any
+) -> None:
+    service, email_service = _otp_auth_service(fake_user_repository, mock_redis)
+
+    await service.send_email_verification("missing@example.com")
+
+    assert email_service.messages == []
+
+
+async def test_confirm_email_otp_unknown_email_returns_false(
+    fake_user_repository: Any, mock_redis: Any
+) -> None:
+    service, _ = _otp_auth_service(fake_user_repository, mock_redis)
+
+    assert await service.confirm_email_otp("missing@example.com", "123456") is False
+
+
+async def test_request_email_otp_never_logs_the_code(
+    fake_user_repository: Any, mock_redis: Any, caplog: pytest.LogCaptureFixture
+) -> None:
+    service, _ = _otp_auth_service(fake_user_repository, mock_redis)
+    user = await service.register_user(
+        phone="0901234567", password=PASSWORD, email="user@example.com"
+    )
+    caplog.set_level("INFO")
+
+    await service.request_email_otp(user)
+    code = await mock_redis.get(f"email_otp:{user.id}")
+
+    assert code not in caplog.text

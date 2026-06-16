@@ -99,6 +99,7 @@ function userFromCookie(cookie) {
     return {
       id: role === 'admin' ? 'admin-1' : 'user-1',
       email: payload.email ?? `${role}@example.com`,
+      email_verified: true,
       full_name: role === 'admin' ? 'Quản trị viên' : 'Khách Hàng Test',
       phone: '0903026306',
       role,
@@ -171,7 +172,7 @@ export function resolveApi({ method, path, query, body = {}, cookie }) {
   if (method === 'POST' && path === '/api/v1/auth/login') {
     return json(200, {
       token_type: 'bearer',
-      user: { id: 'user-1', email: body.email ?? 'customer@example.com', full_name: 'Khách Hàng Test', phone: '0903026306', role: 'customer', is_active: true, created_at: now },
+      user: { id: 'user-1', email: body.email ?? 'customer@example.com', email_verified: true, full_name: 'Khách Hàng Test', phone: '0903026306', role: 'customer', is_active: true, created_at: now },
     })
   }
   if (method === 'POST' && path === '/api/v1/auth/register') {

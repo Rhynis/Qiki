@@ -10,10 +10,12 @@ from app.api.v1.dependencies.auth import (
     get_current_active_user,
 )
 from app.core.config import get_settings
-from app.core.exceptions import UnauthorizedException
+from app.core.exceptions import UnauthorizedException, ValidationException
 from app.core.rate_limit import limiter
 from app.models.user import User
 from app.schemas.user import (
+    EmailOtpRequest,
+    EmailOtpVerify,
     LoginRequest,
     LoginResponse,
     PasswordChangeRequest,
@@ -173,6 +175,35 @@ async def reset_password(
     """Reset password using a valid reset token."""
     await auth_service.reset_password(payload.token, payload.new_password)
     return {"detail": "Mật khẩu đã được cập nhật."}
+
+
+@router.post("/email/otp-request", status_code=status.HTTP_200_OK)
+@limiter.limit("5/minute")
+async def request_email_otp(
+    request: Request,
+    payload: EmailOtpRequest,
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+) -> dict[str, str]:
+    """Email a verification code without revealing whether the email exists."""
+    await auth_service.send_email_verification(payload.email)
+    return {"detail": "Nếu email hợp lệ, mã xác minh đã được gửi."}
+
+
+@router.post("/email/otp-verify", status_code=status.HTTP_200_OK)
+@limiter.limit("5/minute")
+async def verify_email_otp(
+    request: Request,
+    payload: EmailOtpVerify,
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+) -> dict[str, bool]:
+    """Verify an email with its OTP code. Generic failure avoids enumeration."""
+    verified = await auth_service.confirm_email_otp(payload.email, payload.code)
+    if not verified:
+        raise ValidationException(
+            "Mã xác minh không đúng hoặc đã hết hạn",
+            error_code="invalid_email_otp",
+        )
+    return {"verified": True}
 
 
 @router.get("/me", response_model=UserResponse, summary="Get current user")

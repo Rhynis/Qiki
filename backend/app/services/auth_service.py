@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import html
 import logging
+import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Protocol
@@ -25,7 +26,7 @@ from app.core.security import (
 )
 from app.models.user import User
 from app.schemas.user import UserCreate
-from app.services.email_service import EmailService
+from app.services.email_service import EmailService, render_email_otp
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,9 @@ LOCKOUT_TTL_SECONDS = 900
 FAILED_LOGIN_TTL_SECONDS = 3600
 FAILED_LOGIN_LIMIT = 5
 PASSWORD_RESET_TTL_SECONDS = 3600
+EMAIL_OTP_TTL_SECONDS = 600
+EMAIL_OTP_RESEND_TTL_SECONDS = 3600
+EMAIL_OTP_RESEND_LIMIT = 5
 
 
 class UserRepositoryProtocol(Protocol):
@@ -251,6 +255,57 @@ class AuthService:
             {"hashed_password": get_password_hash(new_password)},
         )
         await self._delete(f"password_reset:{token}")
+        return True
+
+    async def send_email_verification(self, email: str) -> None:
+        """Email an OTP for the account owning ``email`` without revealing existence."""
+        user = await self.user_repository.get_by_email(email.lower())
+        if user and user.email:
+            await self.request_email_otp(user)
+
+    async def request_email_otp(self, user: User) -> bool:
+        """Generate, store and email a single-use OTP for the user's email.
+
+        Returns ``False`` (without sending) when the user has no email or when the
+        resend rate limit has been exceeded. The code is never logged.
+        """
+        if not user.email:
+            return False
+
+        resend_key = f"email_otp_resend:{user.id}"
+        attempts = int(await self.redis.incr(resend_key))
+        if attempts == 1:
+            await self.redis.expire(resend_key, EMAIL_OTP_RESEND_TTL_SECONDS)
+        if attempts > EMAIL_OTP_RESEND_LIMIT:
+            logger.info("email_otp_resend_rate_limited")
+            return False
+
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        await self._setex(f"email_otp:{user.id}", EMAIL_OTP_TTL_SECONDS, code)
+        subject, text, html_body = render_email_otp(code, ttl_minutes=EMAIL_OTP_TTL_SECONDS // 60)
+        await self.email_service.send_email(
+            to=user.email, subject=subject, html=html_body, text=text
+        )
+        return True
+
+    async def confirm_email_otp(self, email: str, code: str) -> bool:
+        """Resolve the account by email and verify its OTP. Generic on unknown email."""
+        user = await self.user_repository.get_by_email(email.lower())
+        if not user:
+            return False
+        return await self.verify_email_otp(user, code)
+
+    async def verify_email_otp(self, user: User, code: str) -> bool:
+        """Verify a submitted OTP; on success set email_verified and delete the key."""
+        raw_code = await self._get(f"email_otp:{user.id}")
+        if not raw_code:
+            return False
+        if not secrets.compare_digest(self._decode_redis_value(raw_code), code):
+            return False
+
+        await self.user_repository.update(user.id, {"email_verified": True})
+        await self._delete(f"email_otp:{user.id}")
+        await self._delete(f"email_otp_resend:{user.id}")
         return True
 
     async def track_failed_login(self, email: str) -> None:

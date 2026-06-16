@@ -5,6 +5,7 @@ import type { User } from '@/lib/api/auth'
 const user: User = {
   id: 'user-id',
   email: 'admin@example.com',
+  email_verified: true,
   full_name: 'Admin User',
   phone: '+84901234567',
   role: 'admin',

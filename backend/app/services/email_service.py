@@ -16,6 +16,29 @@ logger = logging.getLogger(__name__)
 RESEND_EMAILS_URL = "https://api.resend.com/emails"
 
 
+def render_email_otp(code: str, *, ttl_minutes: int) -> tuple[str, str, str]:
+    """Build the Vietnamese email-verification message: (subject, text, html).
+
+    The caller passes a freshly generated code; this function never logs it.
+    """
+    subject = "Mã xác minh email Gas Quốc Cường"
+    text = (
+        "Dạ chào bạn,\n\n"
+        "Mã xác minh email cho tài khoản Gas Quốc Cường của bạn là: "
+        f"{code}\n\n"
+        f"Mã có hiệu lực trong {ttl_minutes} phút. "
+        "Nếu bạn không yêu cầu, vui lòng bỏ qua email này."
+    )
+    html = (
+        "<p>Dạ chào bạn,</p>"
+        "<p>Mã xác minh email cho tài khoản Gas Quốc Cường của bạn là:</p>"
+        f'<p style="font-size:24px;font-weight:bold;letter-spacing:4px">{code}</p>'
+        f"<p>Mã có hiệu lực trong {ttl_minutes} phút. "
+        "Nếu bạn không yêu cầu, vui lòng bỏ qua email này.</p>"
+    )
+    return subject, text, html
+
+
 class EmailService:
     """Send transactional emails through Gmail SMTP or Resend, selected by config."""
 

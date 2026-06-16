@@ -59,6 +59,7 @@ class FakeUserRepository:
         user = User(
             id=uuid4(),
             email=email,
+            email_verified=False,
             hashed_password=hashed_password,
             full_name=data.full_name,
             phone=data.phone,
