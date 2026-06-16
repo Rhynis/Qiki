@@ -47,11 +47,14 @@ export function LoginForm() {
     <form className="space-y-5" onSubmit={handleSubmit(onSubmit)}>
       <div className="space-y-2">
         <label className="text-sm font-medium" htmlFor="identifier">
-          Số điện thoại
+          Số điện thoại hoặc email
         </label>
         <input
           id="identifier"
           autoComplete="username"
+          autoCapitalize="none"
+          spellCheck={false}
+          placeholder="Số điện thoại hoặc email"
           className="h-10 w-full rounded-md border px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
           {...register('identifier')}
         />

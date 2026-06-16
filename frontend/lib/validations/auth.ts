@@ -4,7 +4,7 @@ import { isVietnameseMobilePhone, normalizePhoneDigits } from '@/utils/phone-for
 export const emailInvalidMessage = 'Email không hợp lệ, ví dụ: ten@gmail.com'
 export const passwordHelpText = 'Mật khẩu tối thiểu 6 ký tự, có 1 chữ hoa và 1 chữ số.'
 export const phoneInvalidMessage = 'Số điện thoại không hợp lệ, ví dụ: 090 3026 306'
-export const loginIdentifierRequiredMessage = 'Vui lòng nhập số điện thoại'
+export const loginIdentifierRequiredMessage = 'Vui lòng nhập số điện thoại hoặc email'
 
 export const passwordSchema = z
   .string()

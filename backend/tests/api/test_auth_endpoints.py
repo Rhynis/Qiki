@@ -74,6 +74,7 @@ async def test_register_with_duplicate_email_returns_409(test_client: AsyncClien
 
     assert response.status_code == 409
     assert response.json()["error_code"] == "email_already_exists"
+    assert response.json()["detail"] == "Email này đã được sử dụng."
 
 
 async def test_register_with_duplicate_phone_returns_409(test_client: AsyncClient) -> None:
@@ -87,6 +88,7 @@ async def test_register_with_duplicate_phone_returns_409(test_client: AsyncClien
 
     assert response.status_code == 409
     assert response.json()["error_code"] == "phone_already_exists"
+    assert response.json()["detail"] == "Số điện thoại đã được đăng ký."
 
 
 async def test_register_without_email_returns_201(test_client: AsyncClient) -> None:
@@ -173,6 +175,7 @@ async def test_login_with_wrong_password_returns_401(test_client: AsyncClient) -
     )
 
     assert response.status_code == 401
+    assert response.json()["detail"] == "Số điện thoại/email hoặc mật khẩu không đúng."
 
 
 async def test_account_locks_after_5_failed_logins(test_client: AsyncClient) -> None:
