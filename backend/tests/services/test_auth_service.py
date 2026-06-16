@@ -85,6 +85,7 @@ async def test_register_raises_on_duplicate_phone(auth_service: AuthService) -> 
         await auth_service.register_user(phone="0901234567", password=PASSWORD)
 
     assert exc_info.value.error_code == "phone_already_exists"
+    assert exc_info.value.detail == "Số điện thoại đã được đăng ký."
 
 
 async def test_register_raises_on_duplicate_email_when_provided(auth_service: AuthService) -> None:
@@ -98,6 +99,7 @@ async def test_register_raises_on_duplicate_email_when_provided(auth_service: Au
         )
 
     assert exc_info.value.error_code == "email_already_exists"
+    assert exc_info.value.detail == "Email này đã được sử dụng."
 
 
 async def test_login_returns_tokens_on_correct_credentials(auth_service: AuthService) -> None:
@@ -146,8 +148,12 @@ async def test_login_raises_on_wrong_password(auth_service: AuthService) -> None
         phone="0901234567", password=PASSWORD, email="user@example.com"
     )
 
-    with pytest.raises(UnauthorizedException):
+    with pytest.raises(UnauthorizedException) as exc_info:
         await auth_service.login_user("user@example.com", "wrong")
+
+    # Generic Vietnamese message (no enumeration of which field was wrong).
+    assert exc_info.value.error_code == "invalid_credentials"
+    assert exc_info.value.detail == "Số điện thoại/email hoặc mật khẩu không đúng."
 
 
 async def test_login_increments_failed_counter(auth_service: AuthService, mock_redis: Any) -> None:

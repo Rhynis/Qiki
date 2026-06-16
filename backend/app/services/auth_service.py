@@ -106,9 +106,11 @@ class AuthService:
         """Register a local password user. Phone is required and unique."""
         data = UserCreate(phone=phone, password=password, full_name=full_name, email=email)
         if await self.user_repository.get_by_phone(data.phone):
-            raise ConflictException("Phone already registered", error_code="phone_already_exists")
+            raise ConflictException(
+                "Số điện thoại đã được đăng ký.", error_code="phone_already_exists"
+            )
         if data.email and await self.user_repository.get_by_email(data.email):
-            raise ConflictException("Email already registered", error_code="email_already_exists")
+            raise ConflictException("Email này đã được sử dụng.", error_code="email_already_exists")
 
         hashed_password = get_password_hash(data.password)
         return await self.user_repository.create(data, hashed_password)
@@ -118,26 +120,28 @@ class AuthService:
         lookup_key = identifier.strip().lower()
         if await self.is_account_locked(lookup_key):
             raise UnauthorizedException(
-                "Account is temporarily locked", error_code="account_locked"
+                "Tài khoản tạm thời bị khóa. Vui lòng thử lại sau.",
+                error_code="account_locked",
             )
 
         user = await self._resolve_login_user(identifier)
+        # One generic message for any login failure to avoid account enumeration.
         if not user or not user.hashed_password:
             await self.track_failed_login(lookup_key)
             raise UnauthorizedException(
-                "Invalid phone or password",
+                "Số điện thoại/email hoặc mật khẩu không đúng.",
                 error_code="invalid_credentials",
             )
 
         if not verify_password(password, user.hashed_password):
             await self.track_failed_login(lookup_key)
             raise UnauthorizedException(
-                "Invalid phone or password",
+                "Số điện thoại/email hoặc mật khẩu không đúng.",
                 error_code="invalid_credentials",
             )
 
         if not user.is_active:
-            raise UnauthorizedException("User account is inactive", error_code="inactive_user")
+            raise UnauthorizedException("Tài khoản đã bị vô hiệu hóa.", error_code="inactive_user")
 
         await self._delete(f"failed_login:{lookup_key}")
         return self._create_auth_result(user)

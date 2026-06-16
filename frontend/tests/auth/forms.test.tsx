@@ -41,30 +41,34 @@ describe('auth forms', () => {
     const user = userEvent.setup()
     render(<LoginForm />)
 
-    const identifier = screen.getByLabelText('Số điện thoại')
+    const identifier = screen.getByLabelText('Số điện thoại hoặc email')
     await user.type(identifier, '0')
     await user.clear(identifier)
 
-    expect(await screen.findByText('Vui lòng nhập số điện thoại')).toBeInTheDocument()
+    expect(await screen.findByText('Vui lòng nhập số điện thoại hoặc email')).toBeInTheDocument()
 
     await user.type(identifier, '0903026306')
 
     await waitFor(() => {
-      expect(screen.queryByText('Vui lòng nhập số điện thoại')).not.toBeInTheDocument()
+      expect(screen.queryByText('Vui lòng nhập số điện thoại hoặc email')).not.toBeInTheDocument()
     })
   })
 
   it('logs in by phone and shows submit errors inline', async () => {
     const user = userEvent.setup()
-    authMocks.login.mockRejectedValueOnce(new Error('Số điện thoại hoặc mật khẩu không đúng'))
+    authMocks.login.mockRejectedValueOnce(
+      new Error('Số điện thoại/email hoặc mật khẩu không đúng.')
+    )
     render(<LoginForm />)
 
-    await user.type(screen.getByLabelText('Số điện thoại'), '0903026306')
+    await user.type(screen.getByLabelText('Số điện thoại hoặc email'), '0903026306')
     await user.type(screen.getByLabelText('Mật khẩu'), 'Abc123')
     await user.click(screen.getByRole('button', { name: 'Đăng nhập' }))
 
     expect(authMocks.login).toHaveBeenCalledWith('0903026306', 'Abc123', '/')
-    expect(await screen.findByText('Số điện thoại hoặc mật khẩu không đúng')).toBeInTheDocument()
+    expect(
+      await screen.findByText('Số điện thoại/email hoặc mật khẩu không đúng.')
+    ).toBeInTheDocument()
   })
 
   it('formats register phone input and submits digits only', async () => {
@@ -87,6 +91,21 @@ describe('auth forms', () => {
         expect.objectContaining({ phone: '0903026306' })
       )
     })
+  })
+
+  it('surfaces the duplicate-email error inline on register', async () => {
+    const user = userEvent.setup()
+    authMocks.register.mockRejectedValueOnce(new Error('Email này đã được sử dụng.'))
+    render(<RegisterForm />)
+
+    await user.type(screen.getByLabelText('Họ và tên'), 'Nguyen Van A')
+    await user.type(screen.getByLabelText('Email (không bắt buộc)'), 'ten@gmail.com')
+    await user.type(screen.getByLabelText('Số điện thoại'), '0903026306')
+    await user.type(screen.getByLabelText('Mật khẩu'), 'Abc123')
+    await user.type(screen.getByLabelText('Xác nhận mật khẩu'), 'Abc123')
+    await user.click(screen.getByRole('button', { name: 'Đăng ký' }))
+
+    expect(await screen.findByText('Email này đã được sử dụng.')).toBeInTheDocument()
   })
 
   it('shows invalid register phone inline and clears it when corrected', async () => {
