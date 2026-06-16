@@ -50,13 +50,19 @@ export function Header() {
             onMouseLeave={scheduleProductMenuClose}
           >
             <DropdownMenu modal={false} open={productMenuOpen} onOpenChange={setProductMenuOpen}>
+              <Link
+                className="inline-flex h-9 items-center rounded-l-md px-2 font-medium text-slate-700 transition hover:bg-slate-100 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                href="/products"
+              >
+                Sản phẩm
+              </Link>
               <DropdownMenuTrigger asChild>
                 <button
-                  className="inline-flex h-9 items-center gap-1 rounded-md px-2 font-medium text-slate-700 transition hover:bg-slate-100 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label="Mở danh mục sản phẩm"
+                  className="inline-flex h-9 items-center rounded-r-md px-1.5 font-medium text-slate-700 transition hover:bg-slate-100 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   type="button"
                 >
-                  Sản phẩm
-                  <ChevronDown className="h-4 w-4" />
+                  <ChevronDown aria-hidden="true" className="h-4 w-4" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent

@@ -26,4 +26,26 @@ test.describe('logged-in customer', () => {
     await expect(page.locator('#customer_name')).toHaveValue('Khách Hàng Test')
     await expect(page.locator('#customer_phone')).toHaveValue('0903026306')
   })
+
+  test('user menu opens on hover and closes on mouse leave', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'Hover behavior is covered by the desktop project.')
+
+    await page.goto('/')
+    const trigger = page.getByRole('button', { name: /Khách Hàng Test/ })
+    await trigger.hover()
+
+    await expect(page.getByRole('menuitem', { name: 'Tài khoản' })).toBeVisible()
+
+    await page.mouse.move(0, 0)
+    await expect(page.getByRole('menuitem', { name: 'Tài khoản' })).toBeHidden()
+  })
+
+  test('user menu opens on tap for touch viewports', async ({ page, isMobile }) => {
+    test.skip(!isMobile, 'Tap behavior is covered by the mobile projects.')
+
+    await page.goto('/')
+    await page.getByRole('button', { name: /Khách Hàng Test/ }).click()
+
+    await expect(page.getByRole('menuitem', { name: 'Tài khoản' })).toBeVisible()
+  })
 })
