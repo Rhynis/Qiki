@@ -65,7 +65,9 @@ class Settings(BaseSettings):
     LANGFUSE_HOST: str = "https://cloud.langfuse.com"
     SENTRY_DSN: str = ""
 
-    EMAIL_PROVIDER: str = "smtp"  # "smtp" (Gmail App Password) | "resend"
+    # "smtp" (Gmail App Password) | "resend" | "gmail_api" (Gmail API over HTTPS,
+    # for hosts that block outbound SMTP such as Railway).
+    EMAIL_PROVIDER: Literal["smtp", "resend", "gmail_api"] = "smtp"
     RESEND_API_KEY: str = ""
     EMAIL_FROM: str = "Gas Quốc Cường <onboarding@resend.dev>"
     FRONTEND_URL: str = "http://localhost:3000"
@@ -73,6 +75,10 @@ class Settings(BaseSettings):
     SMTP_PORT: int = 587
     SMTP_USERNAME: str = ""
     SMTP_PASSWORD: str = ""
+    # Gmail API (OAuth) — sends over HTTPS (port 443); secrets via env only.
+    GMAIL_CLIENT_ID: str = ""
+    GMAIL_CLIENT_SECRET: str = ""
+    GMAIL_REFRESH_TOKEN: str = ""
 
     JWT_SECRET_KEY: str = Field(
         default="development_secret_key_change_me_32_chars_minimum",
