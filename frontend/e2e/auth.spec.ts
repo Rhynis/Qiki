@@ -29,12 +29,23 @@ test.describe('auth forms', () => {
     await expect(page.locator('#phone')).toHaveValue('090 3026 306')
   })
 
-  test('login surfaces an inline error for an invalid email', async ({ page }) => {
+  test('login requires the phone identifier and shows an inline error', async ({ page }) => {
     await page.goto('/login')
-    await page.locator('#email').fill('not-an-email')
+    // Phone-first: the login field is the phone (an email is still accepted).
+    await expect(page.getByLabel('Số điện thoại')).toBeVisible()
     await page.locator('#password').fill('Abcdef1')
     await page.getByRole('button', { name: 'Đăng nhập' }).click()
-    await expect(page.locator('p.text-red-600').first()).toBeVisible()
+    await expect(
+      page.locator('p.text-red-600').filter({ hasText: 'Vui lòng nhập số điện thoại' })
+    ).toBeVisible()
+  })
+
+  test('login by phone succeeds', async ({ page }) => {
+    await page.goto('/login')
+    await page.locator('#identifier').fill('0903026306')
+    await page.locator('#password').fill('Abcdef1')
+    await page.getByRole('button', { name: 'Đăng nhập' }).click()
+    await expect(page.getByText('Đăng nhập thành công')).toBeVisible()
   })
 
   test('forgot-password shows an inline success message (not a toast)', async ({ page }) => {
