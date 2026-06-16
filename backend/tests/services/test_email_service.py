@@ -1,9 +1,11 @@
 """Tests for transactional email delivery."""
 
+import base64
 from email.message import EmailMessage
 from typing import Any
 
 import aiosmtplib
+import httpx
 import pytest
 
 from app.core.config import Settings
@@ -23,6 +25,60 @@ def _smtp_settings(**overrides: Any) -> Settings:
     }
     base.update(overrides)
     return Settings(**base)
+
+
+def _gmail_settings(**overrides: Any) -> Settings:
+    base: dict[str, Any] = {
+        "EMAIL_PROVIDER": "gmail_api",
+        "EMAIL_FROM": "Gas Quốc Cường <shop@gmail.com>",
+        "GMAIL_CLIENT_ID": "client-id",
+        "GMAIL_CLIENT_SECRET": "client-secret",
+        "GMAIL_REFRESH_TOKEN": "refresh-token",
+    }
+    base.update(overrides)
+    return Settings(**base)
+
+
+def _install_fake_httpx(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    fail_on: str | None = None,
+    token_json: Any = None,
+) -> list[dict[str, Any]]:
+    """Patch httpx.AsyncClient with a fake recording POST calls. Returns the call log."""
+    calls: list[dict[str, Any]] = []
+    token_body: Any = token_json if token_json is not None else {"access_token": "ya29.test"}
+
+    class FakeResponse:
+        def __init__(self, *, json_data: Any, raise_error: bool) -> None:
+            self._json = json_data
+            self._raise = raise_error
+
+        def raise_for_status(self) -> None:
+            if self._raise:
+                raise httpx.HTTPError("boom")
+
+        def json(self) -> Any:
+            return self._json
+
+    class FakeAsyncClient:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        async def __aenter__(self) -> "FakeAsyncClient":
+            return self
+
+        async def __aexit__(self, *args: Any) -> bool:
+            return False
+
+        async def post(self, url: str, **kwargs: Any) -> FakeResponse:
+            calls.append({"url": url, **kwargs})
+            if "oauth2.googleapis.com" in url:
+                return FakeResponse(json_data=token_body, raise_error=fail_on == "token")
+            return FakeResponse(json_data={"id": "msg-1"}, raise_error=fail_on == "send")
+
+    monkeypatch.setattr("app.services.email_service.httpx.AsyncClient", FakeAsyncClient)
+    return calls
 
 
 def _message_bodies(message: EmailMessage) -> list[str]:
@@ -125,6 +181,84 @@ async def test_email_service_smtp_failure_does_not_raise(
         subject="Test",
         html="<p>Hi</p>",
         text="Hi",
+    )
+
+    assert result is False
+
+
+async def test_gmail_api_sends(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _install_fake_httpx(monkeypatch)
+    service = EmailService(_gmail_settings())
+
+    result = await service.send_email(
+        to="customer@example.com",
+        subject="Reset your password",
+        html="<p>Hi</p>",
+        text="Hi",
+    )
+
+    assert result is True
+    assert len(calls) == 2
+    token_call, send_call = calls
+
+    assert token_call["url"] == "https://oauth2.googleapis.com/token"
+    assert token_call["data"]["refresh_token"] == "refresh-token"
+    assert token_call["data"]["grant_type"] == "refresh_token"
+    assert token_call["data"]["client_id"] == "client-id"
+
+    assert send_call["url"] == "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
+    assert send_call["headers"]["Authorization"] == "Bearer ya29.test"
+    decoded = base64.urlsafe_b64decode(send_call["json"]["raw"]).decode()
+    assert "customer@example.com" in decoded
+    assert "Reset your password" in decoded
+    assert "shop@gmail.com" in decoded  # From == EMAIL_FROM
+
+
+async def test_gmail_api_noop_without_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _install_fake_httpx(monkeypatch)
+    service = EmailService(_gmail_settings(GMAIL_REFRESH_TOKEN=""))
+
+    result = await service.send_email(
+        to="customer@example.com", subject="Test", html="<p>Hi</p>", text="Hi"
+    )
+
+    assert result is False
+    assert calls == []
+
+
+async def test_gmail_api_token_error_does_not_raise(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_fake_httpx(monkeypatch, fail_on="token")
+    service = EmailService(_gmail_settings())
+
+    result = await service.send_email(
+        to="customer@example.com", subject="Test", html="<p>Hi</p>", text="Hi"
+    )
+
+    assert result is False
+
+
+async def test_gmail_api_send_error_does_not_raise(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _install_fake_httpx(monkeypatch, fail_on="send")
+    service = EmailService(_gmail_settings())
+
+    result = await service.send_email(
+        to="customer@example.com", subject="Test", html="<p>Hi</p>", text="Hi"
+    )
+
+    assert result is False
+    # The token exchange succeeded, then the send failed and was swallowed.
+    assert len(calls) == 2
+
+
+async def test_gmail_api_unexpected_token_shape_does_not_raise(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A non-object token response must not raise (indexing it would TypeError).
+    _install_fake_httpx(monkeypatch, token_json=["unexpected"])
+    service = EmailService(_gmail_settings())
+
+    result = await service.send_email(
+        to="customer@example.com", subject="Test", html="<p>Hi</p>", text="Hi"
     )
 
     assert result is False
