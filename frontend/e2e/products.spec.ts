@@ -9,7 +9,7 @@ test.describe('products', () => {
 
   test('header "Sản phẩm" dropdown filters to Nước Uống', async ({ page }) => {
     await page.goto('/products')
-    await page.getByRole('button', { name: 'Sản phẩm' }).hover()
+    await page.getByRole('link', { name: 'Sản phẩm', exact: true }).hover()
     const nuoc = page.getByRole('menuitem', { name: 'Nước Uống' })
     await nuoc.waitFor({ state: 'visible' })
     await nuoc.click()
@@ -17,6 +17,15 @@ test.describe('products', () => {
     await expect(page).toHaveURL(/category=nuoc_uong/)
     await expect(page.getByRole('heading', { name: 'Nước Hoàn Hảo 20 lít' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Bình gas Elf 12kg (đỏ)' })).toHaveCount(0)
+  })
+
+  test('header "Sản phẩm" link opens the all-products page', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('link', { name: 'Sản phẩm', exact: true }).click()
+
+    await expect(page).toHaveURL(/\/products$/)
+    await expect(page.getByRole('heading', { name: 'Bình gas Elf 12kg (đỏ)' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Nước Hoàn Hảo 20 lít' })).toBeVisible()
   })
 
   test('sort by price (asc) reorders via the URL', async ({ page }) => {

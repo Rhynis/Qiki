@@ -1,18 +1,49 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect } from 'react'
-import { Button } from '@/components/ui/button'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '@/lib/hooks/use-auth'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Button } from '@/components/ui/button'
 
 export function UserMenu() {
   const { user, isAuthenticated, isAdmin, logout, refreshUser } = useAuth()
+  const [open, setOpen] = useState(false)
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     if (!user) {
       void refreshUser()
     }
   }, [refreshUser, user])
+
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current)
+    }
+  }, [])
+
+  function openMenu() {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current)
+      closeTimerRef.current = null
+    }
+    setOpen(true)
+  }
+
+  function scheduleMenuClose() {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current)
+    closeTimerRef.current = setTimeout(() => {
+      setOpen(false)
+      closeTimerRef.current = null
+    }, 150)
+  }
 
   if (!isAuthenticated || !user) {
     return (
@@ -28,38 +59,49 @@ export function UserMenu() {
   }
 
   const initial = (user.full_name ?? user.email ?? user.phone ?? '?').charAt(0).toUpperCase()
+  const displayName = user.full_name ?? user.email ?? 'Tài khoản'
 
   return (
-    <details className="relative">
-      <summary className="flex cursor-pointer list-none items-center gap-2 rounded-md px-2 py-1.5 hover:bg-slate-100">
-        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
-          {initial}
-        </span>
-        <span className="hidden max-w-[140px] truncate text-sm sm:inline">
-          {user.full_name ?? user.email}
-        </span>
-      </summary>
-      <div className="absolute right-0 z-20 mt-2 w-56 rounded-md border bg-white p-1 text-sm shadow-lg">
-        <Link className="block rounded px-3 py-2 hover:bg-slate-100" href="/account">
-          Tài khoản
-        </Link>
-        <Link className="block rounded px-3 py-2 hover:bg-slate-100" href="/orders">
-          Đơn hàng của tôi
-        </Link>
-        {isAdmin ? (
-          <Link className="block rounded px-3 py-2 hover:bg-slate-100" href="/admin">
-            Quản trị
-          </Link>
-        ) : null}
-        <div className="my-1 border-t" />
-        <button
-          className="block w-full rounded px-3 py-2 text-left text-red-700 hover:bg-red-50"
-          onClick={() => void logout()}
-          type="button"
+    <div className="relative" onMouseEnter={openMenu} onMouseLeave={scheduleMenuClose}>
+      <DropdownMenu modal={false} open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger asChild>
+          <button
+            aria-label={displayName}
+            className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            type="button"
+          >
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
+              {initial}
+            </span>
+            <span className="hidden max-w-[140px] truncate text-sm sm:inline">{displayName}</span>
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="end"
+          className="w-56"
+          onMouseEnter={openMenu}
+          onMouseLeave={scheduleMenuClose}
         >
-          Đăng xuất
-        </button>
-      </div>
-    </details>
+          <DropdownMenuItem asChild>
+            <Link href="/account">Tài khoản</Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild>
+            <Link href="/orders">Đơn hàng của tôi</Link>
+          </DropdownMenuItem>
+          {isAdmin ? (
+            <DropdownMenuItem asChild>
+              <Link href="/admin">Quản trị</Link>
+            </DropdownMenuItem>
+          ) : null}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            className="cursor-pointer text-red-700 focus:bg-red-50 focus:text-red-700"
+            onSelect={() => void logout()}
+          >
+            Đăng xuất
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   )
 }

@@ -34,7 +34,8 @@ test.describe('mobile layout', () => {
 
   test('header navigation is reachable', async ({ page }) => {
     await page.goto('/')
-    await expect(page.getByRole('button', { name: 'Sản phẩm' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Sản phẩm', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Mở danh mục sản phẩm' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Giỏ hàng' })).toBeVisible()
   })
 
@@ -46,6 +47,6 @@ test.describe('mobile layout', () => {
 
     await expect(page.getByText('Đăng nhập thành công')).toBeVisible()
     // The header menu must stay actionable (trial click fails if the toast covers it).
-    await page.getByRole('button', { name: 'Sản phẩm' }).click({ trial: true })
+    await page.getByRole('button', { name: 'Mở danh mục sản phẩm' }).click({ trial: true })
   })
 })
