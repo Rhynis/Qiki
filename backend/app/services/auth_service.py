@@ -14,6 +14,7 @@ from redis.asyncio import Redis
 
 from app.core.config import Settings, get_settings
 from app.core.exceptions import ConflictException, UnauthorizedException, ValidationException
+from app.core.input_validation import VietnamesePhoneValidator
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -47,6 +48,8 @@ class UserRepositoryProtocol(Protocol):
     async def get_by_id(self, user_id: UUID) -> User | None: ...
 
     async def get_by_email(self, email: str) -> User | None: ...
+
+    async def get_by_phone(self, phone: str) -> User | None: ...
 
     async def update(self, user_id: UUID, data: dict[str, object]) -> User | None: ...
 
@@ -91,48 +94,62 @@ class AuthService:
 
     async def register_user(
         self,
-        email: str,
+        phone: str,
         password: str,
         full_name: str | None = None,
-        phone: str | None = None,
+        email: str | None = None,
     ) -> User:
-        """Register a local password user."""
-        data = UserCreate(email=email, password=password, full_name=full_name, phone=phone)
-        existing = await self.user_repository.get_by_email(data.email)
-        if existing:
+        """Register a local password user. Phone is required and unique."""
+        data = UserCreate(phone=phone, password=password, full_name=full_name, email=email)
+        if await self.user_repository.get_by_phone(data.phone):
+            raise ConflictException("Phone already registered", error_code="phone_already_exists")
+        if data.email and await self.user_repository.get_by_email(data.email):
             raise ConflictException("Email already registered", error_code="email_already_exists")
 
         hashed_password = get_password_hash(data.password)
         return await self.user_repository.create(data, hashed_password)
 
-    async def login_user(self, email: str, password: str) -> AuthResult:
-        """Authenticate user credentials and return tokens."""
-        normalized_email = email.lower()
-        if await self.is_account_locked(normalized_email):
+    async def login_user(self, identifier: str, password: str) -> AuthResult:
+        """Authenticate by phone (or email for back-compat) and return tokens."""
+        lookup_key = identifier.strip().lower()
+        if await self.is_account_locked(lookup_key):
             raise UnauthorizedException(
                 "Account is temporarily locked", error_code="account_locked"
             )
 
-        user = await self.user_repository.get_by_email(normalized_email)
+        user = await self._resolve_login_user(identifier)
         if not user or not user.hashed_password:
-            await self.track_failed_login(normalized_email)
+            await self.track_failed_login(lookup_key)
             raise UnauthorizedException(
-                "Invalid email or password",
+                "Invalid phone or password",
                 error_code="invalid_credentials",
             )
 
         if not verify_password(password, user.hashed_password):
-            await self.track_failed_login(normalized_email)
+            await self.track_failed_login(lookup_key)
             raise UnauthorizedException(
-                "Invalid email or password",
+                "Invalid phone or password",
                 error_code="invalid_credentials",
             )
 
         if not user.is_active:
             raise UnauthorizedException("User account is inactive", error_code="inactive_user")
 
-        await self._delete(f"failed_login:{normalized_email}")
+        await self._delete(f"failed_login:{lookup_key}")
         return self._create_auth_result(user)
+
+    async def _resolve_login_user(self, identifier: str) -> User | None:
+        """Resolve a login identifier as a phone first, then fall back to email."""
+        candidate = identifier.strip()
+        try:
+            normalized_phone = VietnamesePhoneValidator.validate(candidate)
+        except ValueError:
+            normalized_phone = None
+        if normalized_phone:
+            user = await self.user_repository.get_by_phone(normalized_phone)
+            if user:
+                return user
+        return await self.user_repository.get_by_email(candidate.lower())
 
     async def refresh_access_token(self, refresh_token: str) -> AuthResult:
         """Rotate refresh token and issue a new access token."""
@@ -209,7 +226,7 @@ class AuthService:
             "password_reset_token_created",
             extra={"reset_token_fingerprint": token_fingerprint},
         )
-        await self._send_password_reset_email(user.email, token)
+        await self._send_password_reset_email(email.lower(), token)
         return True  # pragma: no cover
 
     async def reset_password(self, token: str, new_password: str) -> bool:

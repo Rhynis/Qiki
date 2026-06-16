@@ -40,7 +40,7 @@ test.describe('mobile layout', () => {
 
   test('login success toast does not cover the header menu', async ({ page }) => {
     await page.goto('/login')
-    await page.locator('#email').fill('customer@example.com')
+    await page.locator('#identifier').fill('0903026306')
     await page.locator('#password').fill('Abcdef1')
     await page.getByRole('button', { name: 'Đăng nhập' }).click()
 

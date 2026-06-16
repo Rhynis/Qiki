@@ -22,16 +22,16 @@ def validate_password_strength(password: str) -> str:
 
 
 class UserBase(BaseModel):
-    """Shared user fields."""
+    """Shared user fields. Phone-first: email is optional, phone is the identifier."""
 
-    email: EmailStr
+    email: EmailStr | None = None
     full_name: str | None = Field(default=None, min_length=2, max_length=255)
     phone: str | None = None
 
     @field_validator("email")
     @classmethod
-    def normalize_email(cls, value: str) -> str:
-        return value.lower()
+    def normalize_email(cls, value: str | None) -> str | None:
+        return value.lower() if value else None
 
     @field_validator("phone")
     @classmethod
@@ -42,9 +42,17 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
-    """Registration payload."""
+    """Registration payload. Phone is required; email is optional."""
 
+    phone: str
     password: str
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, value: str | None) -> str:
+        if value is None or not value.strip():
+            raise ValueError("Phone number is required")
+        return VietnamesePhoneValidator.validate(value)
 
     @field_validator("password")
     @classmethod
@@ -79,15 +87,15 @@ class UserResponse(UserBase):
 
 
 class LoginRequest(BaseModel):
-    """Login payload."""
+    """Login payload. The identifier is a phone number or, for back-compat, an email."""
 
-    email: EmailStr
+    identifier: str = Field(min_length=1)
     password: str
 
-    @field_validator("email")
+    @field_validator("identifier")
     @classmethod
-    def normalize_email(cls, value: str) -> str:
-        return value.lower()
+    def strip_identifier(cls, value: str) -> str:
+        return value.strip()
 
 
 class LoginResponse(BaseModel):

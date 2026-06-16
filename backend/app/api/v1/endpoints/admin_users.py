@@ -26,7 +26,7 @@ class AdminUserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    email: EmailStr
+    email: EmailStr | None
     full_name: str | None
     phone: str | None
     role: str

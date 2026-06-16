@@ -13,7 +13,7 @@ export interface User {
 }
 
 export interface RegisterData {
-  email: string
+  email?: string
   password: string
   full_name: string
   phone: string
@@ -31,8 +31,11 @@ export async function register(data: RegisterData): Promise<User> {
   return response.data
 }
 
-export async function login(email: string, password: string): Promise<LoginResponse> {
-  const response = await apiClient.post<LoginResponse>('/api/v1/auth/login', { email, password })
+export async function login(identifier: string, password: string): Promise<LoginResponse> {
+  const response = await apiClient.post<LoginResponse>('/api/v1/auth/login', {
+    identifier,
+    password,
+  })
   return response.data
 }
 

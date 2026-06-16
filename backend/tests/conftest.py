@@ -48,15 +48,17 @@ class FakeUserRepository:
     def __init__(self) -> None:
         self.users_by_id: dict[UUID, object] = {}
         self.users_by_email: dict[str, object] = {}
+        self.users_by_phone: dict[str, object] = {}
 
     async def create(self, data: Any, hashed_password: str) -> object:
         """Create a user from a schema-like object."""
         from app.models.user import User
 
         now = datetime.now(UTC)
+        email = data.email.lower() if data.email else None
         user = User(
             id=uuid4(),
-            email=data.email.lower(),
+            email=email,
             hashed_password=hashed_password,
             full_name=data.full_name,
             phone=data.phone,
@@ -66,7 +68,10 @@ class FakeUserRepository:
             updated_at=now,
         )
         self.users_by_id[user.id] = user
-        self.users_by_email[user.email] = user
+        if email:
+            self.users_by_email[email] = user
+        if data.phone:
+            self.users_by_phone[data.phone] = user
         return user
 
     async def get_by_id(self, user_id: UUID) -> object | None:
@@ -76,6 +81,10 @@ class FakeUserRepository:
     async def get_by_email(self, email: str) -> object | None:
         """Find a user by email."""
         return self.users_by_email.get(email.lower())
+
+    async def get_by_phone(self, phone: str) -> object | None:
+        """Find a user by phone number."""
+        return self.users_by_phone.get(phone)
 
     async def update(self, user_id: UUID, data: dict[str, object]) -> object | None:
         """Update user fields."""

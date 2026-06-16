@@ -55,27 +55,55 @@ def auth_service(fake_user_repository: Any, mock_redis: Any) -> AuthService:
 
 
 async def test_register_creates_user_with_hashed_password(auth_service: AuthService) -> None:
-    user = await auth_service.register_user("A@Example.com", PASSWORD, "Nguyen Van A", "0901234567")
+    user = await auth_service.register_user(
+        phone="0901234567", password=PASSWORD, full_name="Nguyen Van A", email="A@Example.com"
+    )
 
     assert user.hashed_password == f"hashed:{PASSWORD}"
     assert user.role == "customer"
 
 
 async def test_register_lowercases_email(auth_service: AuthService) -> None:
-    user = await auth_service.register_user("USER@Example.com", PASSWORD)
+    user = await auth_service.register_user(
+        phone="0901234567", password=PASSWORD, email="USER@Example.com"
+    )
 
     assert user.email == "user@example.com"
 
 
-async def test_register_raises_on_duplicate_email(auth_service: AuthService) -> None:
-    await auth_service.register_user("user@example.com", PASSWORD)
+async def test_register_allows_missing_email(auth_service: AuthService) -> None:
+    user = await auth_service.register_user(phone="0901234567", password=PASSWORD)
 
-    with pytest.raises(ConflictException):
-        await auth_service.register_user("USER@example.com", PASSWORD)
+    assert user.email is None
+    assert user.phone == "+84901234567"
+
+
+async def test_register_raises_on_duplicate_phone(auth_service: AuthService) -> None:
+    await auth_service.register_user(phone="0901234567", password=PASSWORD)
+
+    with pytest.raises(ConflictException) as exc_info:
+        await auth_service.register_user(phone="0901234567", password=PASSWORD)
+
+    assert exc_info.value.error_code == "phone_already_exists"
+
+
+async def test_register_raises_on_duplicate_email_when_provided(auth_service: AuthService) -> None:
+    await auth_service.register_user(
+        phone="0901234567", password=PASSWORD, email="user@example.com"
+    )
+
+    with pytest.raises(ConflictException) as exc_info:
+        await auth_service.register_user(
+            phone="0907654321", password=PASSWORD, email="USER@example.com"
+        )
+
+    assert exc_info.value.error_code == "email_already_exists"
 
 
 async def test_login_returns_tokens_on_correct_credentials(auth_service: AuthService) -> None:
-    user = await auth_service.register_user("user@example.com", PASSWORD)
+    user = await auth_service.register_user(
+        phone="0901234567", password=PASSWORD, email="user@example.com"
+    )
 
     result = await auth_service.login_user("user@example.com", PASSWORD)
 
@@ -84,15 +112,48 @@ async def test_login_returns_tokens_on_correct_credentials(auth_service: AuthSer
     assert decode_token(result.refresh_token)["type"] == "refresh"
 
 
+async def test_login_by_phone_succeeds(auth_service: AuthService) -> None:
+    user = await auth_service.register_user(
+        phone="0901234567", password=PASSWORD, email="user@example.com"
+    )
+
+    result = await auth_service.login_user("0901234567", PASSWORD)
+
+    assert result.user.id == user.id
+
+
+async def test_login_by_phone_works_without_email(auth_service: AuthService) -> None:
+    user = await auth_service.register_user(phone="0901234567", password=PASSWORD)
+
+    result = await auth_service.login_user("0901234567", PASSWORD)
+
+    assert result.user.id == user.id
+
+
+async def test_login_by_email_still_works_for_existing_account(auth_service: AuthService) -> None:
+    # An existing email-based account (e.g. the admin) must keep logging in by email.
+    user = await auth_service.register_user(
+        phone="0907654321", password=PASSWORD, email="admin@example.com"
+    )
+
+    result = await auth_service.login_user("ADMIN@example.com", PASSWORD)
+
+    assert result.user.id == user.id
+
+
 async def test_login_raises_on_wrong_password(auth_service: AuthService) -> None:
-    await auth_service.register_user("user@example.com", PASSWORD)
+    await auth_service.register_user(
+        phone="0901234567", password=PASSWORD, email="user@example.com"
+    )
 
     with pytest.raises(UnauthorizedException):
         await auth_service.login_user("user@example.com", "wrong")
 
 
 async def test_login_increments_failed_counter(auth_service: AuthService, mock_redis: Any) -> None:
-    await auth_service.register_user("user@example.com", PASSWORD)
+    await auth_service.register_user(
+        phone="0901234567", password=PASSWORD, email="user@example.com"
+    )
 
     with pytest.raises(UnauthorizedException):
         await auth_service.login_user("user@example.com", "wrong")
@@ -104,7 +165,9 @@ async def test_login_locks_account_after_5_fails(
     auth_service: AuthService,
     mock_redis: Any,
 ) -> None:
-    await auth_service.register_user("user@example.com", PASSWORD)
+    await auth_service.register_user(
+        phone="0901234567", password=PASSWORD, email="user@example.com"
+    )
 
     for _ in range(5):
         with pytest.raises(UnauthorizedException):
@@ -114,7 +177,9 @@ async def test_login_locks_account_after_5_fails(
 
 
 async def test_locked_account_cannot_login(auth_service: AuthService) -> None:
-    await auth_service.register_user("user@example.com", PASSWORD)
+    await auth_service.register_user(
+        phone="0901234567", password=PASSWORD, email="user@example.com"
+    )
     await auth_service.track_failed_login("user@example.com")
     await auth_service.track_failed_login("user@example.com")
     await auth_service.track_failed_login("user@example.com")
@@ -131,7 +196,9 @@ async def test_login_clears_failed_counter_on_success(
     auth_service: AuthService,
     mock_redis: Any,
 ) -> None:
-    await auth_service.register_user("user@example.com", PASSWORD)
+    await auth_service.register_user(
+        phone="0901234567", password=PASSWORD, email="user@example.com"
+    )
     with pytest.raises(UnauthorizedException):
         await auth_service.login_user("user@example.com", "wrong")
 
@@ -141,7 +208,9 @@ async def test_login_clears_failed_counter_on_success(
 
 
 async def test_refresh_token_rotates_correctly(auth_service: AuthService, mock_redis: Any) -> None:
-    await auth_service.register_user("user@example.com", PASSWORD)
+    await auth_service.register_user(
+        phone="0901234567", password=PASSWORD, email="user@example.com"
+    )
     first = await auth_service.login_user("user@example.com", PASSWORD)
 
     second = await auth_service.refresh_access_token(first.refresh_token)
@@ -152,7 +221,9 @@ async def test_refresh_token_rotates_correctly(auth_service: AuthService, mock_r
 
 
 async def test_logout_blacklists_token(auth_service: AuthService, mock_redis: Any) -> None:
-    await auth_service.register_user("user@example.com", PASSWORD)
+    await auth_service.register_user(
+        phone="0901234567", password=PASSWORD, email="user@example.com"
+    )
     result = await auth_service.login_user("user@example.com", PASSWORD)
 
     assert await auth_service.logout_user(result.access_token) is True
@@ -162,7 +233,9 @@ async def test_logout_blacklists_token(auth_service: AuthService, mock_redis: An
 
 
 async def test_blacklisted_token_rejected(auth_service: AuthService) -> None:
-    await auth_service.register_user("user@example.com", PASSWORD)
+    await auth_service.register_user(
+        phone="0901234567", password=PASSWORD, email="user@example.com"
+    )
     result = await auth_service.login_user("user@example.com", PASSWORD)
     await auth_service.logout_user(result.access_token)
 
@@ -171,7 +244,9 @@ async def test_blacklisted_token_rejected(auth_service: AuthService) -> None:
 
 
 async def test_logout_blacklists_refresh_token(auth_service: AuthService) -> None:
-    await auth_service.register_user("user@example.com", PASSWORD)
+    await auth_service.register_user(
+        phone="0901234567", password=PASSWORD, email="user@example.com"
+    )
     result = await auth_service.login_user("user@example.com", PASSWORD)
 
     await auth_service.logout_user(result.access_token, result.refresh_token)
@@ -181,7 +256,9 @@ async def test_logout_blacklists_refresh_token(auth_service: AuthService) -> Non
 
 
 async def test_verify_token_rejects_inactive_user(auth_service: AuthService) -> None:
-    user = await auth_service.register_user("user@example.com", PASSWORD)
+    user = await auth_service.register_user(
+        phone="0901234567", password=PASSWORD, email="user@example.com"
+    )
     result = await auth_service.login_user("user@example.com", PASSWORD)
     user.is_active = False
 
@@ -192,7 +269,9 @@ async def test_verify_token_rejects_inactive_user(auth_service: AuthService) -> 
 
 
 async def test_change_password_invalidates_old_tokens(auth_service: AuthService) -> None:
-    user = await auth_service.register_user("user@example.com", PASSWORD)
+    user = await auth_service.register_user(
+        phone="0901234567", password=PASSWORD, email="user@example.com"
+    )
     result = await auth_service.login_user("user@example.com", PASSWORD)
 
     assert await auth_service.change_password(user.id, PASSWORD, NEW_PASSWORD, result.access_token)
@@ -209,7 +288,9 @@ async def test_password_reset_flow_end_to_end(
     mock_redis: Any,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    user = await auth_service.register_user("user@example.com", PASSWORD)
+    user = await auth_service.register_user(
+        phone="0901234567", password=PASSWORD, email="user@example.com"
+    )
     monkeypatch.setattr(auth_module, "generate_password_reset_token", lambda: "reset-token")
 
     assert await auth_service.request_password_reset("user@example.com") is True
@@ -232,7 +313,9 @@ async def test_password_reset_sends_email_with_token_link(
         email_service=email_service,
         settings=settings,
     )
-    await auth_service.register_user("user@example.com", PASSWORD)
+    await auth_service.register_user(
+        phone="0901234567", password=PASSWORD, email="user@example.com"
+    )
     monkeypatch.setattr(auth_module, "generate_password_reset_token", lambda: "reset-token")
 
     assert await auth_service.request_password_reset("user@example.com") is True
@@ -278,7 +361,9 @@ async def test_password_reset_logs_fingerprint_not_raw_token(
     caplog: pytest.LogCaptureFixture,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    await auth_service.register_user("user@example.com", PASSWORD)
+    await auth_service.register_user(
+        phone="0901234567", password=PASSWORD, email="user@example.com"
+    )
     monkeypatch.setattr(auth_module, "generate_password_reset_token", lambda: "reset-token")
     caplog.set_level("INFO")
 

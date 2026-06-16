@@ -40,13 +40,19 @@ def auth_override(fake_user_repository: Any, mock_redis: Any) -> None:
     app.state.limiter.reset()
 
 
-def register_payload(email: str = "user@example.com", password: str = PASSWORD) -> dict[str, str]:
-    return {
-        "email": email,
+def register_payload(
+    email: str | None = "user@example.com",
+    password: str = PASSWORD,
+    phone: str = "0901234567",
+) -> dict[str, str]:
+    payload = {
         "password": password,
         "full_name": "Nguyen Van A",
-        "phone": "0901234567",
+        "phone": phone,
     }
+    if email is not None:
+        payload["email"] = email
+    return payload
 
 
 async def test_register_endpoint_returns_201(test_client: AsyncClient) -> None:
@@ -60,13 +66,56 @@ async def test_register_endpoint_returns_201(test_client: AsyncClient) -> None:
 async def test_register_with_duplicate_email_returns_409(test_client: AsyncClient) -> None:
     await test_client.post("/api/v1/auth/register", json=register_payload())
 
+    # Same email, different phone: only the email collision should be reported.
     response = await test_client.post(
         "/api/v1/auth/register",
-        json=register_payload("USER@example.com"),
+        json=register_payload("USER@example.com", phone="0907654321"),
     )
 
     assert response.status_code == 409
     assert response.json()["error_code"] == "email_already_exists"
+
+
+async def test_register_with_duplicate_phone_returns_409(test_client: AsyncClient) -> None:
+    await test_client.post("/api/v1/auth/register", json=register_payload())
+
+    # Same phone, different email: the phone collision wins.
+    response = await test_client.post(
+        "/api/v1/auth/register",
+        json=register_payload("other@example.com"),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error_code"] == "phone_already_exists"
+
+
+async def test_register_without_email_returns_201(test_client: AsyncClient) -> None:
+    response = await test_client.post("/api/v1/auth/register", json=register_payload(email=None))
+
+    assert response.status_code == 201
+    assert response.json()["email"] is None
+    assert response.json()["phone"] == "+84901234567"
+
+
+async def test_register_without_phone_returns_422(test_client: AsyncClient) -> None:
+    payload = register_payload()
+    del payload["phone"]
+
+    response = await test_client.post("/api/v1/auth/register", json=payload)
+
+    assert response.status_code == 422
+
+
+async def test_login_by_phone_returns_tokens(test_client: AsyncClient) -> None:
+    await test_client.post("/api/v1/auth/register", json=register_payload())
+
+    response = await test_client.post(
+        "/api/v1/auth/login",
+        json={"identifier": "0901234567", "password": PASSWORD},
+    )
+
+    assert response.status_code == 200
+    assert response.cookies.get("gasbot_access_token")
 
 
 async def test_register_with_weak_password_returns_422(test_client: AsyncClient) -> None:
@@ -92,7 +141,7 @@ async def test_login_returns_tokens(test_client: AsyncClient) -> None:
 
     response = await test_client.post(
         "/api/v1/auth/login",
-        json={"email": "user@example.com", "password": PASSWORD},
+        json={"identifier": "user@example.com", "password": PASSWORD},
     )
 
     assert response.status_code == 200
@@ -120,7 +169,7 @@ async def test_login_with_wrong_password_returns_401(test_client: AsyncClient) -
 
     response = await test_client.post(
         "/api/v1/auth/login",
-        json={"email": "user@example.com", "password": "wrong"},
+        json={"identifier": "user@example.com", "password": "wrong"},
     )
 
     assert response.status_code == 401
@@ -134,14 +183,14 @@ async def test_account_locks_after_5_failed_logins(test_client: AsyncClient) -> 
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             await client.post(
                 "/api/v1/auth/login",
-                json={"email": "user@example.com", "password": "wrong"},
+                json={"identifier": "user@example.com", "password": "wrong"},
             )
 
     transport = ASGITransport(app=app, client=("127.0.0.6", 123))
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
             "/api/v1/auth/login",
-            json={"email": "user@example.com", "password": PASSWORD},
+            json={"identifier": "user@example.com", "password": PASSWORD},
         )
 
     assert response.status_code == 401
@@ -152,7 +201,7 @@ async def test_me_endpoint_returns_current_user(test_client: AsyncClient) -> Non
     await test_client.post("/api/v1/auth/register", json=register_payload())
     await test_client.post(
         "/api/v1/auth/login",
-        json={"email": "user@example.com", "password": PASSWORD},
+        json={"identifier": "user@example.com", "password": PASSWORD},
     )
 
     response = await test_client.get("/api/v1/auth/me")
@@ -173,7 +222,7 @@ async def test_protected_endpoint_with_blacklisted_token_returns_401(
     await test_client.post("/api/v1/auth/register", json=register_payload())
     login = await test_client.post(
         "/api/v1/auth/login",
-        json={"email": "user@example.com", "password": PASSWORD},
+        json={"identifier": "user@example.com", "password": PASSWORD},
     )
     token = login.cookies["gasbot_access_token"]
     await test_client.post("/api/v1/auth/logout")
@@ -190,7 +239,7 @@ async def test_logout_revokes_refresh_token(test_client: AsyncClient) -> None:
     await test_client.post("/api/v1/auth/register", json=register_payload())
     login = await test_client.post(
         "/api/v1/auth/login",
-        json={"email": "user@example.com", "password": PASSWORD},
+        json={"identifier": "user@example.com", "password": PASSWORD},
     )
     refresh_token = login.cookies["gasbot_refresh_token"]
 
@@ -208,7 +257,7 @@ async def test_logout_deletes_refresh_cookie_at_root_path(test_client: AsyncClie
     await test_client.post("/api/v1/auth/register", json=register_payload())
     await test_client.post(
         "/api/v1/auth/login",
-        json={"email": "user@example.com", "password": PASSWORD},
+        json={"identifier": "user@example.com", "password": PASSWORD},
     )
 
     response = await test_client.post("/api/v1/auth/logout")
@@ -225,7 +274,7 @@ async def test_refresh_endpoint_with_valid_token(test_client: AsyncClient) -> No
     await test_client.post("/api/v1/auth/register", json=register_payload())
     await test_client.post(
         "/api/v1/auth/login",
-        json={"email": "user@example.com", "password": PASSWORD},
+        json={"identifier": "user@example.com", "password": PASSWORD},
     )
 
     response = await test_client.post("/api/v1/auth/refresh")

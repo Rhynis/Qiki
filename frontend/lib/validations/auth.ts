@@ -4,6 +4,7 @@ import { isVietnameseMobilePhone, normalizePhoneDigits } from '@/utils/phone-for
 export const emailInvalidMessage = 'Email không hợp lệ, ví dụ: ten@gmail.com'
 export const passwordHelpText = 'Mật khẩu tối thiểu 6 ký tự, có 1 chữ hoa và 1 chữ số.'
 export const phoneInvalidMessage = 'Số điện thoại không hợp lệ, ví dụ: 090 3026 306'
+export const loginIdentifierRequiredMessage = 'Vui lòng nhập số điện thoại'
 
 export const passwordSchema = z
   .string()
@@ -13,7 +14,8 @@ export const passwordSchema = z
   .regex(/\d/, 'Mật khẩu cần có ít nhất 1 chữ số')
 
 export const loginSchema = z.object({
-  email: z.string().min(1, 'Email không được để trống').email(emailInvalidMessage),
+  // Phone-first, but an email is still accepted for existing accounts.
+  identifier: z.string().trim().min(1, loginIdentifierRequiredMessage),
   password: z.string().min(1, 'Mật khẩu không được để trống'),
 })
 
@@ -23,10 +25,13 @@ const phoneSchema = z
   .transform(normalizePhoneDigits)
   .refine(isVietnameseMobilePhone, phoneInvalidMessage)
 
+// Email is optional; an empty string is treated as "no email".
+const optionalEmailSchema = z.union([z.literal(''), z.string().email(emailInvalidMessage)])
+
 export const registerSchema = z
   .object({
     full_name: z.string().min(2, 'Họ tên phải có ít nhất 2 ký tự').max(255, 'Họ tên quá dài'),
-    email: z.string().email(emailInvalidMessage),
+    email: optionalEmailSchema,
     phone: phoneSchema,
     password: passwordSchema,
     confirmPassword: z.string(),

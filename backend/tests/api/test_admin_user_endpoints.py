@@ -29,7 +29,7 @@ def make_user(
         email=email or f"{role}-{suffix}@example.com",
         hashed_password="hashed",
         full_name=f"{role.title()} User",
-        phone="0900000000",
+        phone=f"09{uuid4().int % 10**8:08d}",
         role=role,
         is_active=is_active,
         created_at=now,

@@ -65,9 +65,30 @@ describe('auth validation schemas', () => {
     )
   })
 
-  it('requires login email and password', () => {
-    const result = loginSchema.safeParse({ email: '', password: '' })
+  it('requires login identifier and password', () => {
+    const result = loginSchema.safeParse({ identifier: '', password: '' })
 
     expect(result.success).toBe(false)
+  })
+
+  it('accepts a login identifier that is a phone or an email', () => {
+    expect(loginSchema.safeParse({ identifier: '0903026306', password: 'Abc123' }).success).toBe(
+      true
+    )
+    expect(
+      loginSchema.safeParse({ identifier: 'user@example.com', password: 'Abc123' }).success
+    ).toBe(true)
+  })
+
+  it('allows registration without an email', () => {
+    const result = registerSchema.safeParse({
+      full_name: 'Nguyen Van A',
+      email: '',
+      phone: '0901234567',
+      password: 'Abc123',
+      confirmPassword: 'Abc123',
+    })
+
+    expect(result.success).toBe(true)
   })
 })

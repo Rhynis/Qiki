@@ -80,14 +80,14 @@ async def register(
 ) -> User:
     """Create a new customer account."""
     return await auth_service.register_user(
-        email=payload.email,
+        phone=payload.phone,
         password=payload.password,
         full_name=payload.full_name,
-        phone=payload.phone,
+        email=payload.email,
     )
 
 
-@router.post("/login", response_model=LoginResponse, summary="Log in with email and password")
+@router.post("/login", response_model=LoginResponse, summary="Log in with phone and password")
 @limiter.limit("5/minute")
 async def login(
     request: Request,
@@ -96,7 +96,7 @@ async def login(
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> LoginResponse:
     """Authenticate credentials and set auth cookies."""
-    result = await auth_service.login_user(payload.email, payload.password)
+    result = await auth_service.login_user(payload.identifier, payload.password)
     _set_auth_cookies(response, result)
     return LoginResponse(user=UserResponse.model_validate(result.user))
 
