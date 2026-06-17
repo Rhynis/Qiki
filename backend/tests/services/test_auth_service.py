@@ -272,6 +272,7 @@ async def test_verify_token_rejects_inactive_user(auth_service: AuthService) -> 
         await auth_service.verify_token(result.access_token)
 
     assert exc_info.value.error_code == "inactive_user"
+    assert exc_info.value.detail == "Tài khoản đã bị vô hiệu hóa."
 
 
 async def test_change_password_invalidates_old_tokens(auth_service: AuthService) -> None:
@@ -287,6 +288,20 @@ async def test_change_password_invalidates_old_tokens(auth_service: AuthService)
     with pytest.raises(UnauthorizedException):
         await auth_service.login_user("user@example.com", PASSWORD)
     assert await auth_service.login_user("user@example.com", NEW_PASSWORD)
+
+
+async def test_change_password_wrong_old_password_returns_vietnamese(
+    auth_service: AuthService,
+) -> None:
+    user = await auth_service.register_user(
+        phone="0901234567", password=PASSWORD, email="user@example.com"
+    )
+
+    with pytest.raises(UnauthorizedException) as exc_info:
+        await auth_service.change_password(user.id, "WrongOld123!", NEW_PASSWORD)
+
+    assert exc_info.value.error_code == "invalid_credentials"
+    assert exc_info.value.detail == "Mật khẩu hiện tại không đúng."
 
 
 async def test_password_reset_flow_end_to_end(
@@ -384,8 +399,11 @@ async def test_password_reset_unknown_email_returns_success(auth_service: AuthSe
 
 
 async def test_reset_password_rejects_invalid_token(auth_service: AuthService) -> None:
-    with pytest.raises(ValidationException):
+    with pytest.raises(ValidationException) as exc_info:
         await auth_service.reset_password("missing-token", NEW_PASSWORD)
+
+    assert exc_info.value.error_code == "invalid_reset_token"
+    assert exc_info.value.detail == "Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn."
 
 
 # --- Email OTP verification ---------------------------------------------------

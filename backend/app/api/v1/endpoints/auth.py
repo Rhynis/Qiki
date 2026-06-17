@@ -29,6 +29,7 @@ from app.schemas.user import (
 from app.services.auth_service import (
     ACCESS_TOKEN_COOKIE,
     ACCESS_TOKEN_COOKIE_PATH,
+    INVALID_SESSION_MESSAGE,
     REFRESH_TOKEN_COOKIE,
     REFRESH_TOKEN_COOKIE_PATH,
     AuthResult,
@@ -116,7 +117,7 @@ async def refresh(
     if not refresh_token and payload:
         refresh_token = payload.refresh_token
     if not refresh_token:
-        raise UnauthorizedException("Refresh token required", error_code="not_authenticated")
+        raise UnauthorizedException(INVALID_SESSION_MESSAGE, error_code="not_authenticated")
     result = await auth_service.refresh_access_token(refresh_token)
     _set_auth_cookies(response, result)
     return TokenRefreshResponse(user=UserResponse.model_validate(result.user))
