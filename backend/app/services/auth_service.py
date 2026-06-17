@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import html
 import logging
 import secrets
 from dataclasses import dataclass
@@ -26,7 +25,7 @@ from app.core.security import (
 )
 from app.models.user import User
 from app.schemas.user import UserCreate
-from app.services.email_service import EmailService, render_email_otp
+from app.services.email_service import EmailService, render_email_layout, render_email_otp
 
 logger = logging.getLogger(__name__)
 
@@ -370,7 +369,6 @@ class AuthService:
     async def _send_password_reset_email(self, email: str, token: str) -> None:
         reset_link = f"{self.settings.FRONTEND_URL.rstrip('/')}/reset-password?token={token}"
         ttl_minutes = max(1, PASSWORD_RESET_TTL_SECONDS // 60)
-        escaped_link = html.escape(reset_link, quote=True)
         subject = "Đặt lại mật khẩu Gas Quốc Cường"
         text = (
             "Dạ chào bạn,\n\n"
@@ -379,12 +377,18 @@ class AuthService:
             f"Liên kết này có hiệu lực trong {ttl_minutes} phút. "
             "Nếu bạn không yêu cầu, vui lòng bỏ qua email này."
         )
-        html_body = (
-            "<p>Dạ chào bạn,</p>"
-            "<p>Gas Quốc Cường nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn.</p>"
-            f'<p><a href="{escaped_link}">Đặt lại mật khẩu</a></p>'
-            f"<p>Liên kết này có hiệu lực trong {ttl_minutes} phút. "
-            "Nếu bạn không yêu cầu, vui lòng bỏ qua email này.</p>"
+        body_html = (
+            '<p style="margin:0 0 16px">Dạ chào bạn,</p>'
+            '<p style="margin:0 0 16px">Gas Quốc Cường nhận được yêu cầu đặt lại mật khẩu '
+            "cho tài khoản của bạn. Nhấn nút bên dưới để đặt lại mật khẩu.</p>"
+            f'<p style="margin:0;color:#64748b;font-size:14px">Liên kết này có hiệu lực trong '
+            f"{ttl_minutes} phút.</p>"
+        )
+        html_body = render_email_layout(
+            "Đặt lại mật khẩu",
+            body_html,
+            cta_label="Đặt lại mật khẩu",
+            cta_url=reset_link,
         )
         try:
             await self.email_service.send_email(

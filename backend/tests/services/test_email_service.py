@@ -9,7 +9,7 @@ import httpx
 import pytest
 
 from app.core.config import Settings
-from app.services.email_service import EmailService, render_email_otp
+from app.services.email_service import EmailService, render_email_layout, render_email_otp
 
 pytestmark = pytest.mark.asyncio
 
@@ -165,6 +165,37 @@ async def test_render_email_otp_includes_code_and_expiry() -> None:
     assert "123456" in html
     assert "10 phút" in text
     assert "10 phút" in html
+    # Branded layout: brand name in the header.
+    assert "Gas Quốc Cường" in html
+
+
+async def test_render_email_layout_branding_and_cta() -> None:
+    html = render_email_layout(
+        "Tiêu đề",
+        "<p>Nội dung</p>",
+        cta_label="Bấm vào đây",
+        cta_url="https://example.com/r?token=abc",
+    )
+
+    # Brand header + tagline + footer hotline.
+    assert "Gas Quốc Cường" in html
+    assert "Trợ lý gas Qiki" in html
+    assert "090 3026306" in html
+    assert "Nếu bạn không yêu cầu, vui lòng bỏ qua email này." in html
+    # CTA button (orange) + raw-link fallback both carry the URL.
+    assert "Bấm vào đây" in html
+    assert html.count("https://example.com/r?token=abc") >= 1
+    assert "#F97316" in html
+    # Inline CSS only — no <style> blocks.
+    assert "<style" not in html
+
+
+async def test_render_email_layout_without_cta_has_no_button() -> None:
+    html = render_email_layout("Tiêu đề", "<p>Chỉ nội dung</p>")
+
+    assert "Gas Quốc Cường" in html
+    assert "Chỉ nội dung" in html
+    assert "Nếu nút không hoạt động" not in html
 
 
 async def test_email_service_smtp_failure_does_not_raise(
