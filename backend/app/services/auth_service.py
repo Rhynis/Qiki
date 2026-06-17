@@ -43,6 +43,10 @@ EMAIL_OTP_TTL_SECONDS = 600
 EMAIL_OTP_RESEND_TTL_SECONDS = 3600
 EMAIL_OTP_RESEND_LIMIT = 5
 
+# User-facing Vietnamese messages reused across the token/session paths.
+INVALID_SESSION_MESSAGE = "Phiên đăng nhập không hợp lệ hoặc đã hết hạn."
+INACTIVE_ACCOUNT_MESSAGE = "Tài khoản đã bị vô hiệu hóa."
+
 
 class UserRepositoryProtocol(Protocol):
     """Repository protocol used by AuthService."""
@@ -141,7 +145,7 @@ class AuthService:
             )
 
         if not user.is_active:
-            raise UnauthorizedException("Tài khoản đã bị vô hiệu hóa.", error_code="inactive_user")
+            raise UnauthorizedException(INACTIVE_ACCOUNT_MESSAGE, error_code="inactive_user")
 
         await self._delete(f"failed_login:{lookup_key}")
         return self._create_auth_result(user)
@@ -163,13 +167,13 @@ class AuthService:
         """Rotate refresh token and issue a new access token."""
         payload = decode_token(refresh_token)
         if payload.get("type") != "refresh":  # pragma: no cover
-            raise UnauthorizedException("Invalid refresh token", error_code="invalid_token")
+            raise UnauthorizedException(INVALID_SESSION_MESSAGE, error_code="invalid_token")
         await self._raise_if_blacklisted(payload)
 
         user_id = self._payload_user_id(payload)
         user = await self.user_repository.get_by_id(user_id)
         if not user or not user.is_active:  # pragma: no cover
-            raise UnauthorizedException("User account is inactive", error_code="inactive_user")
+            raise UnauthorizedException(INACTIVE_ACCOUNT_MESSAGE, error_code="inactive_user")
 
         await self._blacklist_payload(payload)
         return self._create_auth_result(user)
@@ -187,14 +191,14 @@ class AuthService:
         """Verify an access token, blacklist state, and user existence."""
         payload = decode_token(token)
         if payload.get("type") != "access":  # pragma: no cover
-            raise UnauthorizedException("Invalid access token", error_code="invalid_token")
+            raise UnauthorizedException(INVALID_SESSION_MESSAGE, error_code="invalid_token")
         await self._raise_if_blacklisted(payload)
 
         user = await self.user_repository.get_by_id(self._payload_user_id(payload))
         if not user:  # pragma: no cover
-            raise UnauthorizedException("User not found", error_code="invalid_token")
+            raise UnauthorizedException(INVALID_SESSION_MESSAGE, error_code="invalid_token")
         if not user.is_active:  # pragma: no cover
-            raise UnauthorizedException("User account is inactive", error_code="inactive_user")
+            raise UnauthorizedException(INACTIVE_ACCOUNT_MESSAGE, error_code="inactive_user")
         return user
 
     async def change_password(
@@ -207,9 +211,13 @@ class AuthService:
         """Change a user password and invalidate the current access token."""
         user = await self.user_repository.get_by_id(user_id)
         if not user or not user.hashed_password:  # pragma: no cover
-            raise UnauthorizedException("User not found", error_code="invalid_credentials")
+            raise UnauthorizedException(
+                "Mật khẩu hiện tại không đúng.", error_code="invalid_credentials"
+            )
         if not verify_password(old_password, user.hashed_password):  # pragma: no cover
-            raise UnauthorizedException("Invalid password", error_code="invalid_credentials")
+            raise UnauthorizedException(
+                "Mật khẩu hiện tại không đúng.", error_code="invalid_credentials"
+            )
 
         await self.user_repository.update(
             user_id,
@@ -242,7 +250,7 @@ class AuthService:
         raw_user_id = await self._get(f"password_reset:{token}")
         if not raw_user_id:  # pragma: no cover
             raise ValidationException(
-                "Invalid or expired reset token",
+                "Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.",
                 error_code="invalid_reset_token",
             )
 
@@ -250,7 +258,7 @@ class AuthService:
         user = await self.user_repository.get_by_id(user_id)
         if not user:  # pragma: no cover
             raise ValidationException(
-                "Invalid or expired reset token",
+                "Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.",
                 error_code="invalid_reset_token",
             )
 
@@ -334,7 +342,7 @@ class AuthService:
     async def _raise_if_blacklisted(self, payload: dict[str, Any]) -> None:
         jti = payload.get("jti")
         if jti and await self._get(f"blacklist:{jti}"):  # pragma: no cover
-            raise UnauthorizedException("Token has been revoked", error_code="token_revoked")
+            raise UnauthorizedException(INVALID_SESSION_MESSAGE, error_code="token_revoked")
 
     async def _blacklist_payload(self, payload: dict[str, Any]) -> None:
         jti = payload.get("jti")
@@ -351,7 +359,7 @@ class AuthService:
     def _payload_user_id(self, payload: dict[str, Any]) -> UUID:
         subject = payload.get("sub")
         if not isinstance(subject, str):  # pragma: no cover
-            raise UnauthorizedException("Invalid token subject", error_code="invalid_token")
+            raise UnauthorizedException(INVALID_SESSION_MESSAGE, error_code="invalid_token")
         return UUID(subject)
 
     def _decode_redis_value(self, value: object) -> str:
