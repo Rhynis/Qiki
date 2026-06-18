@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import html as html_lib
 import logging
 from collections.abc import Sequence
 from email.message import EmailMessage
@@ -18,6 +19,69 @@ RESEND_EMAILS_URL = "https://api.resend.com/emails"
 GMAIL_TOKEN_URL = "https://oauth2.googleapis.com/token"  # noqa: S105
 GMAIL_SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
 
+# Brand constants for the shared email layout (orange matches the site's --primary).
+BRAND_NAME = "Gas Quốc Cường"
+BRAND_TAGLINE = "Trợ lý gas Qiki"
+BRAND_HOTLINE = "090 3026306"
+BRAND_ORANGE = "#F97316"
+_FONT_STACK = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
+
+
+def render_email_layout(
+    title: str,
+    body_html: str,
+    *,
+    cta_label: str | None = None,
+    cta_url: str | None = None,
+) -> str:
+    """Wrap email body content in the shared branded HTML shell (inline CSS only).
+
+    Renders a centered ~600px white card on a light background with a brand
+    header, the given body, an optional orange CTA button (plus a raw-link
+    fallback for clients that strip buttons), and a muted fine-print footer.
+    Table + max-width layout so it survives Gmail/Outlook (no <style>, no flexbox).
+    """
+    cta_block = ""
+    if cta_label and cta_url:
+        safe_href = html_lib.escape(cta_url, quote=True)
+        cta_block = (
+            '<div style="margin:24px 0 8px">'
+            f'<a href="{safe_href}" '
+            f'style="display:inline-block;background-color:{BRAND_ORANGE};color:#ffffff;'
+            "text-decoration:none;font-weight:600;font-size:16px;padding:13px 30px;"
+            'border-radius:8px">'
+            f"{html_lib.escape(cta_label)}</a></div>"
+            '<div style="font-size:13px;line-height:1.6;color:#94a3b8;word-break:break-all">'
+            f"Nếu nút không hoạt động, hãy mở liên kết: {html_lib.escape(cta_url)}</div>"
+        )
+    return (
+        '<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1"></head>'
+        f'<body style="margin:0;padding:0;background-color:#f4f4f5;font-family:{_FONT_STACK};'
+        'color:#0f172a">'
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" '
+        'style="background-color:#f4f4f5">'
+        '<tr><td align="center" style="padding:24px 12px">'
+        '<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" '
+        'style="width:100%;max-width:600px;background-color:#ffffff;border:1px solid #e4e4e7;'
+        'border-radius:12px">'
+        '<tr><td style="padding:28px 32px 18px;border-bottom:1px solid #f1f5f9">'
+        f'<div style="font-size:22px;font-weight:700;color:{BRAND_ORANGE}">{BRAND_NAME}</div>'
+        f'<div style="font-size:13px;color:#64748b;margin-top:3px">{BRAND_TAGLINE}</div>'
+        "</td></tr>"
+        '<tr><td style="padding:26px 32px 30px">'
+        f'<h1 style="font-size:20px;font-weight:600;margin:0 0 14px;color:#0f172a">{title}</h1>'
+        f'<div style="font-size:15px;line-height:1.65;color:#334155">{body_html}</div>'
+        f"{cta_block}"
+        "</td></tr>"
+        '<tr><td style="padding:18px 32px 26px;border-top:1px solid #f1f5f9;'
+        'font-size:12px;line-height:1.6;color:#94a3b8">'
+        "Nếu bạn không yêu cầu, vui lòng bỏ qua email này.<br>"
+        f"{BRAND_NAME} · Hotline {BRAND_HOTLINE}"
+        "</td></tr>"
+        "</table></td></tr></table></body></html>"
+    )
+
 
 def render_email_otp(code: str, *, ttl_minutes: int) -> tuple[str, str, str]:
     """Build the Vietnamese email-verification message: (subject, text, html).
@@ -32,13 +96,16 @@ def render_email_otp(code: str, *, ttl_minutes: int) -> tuple[str, str, str]:
         f"Mã có hiệu lực trong {ttl_minutes} phút. "
         "Nếu bạn không yêu cầu, vui lòng bỏ qua email này."
     )
-    html = (
-        "<p>Dạ chào bạn,</p>"
-        "<p>Mã xác minh email cho tài khoản Gas Quốc Cường của bạn là:</p>"
-        f'<p style="font-size:24px;font-weight:bold;letter-spacing:4px">{code}</p>'
-        f"<p>Mã có hiệu lực trong {ttl_minutes} phút. "
-        "Nếu bạn không yêu cầu, vui lòng bỏ qua email này.</p>"
+    body_html = (
+        '<p style="margin:0 0 16px">Dạ chào bạn,</p>'
+        '<p style="margin:0 0 16px">Mã xác minh email cho tài khoản của bạn là:</p>'
+        f'<div style="font-size:32px;font-weight:700;letter-spacing:8px;color:{BRAND_ORANGE};'
+        "background-color:#fff7ed;border:1px solid #fed7aa;border-radius:10px;"
+        f'padding:16px 0;text-align:center;margin:0 0 18px">{code}</div>'
+        f'<p style="margin:0;color:#64748b;font-size:14px">Mã có hiệu lực trong '
+        f"{ttl_minutes} phút.</p>"
     )
+    html = render_email_layout("Xác minh email", body_html)
     return subject, text, html
 
 

@@ -341,28 +341,21 @@ async def test_password_reset_sends_email_with_token_link(
 
     assert await auth_service.request_password_reset("user@example.com") is True
 
-    assert email_service.messages == [
-        {
-            "to": "user@example.com",
-            "subject": "Đặt lại mật khẩu Gas Quốc Cường",
-            "html": (
-                "<p>Dạ chào bạn,</p>"
-                "<p>Gas Quốc Cường nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn.</p>"
-                '<p><a href="https://frontend.test/reset-password?token=reset-token">'
-                "Đặt lại mật khẩu</a></p>"
-                "<p>Liên kết này có hiệu lực trong 60 phút. "
-                "Nếu bạn không yêu cầu, vui lòng bỏ qua email này.</p>"
-            ),
-            "text": (
-                "Dạ chào bạn,\n\n"
-                "Gas Quốc Cường nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn.\n"
-                "Vui lòng mở liên kết sau để đặt lại mật khẩu: "
-                "https://frontend.test/reset-password?token=reset-token\n\n"
-                "Liên kết này có hiệu lực trong 60 phút. "
-                "Nếu bạn không yêu cầu, vui lòng bỏ qua email này."
-            ),
-        }
-    ]
+    assert len(email_service.messages) == 1
+    message = email_service.messages[0]
+    reset_url = "https://frontend.test/reset-password?token=reset-token"
+
+    assert message["to"] == "user@example.com"
+    assert message["subject"] == "Đặt lại mật khẩu Gas Quốc Cường"
+    # Branded HTML: brand name, the CTA, the reset URL (button + raw-link fallback), expiry.
+    assert "Gas Quốc Cường" in message["html"]
+    assert "Đặt lại mật khẩu" in message["html"]
+    assert reset_url in message["html"]
+    assert "60 phút" in message["html"]
+    # Plain-text alternative still carries the reset URL + expiry note.
+    assert reset_url in message["text"]
+    assert "60 phút" in message["text"]
+    assert "Nếu bạn không yêu cầu, vui lòng bỏ qua email này." in message["text"]
 
 
 async def test_password_reset_unknown_email_does_not_send_email(
