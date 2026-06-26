@@ -1,0 +1,10 @@
+tunnel: YOUR_TUNNEL_ID
+credentials-file: /Users/YOUR_USER/.cloudflared/<YOUR_TUNNEL_ID>.json
+
+ingress:
+  - hostname: ollama-demo.YOUR_DOMAIN.com
+    service: http://localhost:11434
+    originRequest:
+      noTLSVerify: true
+      httpHostHeader: localhost:11434
+  - service: http_status:404
