@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Toaster } from 'sonner'
 import { ChatWidget } from '@/components/chat/chat-widget'
 import { Providers } from '@/components/providers'
+import { DemoModeBanner } from '@/components/shared/demo-mode-banner'
 import { FloatingContact } from '@/components/shared/floating-contact'
 import { Footer } from '@/components/shared/footer'
 import { Header } from '@/components/shared/header'
@@ -24,6 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <Providers>
           <div className="min-h-screen bg-slate-50">
+            <DemoModeBanner />
             <Header />
             <main>{children}</main>
             <Footer />
