@@ -3,6 +3,7 @@
 set -euo pipefail
 
 MODEL="qwen2.5:7b-instruct-q4_K_M"
+EMBED_MODEL="nomic-embed-text"
 OLLAMA_BASE_URL="http://localhost:11434"
 
 echo "Starting GasBot Local Demo Mode..."
@@ -32,6 +33,12 @@ fi
 if ! ollama list | awk '{ print $1 }' | grep -qx "$MODEL"; then
   echo "Pulling $MODEL. This can take several minutes the first time."
   ollama pull "$MODEL"
+fi
+
+# Embedding model used by the backend RAG pipeline when OLLAMA_EMBED_MODEL is active.
+if ! ollama list | awk '{ print $1 }' | grep -qx "$EMBED_MODEL"; then
+  echo "Pulling embedding model $EMBED_MODEL."
+  ollama pull "$EMBED_MODEL"
 fi
 
 echo "Pre-warming $MODEL..."
