@@ -49,6 +49,9 @@ jobs:
       ENVIRONMENT: development
       # Keep the DeepEval eval suite (tests/eval) offline + deterministic in CI.
       DEEPEVAL_TELEMETRY_OPT_OUT: "YES"
+      # Enables the optional intent-eval step below. Empty unless the repo secret is set,
+      # in which case the step is skipped (the embedding-based classifier needs Gemini).
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
     steps:
       - uses: actions/checkout@v4
@@ -66,6 +69,13 @@ jobs:
       - run: pytest --cov --cov-fail-under=70
       - run: pytest tests/eval -v
       - run: python -m scripts.run_evaluation --suite safety
+      # Optional 96-case intent suite. Runs only when the GEMINI_API_KEY secret is set
+      # (the hybrid classifier embeds queries via Gemini). Report-only: it never blocks a
+      # merge, since intent accuracy depends on non-deterministic LLM fallbacks.
+      - name: Intent evaluation (optional — needs GEMINI_API_KEY secret)
+        if: ${{ env.GEMINI_API_KEY != '' }}
+        continue-on-error: true
+        run: python -m scripts.run_evaluation --suite intent
       # GHSA-8rrh-rw8j-w5fx: dev/build-only `wheel` (deepeval transitive, not in the
       # runtime image); the fix needs packaging>=24 which runtime langfuse pins out.
       - run: pip-audit --strict --ignore-vuln GHSA-8rrh-rw8j-w5fx
