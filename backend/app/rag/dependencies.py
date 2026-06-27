@@ -14,6 +14,7 @@ from app.llm.prompts.templates import PromptLibrary
 from app.rag.context_builder import ContextBuilder
 from app.rag.embeddings import EmbeddingService
 from app.rag.jina_embeddings import JinaEmbeddingService
+from app.rag.ollama_embeddings import OllamaEmbeddingService
 from app.rag.pipeline import RAGPipeline
 from app.rag.retriever import BaseRetriever, HybridRetriever, VectorRetriever
 from app.rag.safety import SafetyChecker
@@ -46,12 +47,22 @@ def get_jina_embedding_service() -> JinaEmbeddingService:
     return JinaEmbeddingService()
 
 
+@lru_cache(maxsize=1)
+def get_ollama_embedding_service() -> OllamaEmbeddingService:
+    """Return cached local Ollama embedding service."""
+    return OllamaEmbeddingService()
+
+
 def get_knowledge_base_service(
     session: Annotated[AsyncSession, Depends(get_db)],
     embedding_service: Annotated[EmbeddingService, Depends(get_embedding_service)],
     jina_embedding_service: Annotated[
         JinaEmbeddingService,
         Depends(get_jina_embedding_service),
+    ],
+    ollama_embedding_service: Annotated[
+        OllamaEmbeddingService,
+        Depends(get_ollama_embedding_service),
     ],
 ) -> KnowledgeBaseService:
     """Build a request-scoped knowledge base service."""
@@ -60,6 +71,7 @@ def get_knowledge_base_service(
         embedding_service,
         jina_embedding_service,
         VietnameseTextProcessor(),
+        ollama_embedding_service,
     )
 
 

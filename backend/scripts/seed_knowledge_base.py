@@ -4,8 +4,10 @@ import asyncio
 from pathlib import Path
 
 from app.db.session import AsyncSessionLocal
+from app.llm.exceptions import LLMConnectionError, LLMInvalidRequestError, LLMTimeoutError
 from app.rag.embeddings import EmbeddingService
 from app.rag.jina_embeddings import JinaEmbeddingService
+from app.rag.ollama_embeddings import OllamaEmbeddingService
 from app.repositories.knowledge_base_repository import KnowledgeBaseRepository
 from app.services.knowledge_base_service import parse_front_matter
 
@@ -32,6 +34,7 @@ async def main() -> None:
 
     embedding_service = EmbeddingService()
     jina_embedding_service = JinaEmbeddingService()
+    ollama_embedding_service = OllamaEmbeddingService()
     texts = [f"{document['title']}\n\n{document['content']}" for document in documents]
     print("Generating Gemini embeddings...")
     embeddings = await embedding_service.embed_batch(texts, batch_size=32)
@@ -42,10 +45,20 @@ async def main() -> None:
         batch_size=32,
     )
 
+    # Ollama is optional: skip its column when a local server is unreachable so
+    # the default Gemini + Jina seed path keeps working without Ollama running.
+    embeddings_ollama: list[list[float] | None]
+    print("Generating Ollama embeddings...")
+    try:
+        embeddings_ollama = list(await ollama_embedding_service.embed_batch(texts, batch_size=32))
+    except (LLMConnectionError, LLMTimeoutError, LLMInvalidRequestError) as exc:
+        print(f"Ollama unreachable, leaving embedding_ollama empty: {exc}")
+        embeddings_ollama = [None] * len(texts)
+
     async with AsyncSessionLocal() as session:
         repo = KnowledgeBaseRepository(session)
         created = await repo.create_batch(
-            list(zip(documents, embeddings, embeddings_jina, strict=True))
+            list(zip(documents, embeddings, embeddings_jina, embeddings_ollama, strict=True))
         )
         await session.commit()
         print(f"Created {len(created)} knowledge base entries")

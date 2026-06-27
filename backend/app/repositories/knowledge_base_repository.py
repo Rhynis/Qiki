@@ -14,6 +14,15 @@ from app.core.exceptions import NotFoundException
 from app.models.knowledge_base import KnowledgeBase
 from app.schemas.knowledge_base import KnowledgeBaseSearchResult
 
+# Postgres match functions, one per embedding vector space. A query must only be
+# matched against the column it was embedded for (Gemini / Jina / Ollama).
+MATCH_DOCUMENTS = "match_documents"
+MATCH_DOCUMENTS_JINA = "match_documents_jina"
+MATCH_DOCUMENTS_OLLAMA = "match_documents_ollama"
+_ALLOWED_MATCH_FUNCTIONS = frozenset(
+    {MATCH_DOCUMENTS, MATCH_DOCUMENTS_JINA, MATCH_DOCUMENTS_OLLAMA}
+)
+
 
 class KnowledgeBaseRepository:
     """Data access layer for knowledge base documents."""
@@ -26,9 +35,15 @@ class KnowledgeBaseRepository:
         data: dict[str, Any],
         embedding: list[float] | None,
         embedding_jina: list[float] | None = None,
+        embedding_ollama: list[float] | None = None,
     ) -> KnowledgeBase:
         """Create one knowledge base document."""
-        document = KnowledgeBase(**data, embedding=embedding, embedding_jina=embedding_jina)
+        document = KnowledgeBase(
+            **data,
+            embedding=embedding,
+            embedding_jina=embedding_jina,
+            embedding_ollama=embedding_ollama,
+        )
         self.session.add(document)
         await self.session.flush()
         await self.session.refresh(document)
@@ -37,13 +52,18 @@ class KnowledgeBaseRepository:
     async def create_batch(
         self,
         items_with_embeddings: Sequence[
-            tuple[dict[str, Any], list[float] | None, list[float] | None]
+            tuple[dict[str, Any], list[float] | None, list[float] | None, list[float] | None]
         ],
     ) -> list[KnowledgeBase]:
         """Create many knowledge base documents."""
         documents = [
-            KnowledgeBase(**item_data, embedding=embedding, embedding_jina=embedding_jina)
-            for item_data, embedding, embedding_jina in items_with_embeddings
+            KnowledgeBase(
+                **item_data,
+                embedding=embedding,
+                embedding_jina=embedding_jina,
+                embedding_ollama=embedding_ollama,
+            )
+            for item_data, embedding, embedding_jina, embedding_ollama in items_with_embeddings
         ]
         self.session.add_all(documents)
         await self.session.flush()
@@ -61,6 +81,7 @@ class KnowledgeBaseRepository:
         data: dict[str, Any],
         embedding: list[float] | None = None,
         embedding_jina: list[float] | None = None,
+        embedding_ollama: list[float] | None = None,
     ) -> KnowledgeBase:
         """Update document fields and optionally embedding."""
         document = await self.get_by_id(kb_id)
@@ -75,6 +96,8 @@ class KnowledgeBaseRepository:
             document.embedding = embedding
         if embedding_jina is not None:
             document.embedding_jina = embedding_jina
+        if embedding_ollama is not None:
+            document.embedding_ollama = embedding_ollama
         await self.session.flush()
         await self.session.refresh(document)
         return document
@@ -112,30 +135,26 @@ class KnowledgeBaseRepository:
         top_k: int = 5,
         threshold: float = 0.5,
         category_filter: str | None = None,
-        use_fallback: bool = False,
+        match_function: str = MATCH_DOCUMENTS,
     ) -> list[KnowledgeBaseSearchResult]:
-        """Search via pgvector similarity using the migration's match_documents function."""
-        sql = (
-            """
+        """Search via pgvector similarity using the given match function.
+
+        ``match_function`` selects the vector space (Gemini / Jina / Ollama) and is
+        validated against an allowlist, so it is safe to interpolate into SQL.
+        """
+        if match_function not in _ALLOWED_MATCH_FUNCTIONS:
+            match_function = MATCH_DOCUMENTS
+        # match_function is constrained to the allowlist above, so this is not
+        # user-controlled SQL; embedding values are bound as parameters.
+        sql = f"""
             SELECT id, title, content, category, similarity
-            FROM match_documents_jina(
+            FROM {match_function}(
                 CAST(:query_embedding AS vector),
                 :threshold,
                 :top_k,
                 :category_filter
             )
-            """
-            if use_fallback
-            else """
-            SELECT id, title, content, category, similarity
-            FROM match_documents(
-                CAST(:query_embedding AS vector),
-                :threshold,
-                :top_k,
-                :category_filter
-            )
-            """
-        )
+        """  # noqa: S608
         try:
             async with self.session.begin_nested():
                 result = await self.session.execute(
@@ -169,7 +188,7 @@ class KnowledgeBaseRepository:
         top_k: int = 5,
         semantic_weight: float = 0.7,
         category_filter: str | None = None,
-        use_fallback: bool = False,
+        match_function: str = MATCH_DOCUMENTS,
     ) -> list[KnowledgeBaseSearchResult]:
         """Blend vector similarity with PostgreSQL keyword ranking."""
         try:
@@ -178,7 +197,7 @@ class KnowledgeBaseRepository:
                 top_k=max(top_k * 3, top_k),
                 threshold=0.0,
                 category_filter=category_filter,
-                use_fallback=use_fallback,
+                match_function=match_function,
             )
             keyword = await self.bm25_search(
                 query_text,

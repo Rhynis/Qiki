@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from app.core.exceptions import ForbiddenException
+from app.core.exceptions import ForbiddenException, NotFoundException
 from app.llm.exceptions import LLMQuotaExceededError
 from app.models.knowledge_base import KnowledgeBase
 from app.models.user import User
@@ -59,38 +59,62 @@ class FakeJinaEmbeddingService:
         return [[0.2] * 768 for _ in texts]
 
 
+class FakeOllamaEmbeddingService:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    async def embed_text(self, text: str) -> list[float]:
+        self.calls.append(text)
+        return [0.3] * 768
+
+    async def embed_batch(self, texts: list[str], batch_size: int = 32) -> list[list[float]]:
+        del batch_size
+        self.calls.extend(texts)
+        return [[0.3] * 768 for _ in texts]
+
+
 class FakeRepository:
     def __init__(self) -> None:
         self.documents: dict[UUID, KnowledgeBase] = {}
         self.created_embeddings: list[list[float] | None] = []
         self.created_jina_embeddings: list[list[float] | None] = []
+        self.created_ollama_embeddings: list[list[float] | None] = []
         self.last_update_embedding: list[float] | None = None
         self.last_update_jina_embedding: list[float] | None = None
-        self.last_use_fallback: bool | None = None
+        self.last_update_ollama_embedding: list[float] | None = None
+        self.last_match_function: str | None = None
 
     async def create(
         self,
         data: dict[str, object],
         embedding: list[float] | None,
         embedding_jina: list[float] | None = None,
+        embedding_ollama: list[float] | None = None,
     ) -> KnowledgeBase:
         document = document_from_data(data)
         document.embedding = embedding
         document.embedding_jina = embedding_jina
+        document.embedding_ollama = embedding_ollama
         self.documents[document.id] = document
         self.created_embeddings.append(embedding)
         self.created_jina_embeddings.append(embedding_jina)
+        self.created_ollama_embeddings.append(embedding_ollama)
         return document
 
     async def create_batch(
         self,
         items_with_embeddings: list[
-            tuple[dict[str, object], list[float] | None, list[float] | None]
+            tuple[
+                dict[str, object],
+                list[float] | None,
+                list[float] | None,
+                list[float] | None,
+            ]
         ],
     ) -> list[KnowledgeBase]:
         created: list[KnowledgeBase] = []
-        for data, embedding, embedding_jina in items_with_embeddings:
-            created.append(await self.create(data, embedding, embedding_jina))
+        for data, embedding, embedding_jina, embedding_ollama in items_with_embeddings:
+            created.append(await self.create(data, embedding, embedding_jina, embedding_ollama))
         return created
 
     async def get_by_id(self, kb_id: UUID) -> KnowledgeBase | None:
@@ -102,6 +126,7 @@ class FakeRepository:
         data: dict[str, object],
         embedding: list[float] | None = None,
         embedding_jina: list[float] | None = None,
+        embedding_ollama: list[float] | None = None,
     ) -> KnowledgeBase:
         document = self.documents[kb_id]
         for key, value in data.items():
@@ -113,8 +138,11 @@ class FakeRepository:
             document.embedding = embedding
         if embedding_jina is not None:
             document.embedding_jina = embedding_jina
+        if embedding_ollama is not None:
+            document.embedding_ollama = embedding_ollama
         self.last_update_embedding = embedding
         self.last_update_jina_embedding = embedding_jina
+        self.last_update_ollama_embedding = embedding_ollama
         return document
 
     async def soft_delete(self, kb_id: UUID) -> bool:
@@ -131,10 +159,10 @@ class FakeRepository:
         top_k: int = 5,
         semantic_weight: float = 0.7,
         category_filter: str | None = None,
-        use_fallback: bool = False,
+        match_function: str = "match_documents",
     ) -> list[KnowledgeBaseSearchResult]:
         del query_embedding, semantic_weight, category_filter
-        self.last_use_fallback = use_fallback
+        self.last_match_function = match_function
         return [
             KnowledgeBaseSearchResult(
                 id=uuid4(),
@@ -151,10 +179,10 @@ class FakeRepository:
         top_k: int = 5,
         threshold: float = 0.0,
         category_filter: str | None = None,
-        use_fallback: bool = False,
+        match_function: str = "match_documents",
     ) -> list[KnowledgeBaseSearchResult]:
         del query_embedding, threshold, category_filter
-        self.last_use_fallback = use_fallback
+        self.last_match_function = match_function
         return [
             KnowledgeBaseSearchResult(
                 id=uuid4(),
@@ -338,6 +366,40 @@ async def test_only_admin_can_create() -> None:
         await svc.create_document(payload, customer_user())
 
 
+async def test_get_and_list_and_delete_and_statistics() -> None:
+    svc, repo, _, _ = service()
+    document = await repo.create(
+        {"title": "FAQ", "content": "Noi dung", "category": "faq", "metadata_": {}},
+        [0.0] * 768,
+    )
+
+    fetched = await svc.get_document(document.id, admin_user())
+    assert fetched.id == document.id
+
+    listing = await svc.list_documents(admin_user(), skip=0, limit=20)
+    assert listing.total == 1
+
+    stats = await svc.get_statistics(admin_user())
+    assert stats.total == 1
+
+    await svc.delete_document(document.id, admin_user())
+    assert repo.documents[document.id].is_active is False
+
+
+async def test_get_missing_document_raises() -> None:
+    svc, _, _, _ = service()
+
+    with pytest.raises(NotFoundException):
+        await svc.get_document(uuid4(), admin_user())
+
+
+async def test_delete_missing_document_raises() -> None:
+    svc, _, _, _ = service()
+
+    with pytest.raises(NotFoundException):
+        await svc.delete_document(uuid4(), admin_user())
+
+
 async def test_search_falls_back_to_jina_on_gemini_quota(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -353,7 +415,7 @@ async def test_search_falls_back_to_jina_on_gemini_quota(
 
     await svc.search_documents("rò rỉ gas", top_k=5)
 
-    assert repo.last_use_fallback is True
+    assert repo.last_match_function == "match_documents_jina"
     assert jina_embeddings.calls == [("rò rỉ gas", "retrieval.query")]
     assert captured == [("Gemini embed quota exceeded, falling back to Jina", "warning")]
 
@@ -363,5 +425,57 @@ async def test_search_uses_gemini_without_jina_when_primary_ok() -> None:
 
     await svc.search_documents("rò rỉ gas", top_k=5)
 
-    assert repo.last_use_fallback is False
+    assert repo.last_match_function == "match_documents"
+    assert jina_embeddings.calls == []
+
+
+async def test_search_uses_ollama_match_function_when_provider_ollama() -> None:
+    svc, repo, embeddings, jina_embeddings = service()
+    ollama = FakeOllamaEmbeddingService()
+    svc.ollama_embedding_service = ollama  # type: ignore[assignment]
+    svc.embedding_provider = "ollama"
+
+    await svc.search_documents("rò rỉ gas", top_k=5)
+
+    assert repo.last_match_function == "match_documents_ollama"
+    assert ollama.calls == ["rò rỉ gas"]
+    # The Gemini/Jina paths must not be touched in the ollama provider.
+    assert embeddings.calls == []
+    assert jina_embeddings.calls == []
+
+
+async def test_create_document_writes_only_ollama_embedding_when_provider_ollama() -> None:
+    svc, repo, embeddings, jina_embeddings = service()
+    ollama = FakeOllamaEmbeddingService()
+    svc.ollama_embedding_service = ollama  # type: ignore[assignment]
+    svc.embedding_provider = "ollama"
+    payload = KnowledgeBaseCreate(
+        title="An toàn gas",
+        content="Khóa van khi ngửi thấy mùi gas.",
+        category="safety",
+    )
+
+    await svc.create_document(payload, admin_user())
+
+    assert repo.created_embeddings == [None]
+    assert repo.created_jina_embeddings == [None]
+    assert len(repo.created_ollama_embeddings[0] or []) == 768
+    assert ollama.calls
+    assert embeddings.calls == []
+    assert jina_embeddings.calls == []
+
+
+async def test_bulk_import_writes_ollama_embeddings_when_provider_ollama() -> None:
+    svc, repo, embeddings, jina_embeddings = service()
+    ollama = FakeOllamaEmbeddingService()
+    svc.ollama_embedding_service = ollama  # type: ignore[assignment]
+    svc.embedding_provider = "ollama"
+
+    result = await svc.bulk_import_from_file(FakeUploadFile(), None, admin_user())  # type: ignore[arg-type]
+
+    assert result.count == 1
+    assert len(repo.created_ollama_embeddings[0] or []) == 768
+    assert repo.created_embeddings == [None]
+    assert repo.created_jina_embeddings == [None]
+    assert embeddings.calls == []
     assert jina_embeddings.calls == []
