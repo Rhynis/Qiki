@@ -46,6 +46,22 @@ configuration to `~/.cloudflared/config.yml`. The committed
 `cloudflare/config.template.yml` is only a placeholder template and must not contain real tunnel
 IDs, domains, or credential paths.
 
+### Ollama Host header (required)
+
+Ollama rejects requests whose `Host` header is not `localhost` with `403 Forbidden`. The named
+tunnel config handles this with the `httpHostHeader: localhost:11434` origin setting (see
+`cloudflare/config.template.yml`), so the script-based flow works out of the box.
+
+If you instead use a zero-config quick tunnel for a throwaway test (no Cloudflare account or
+domain), you must pass the same header flag explicitly, otherwise every request returns 403:
+
+```bash
+cloudflared tunnel --url http://localhost:11434 --http-host-header localhost:11434
+```
+
+Quick tunnels print a random `https://<random>.trycloudflare.com` URL that changes on every
+restart, so they are for testing only — use the named tunnel for any stable demo.
+
 ## Starting Local Demo Mode
 
 Run:
