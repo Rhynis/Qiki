@@ -9,6 +9,7 @@ from uuid import UUID
 import sentry_sdk
 from fastapi import UploadFile
 
+from app.core.config import get_settings
 from app.core.exceptions import ForbiddenException, NotFoundException, ValidationException
 from app.core.logging import get_logger
 from app.llm.exceptions import LLMQuotaExceededError, LLMRateLimitError
@@ -16,8 +17,14 @@ from app.models.knowledge_base import KnowledgeBase
 from app.models.user import User
 from app.rag.embeddings import EmbeddingService
 from app.rag.jina_embeddings import JinaEmbeddingService
+from app.rag.ollama_embeddings import OllamaEmbeddingService
 from app.rag.text_processor import VietnameseTextProcessor
-from app.repositories.knowledge_base_repository import KnowledgeBaseRepository
+from app.repositories.knowledge_base_repository import (
+    MATCH_DOCUMENTS,
+    MATCH_DOCUMENTS_JINA,
+    MATCH_DOCUMENTS_OLLAMA,
+    KnowledgeBaseRepository,
+)
 from app.schemas.knowledge_base import (
     KnowledgeBaseCreate,
     KnowledgeBaseImportResponse,
@@ -39,11 +46,14 @@ class KnowledgeBaseService:
         embedding_service: EmbeddingService | None = None,
         jina_embedding_service: JinaEmbeddingService | None = None,
         text_processor: VietnameseTextProcessor | None = None,
+        ollama_embedding_service: OllamaEmbeddingService | None = None,
     ) -> None:
         self.repository = repository
         self.embedding_service = embedding_service or EmbeddingService()
         self.jina_embedding_service = jina_embedding_service or JinaEmbeddingService()
+        self.ollama_embedding_service = ollama_embedding_service or OllamaEmbeddingService()
         self.text_processor = text_processor or VietnameseTextProcessor()
+        self.embedding_provider = get_settings().EMBEDDING_PROVIDER
         self.logger = get_logger(__name__)
 
     async def create_document(
@@ -54,11 +64,13 @@ class KnowledgeBaseService:
         """Create a document and generate its embedding."""
         self._ensure_staff(current_user)
         normalized = self._normalize_payload(data.model_dump())
-        embedding, embedding_jina = await self._embed_document(
+        embedding, embedding_jina, embedding_ollama = await self._embed_document(
             str(normalized["title"]),
             str(normalized["content"]),
         )
-        document = await self.repository.create(normalized, embedding, embedding_jina)
+        document = await self.repository.create(
+            normalized, embedding, embedding_jina, embedding_ollama
+        )
         return self._response(document)
 
     async def update_document(
@@ -77,14 +89,17 @@ class KnowledgeBaseService:
         normalized = self._normalize_payload(update_data)
         embedding = None
         embedding_jina = None
+        embedding_ollama = None
         if "content" in normalized or "title" in normalized:
             title = str(normalized.get("title", existing.title))
             content = str(normalized.get("content", existing.content))
-            embedding, embedding_jina = await self._embed_document(
+            embedding, embedding_jina, embedding_ollama = await self._embed_document(
                 title,
                 content,
             )
-        document = await self.repository.update(kb_id, normalized, embedding, embedding_jina)
+        document = await self.repository.update(
+            kb_id, normalized, embedding, embedding_jina, embedding_ollama
+        )
         return self._response(document)
 
     async def delete_document(self, kb_id: UUID, current_user: User) -> None:
@@ -139,21 +154,21 @@ class KnowledgeBaseService:
         normalized_query = self.text_processor.normalize(query)
         if not normalized_query:
             return []
-        embedding, use_fallback = await self._embed_query(normalized_query)
+        embedding, match_function = await self._embed_query(normalized_query)
         if use_hybrid:
             return await self.repository.hybrid_search(
                 normalized_query,
                 embedding,
                 top_k=top_k,
                 category_filter=category,
-                use_fallback=use_fallback,
+                match_function=match_function,
             )
         return await self.repository.similarity_search(
             embedding,
             top_k=top_k,
             threshold=0.0,
             category_filter=category,
-            use_fallback=use_fallback,
+            match_function=match_function,
         )
 
     async def bulk_import_from_file(
@@ -175,14 +190,27 @@ class KnowledgeBaseService:
         texts = [
             self._embedding_text(str(item["title"]), str(item["content"])) for item in documents
         ]
-        embeddings = await self.embedding_service.embed_batch(texts, batch_size=32)
-        embeddings_jina = await self.jina_embedding_service.embed_batch(
-            texts,
-            task="retrieval.passage",
-            batch_size=32,
-        )
+        embeddings: list[list[float] | None]
+        embeddings_jina: list[list[float] | None]
+        embeddings_ollama: list[list[float] | None]
+        if self.embedding_provider == "ollama":
+            embeddings_ollama = list(
+                await self.ollama_embedding_service.embed_batch(texts, batch_size=32)
+            )
+            embeddings = [None] * len(texts)
+            embeddings_jina = [None] * len(texts)
+        else:
+            embeddings = list(await self.embedding_service.embed_batch(texts, batch_size=32))
+            embeddings_jina = list(
+                await self.jina_embedding_service.embed_batch(
+                    texts,
+                    task="retrieval.passage",
+                    batch_size=32,
+                )
+            )
+            embeddings_ollama = [None] * len(texts)
         created = await self.repository.create_batch(
-            list(zip(documents, embeddings, embeddings_jina, strict=True))
+            list(zip(documents, embeddings, embeddings_jina, embeddings_ollama, strict=True))
         )
         return KnowledgeBaseImportResponse(count=len(created), errors=[])
 
@@ -250,9 +278,13 @@ class KnowledgeBaseService:
     def _embedding_text(title: str, content: str) -> str:
         return f"{title}\n\n{content}"
 
-    async def _embed_query(self, query: str) -> tuple[list[float], bool]:
+    async def _embed_query(self, query: str) -> tuple[list[float], str]:
+        """Embed a query and return the match function for its vector space."""
+        if self.embedding_provider == "ollama":
+            embedding = await self.ollama_embedding_service.embed_text(query)
+            return embedding, MATCH_DOCUMENTS_OLLAMA
         try:
-            return await self.embedding_service.embed_text(query), False
+            return await self.embedding_service.embed_text(query), MATCH_DOCUMENTS
         except (LLMQuotaExceededError, LLMRateLimitError):
             sentry_sdk.capture_message(
                 "Gemini embed quota exceeded, falling back to Jina",
@@ -262,12 +294,16 @@ class KnowledgeBaseService:
                 query,
                 task="retrieval.query",
             )
-            return embedding, True
+            return embedding, MATCH_DOCUMENTS_JINA
 
     async def _embed_document(
         self, title: str, content: str
-    ) -> tuple[list[float] | None, list[float]]:
+    ) -> tuple[list[float] | None, list[float] | None, list[float] | None]:
+        """Return (gemini, jina, ollama) embeddings for the active provider."""
         text = self._embedding_text(title, content)
+        if self.embedding_provider == "ollama":
+            embedding_ollama = await self.ollama_embedding_service.embed_text(text)
+            return None, None, embedding_ollama
         embedding: list[float] | None
         try:
             embedding = await self.embedding_service.embed_text(text)
@@ -278,7 +314,7 @@ class KnowledgeBaseService:
             text,
             task="retrieval.passage",
         )
-        return embedding, embedding_jina
+        return embedding, embedding_jina, None
 
     @staticmethod
     def _ensure_staff(user: User) -> None:

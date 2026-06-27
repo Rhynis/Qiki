@@ -59,6 +59,9 @@ class Settings(BaseSettings):
 
     EMBEDDING_MODEL: str = "keepitreal/vietnamese-sbert"
     EMBEDDING_DIMENSIONS: int = 768
+    # Retrieval embedding backend. "gemini" keeps Gemini primary -> Jina fallback;
+    # "ollama" embeds queries/documents with the local nomic-embed-text model.
+    EMBEDDING_PROVIDER: Literal["gemini", "ollama"] = "gemini"
 
     LANGFUSE_PUBLIC_KEY: str = ""
     LANGFUSE_SECRET_KEY: str = ""
