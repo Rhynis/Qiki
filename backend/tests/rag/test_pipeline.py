@@ -131,6 +131,46 @@ async def test_query_tracks_observability() -> None:
 
 
 @pytest.mark.asyncio
+async def test_retrieve_without_rerank_uses_top_k_and_skips_reranker() -> None:
+    rag, retriever, _, _ = pipeline()
+    reranker = AsyncMock()
+    rag.reranker = reranker
+    rag.rerank_enabled = False
+
+    await rag._retrieve("rò rỉ gas", top_k=5, category_filter=None)
+
+    retriever.retrieve.assert_awaited_once_with(query="rò rỉ gas", top_k=5, category_filter=None)
+    reranker.rerank.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_retrieve_with_rerank_fetches_k_and_reranks_to_top_n() -> None:
+    rag, retriever, _, _ = pipeline()
+    reranked = [
+        RetrievedDocument(
+            id=uuid4(),
+            title="Reranked",
+            content="noi dung",
+            category="faq",
+            similarity=0.9,
+            source_type="hybrid",
+        )
+    ]
+    reranker = AsyncMock()
+    reranker.rerank = AsyncMock(return_value=reranked)
+    rag.reranker = reranker
+    rag.rerank_enabled = True
+    rag.rerank_retrieve_k = 8
+    rag.rerank_top_n = 3
+
+    result = await rag._retrieve("rò rỉ gas", top_k=5, category_filter=None)
+
+    retriever.retrieve.assert_awaited_once_with(query="rò rỉ gas", top_k=8, category_filter=None)
+    reranker.rerank.assert_awaited_once()
+    assert result == reranked
+
+
+@pytest.mark.asyncio
 async def test_query_calculates_confidence_from_top_similarity() -> None:
     rag, _, _, _ = pipeline()
 

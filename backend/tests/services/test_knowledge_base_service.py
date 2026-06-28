@@ -73,16 +73,33 @@ class FakeOllamaEmbeddingService:
         return [[0.3] * 768 for _ in texts]
 
 
+class FakeBgeEmbeddingService:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    async def embed_text(self, text: str) -> list[float]:
+        self.calls.append(text)
+        return [0.4] * 1024
+
+    async def embed_batch(self, texts: list[str], batch_size: int = 32) -> list[list[float]]:
+        del batch_size
+        self.calls.extend(texts)
+        return [[0.4] * 1024 for _ in texts]
+
+
 class FakeRepository:
     def __init__(self) -> None:
         self.documents: dict[UUID, KnowledgeBase] = {}
         self.created_embeddings: list[list[float] | None] = []
         self.created_jina_embeddings: list[list[float] | None] = []
         self.created_ollama_embeddings: list[list[float] | None] = []
+        self.created_bge_embeddings: list[list[float] | None] = []
         self.last_update_embedding: list[float] | None = None
         self.last_update_jina_embedding: list[float] | None = None
         self.last_update_ollama_embedding: list[float] | None = None
+        self.last_update_bge_embedding: list[float] | None = None
         self.last_match_function: str | None = None
+        self.last_threshold: float | None = None
 
     async def create(
         self,
@@ -90,15 +107,18 @@ class FakeRepository:
         embedding: list[float] | None,
         embedding_jina: list[float] | None = None,
         embedding_ollama: list[float] | None = None,
+        embedding_bge: list[float] | None = None,
     ) -> KnowledgeBase:
         document = document_from_data(data)
         document.embedding = embedding
         document.embedding_jina = embedding_jina
         document.embedding_ollama = embedding_ollama
+        document.embedding_bge = embedding_bge
         self.documents[document.id] = document
         self.created_embeddings.append(embedding)
         self.created_jina_embeddings.append(embedding_jina)
         self.created_ollama_embeddings.append(embedding_ollama)
+        self.created_bge_embeddings.append(embedding_bge)
         return document
 
     async def create_batch(
@@ -109,12 +129,21 @@ class FakeRepository:
                 list[float] | None,
                 list[float] | None,
                 list[float] | None,
+                list[float] | None,
             ]
         ],
     ) -> list[KnowledgeBase]:
         created: list[KnowledgeBase] = []
-        for data, embedding, embedding_jina, embedding_ollama in items_with_embeddings:
-            created.append(await self.create(data, embedding, embedding_jina, embedding_ollama))
+        for (
+            data,
+            embedding,
+            embedding_jina,
+            embedding_ollama,
+            embedding_bge,
+        ) in items_with_embeddings:
+            created.append(
+                await self.create(data, embedding, embedding_jina, embedding_ollama, embedding_bge)
+            )
         return created
 
     async def get_by_id(self, kb_id: UUID) -> KnowledgeBase | None:
@@ -127,6 +156,7 @@ class FakeRepository:
         embedding: list[float] | None = None,
         embedding_jina: list[float] | None = None,
         embedding_ollama: list[float] | None = None,
+        embedding_bge: list[float] | None = None,
     ) -> KnowledgeBase:
         document = self.documents[kb_id]
         for key, value in data.items():
@@ -140,9 +170,12 @@ class FakeRepository:
             document.embedding_jina = embedding_jina
         if embedding_ollama is not None:
             document.embedding_ollama = embedding_ollama
+        if embedding_bge is not None:
+            document.embedding_bge = embedding_bge
         self.last_update_embedding = embedding
         self.last_update_jina_embedding = embedding_jina
         self.last_update_ollama_embedding = embedding_ollama
+        self.last_update_bge_embedding = embedding_bge
         return document
 
     async def soft_delete(self, kb_id: UUID) -> bool:
@@ -160,9 +193,11 @@ class FakeRepository:
         semantic_weight: float = 0.7,
         category_filter: str | None = None,
         match_function: str = "match_documents",
+        threshold: float = 0.0,
     ) -> list[KnowledgeBaseSearchResult]:
         del query_embedding, semantic_weight, category_filter
         self.last_match_function = match_function
+        self.last_threshold = threshold
         return [
             KnowledgeBaseSearchResult(
                 id=uuid4(),
@@ -181,8 +216,9 @@ class FakeRepository:
         category_filter: str | None = None,
         match_function: str = "match_documents",
     ) -> list[KnowledgeBaseSearchResult]:
-        del query_embedding, threshold, category_filter
+        del query_embedding, category_filter
         self.last_match_function = match_function
+        self.last_threshold = threshold
         return [
             KnowledgeBaseSearchResult(
                 id=uuid4(),
@@ -479,3 +515,66 @@ async def test_bulk_import_writes_ollama_embeddings_when_provider_ollama() -> No
     assert repo.created_jina_embeddings == [None]
     assert embeddings.calls == []
     assert jina_embeddings.calls == []
+
+
+def _bge_service() -> tuple[KnowledgeBaseService, FakeRepository, FakeBgeEmbeddingService]:
+    svc, repo, _, _ = service()
+    bge = FakeBgeEmbeddingService()
+    svc.bge_embedding_service = bge  # type: ignore[assignment]
+    svc.embedding_provider = "bge"
+    return svc, repo, bge
+
+
+async def test_search_uses_bge_match_function_and_threshold_when_provider_bge() -> None:
+    svc, repo, bge = _bge_service()
+
+    await svc.search_documents("rò rỉ gas", top_k=5)
+
+    assert repo.last_match_function == "match_documents_bge"
+    assert repo.last_threshold == svc.settings.RAG_THRESHOLD_BGE
+    assert bge.calls == ["rò rỉ gas"]
+
+
+async def test_create_document_writes_only_bge_embedding_when_provider_bge() -> None:
+    svc, repo, bge = _bge_service()
+    payload = KnowledgeBaseCreate(
+        title="An toàn gas",
+        content="Khóa van khi ngửi thấy mùi gas.",
+        category="safety",
+    )
+
+    await svc.create_document(payload, admin_user())
+
+    assert repo.created_embeddings == [None]
+    assert repo.created_jina_embeddings == [None]
+    assert repo.created_ollama_embeddings == [None]
+    assert len(repo.created_bge_embeddings[0] or []) == 1024
+    assert bge.calls
+
+
+async def test_bulk_import_writes_bge_embeddings_when_provider_bge() -> None:
+    svc, repo, bge = _bge_service()
+
+    result = await svc.bulk_import_from_file(FakeUploadFile(), None, admin_user())  # type: ignore[arg-type]
+
+    assert result.count == 1
+    assert len(repo.created_bge_embeddings[0] or []) == 1024
+    assert repo.created_embeddings == [None]
+
+
+async def test_gemini_threshold_stays_zero_so_prod_is_unchanged() -> None:
+    svc, repo, _, _ = service()
+
+    await svc.search_documents("rò rỉ gas", top_k=5)
+
+    assert repo.last_threshold == 0.0
+
+
+async def test_ollama_threshold_applied() -> None:
+    svc, repo, _, _ = service()
+    svc.ollama_embedding_service = FakeOllamaEmbeddingService()  # type: ignore[assignment]
+    svc.embedding_provider = "ollama"
+
+    await svc.search_documents("rò rỉ gas", top_k=5)
+
+    assert repo.last_threshold == svc.settings.RAG_THRESHOLD_OLLAMA
