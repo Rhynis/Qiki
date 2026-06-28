@@ -19,8 +19,9 @@ from app.schemas.knowledge_base import KnowledgeBaseSearchResult
 MATCH_DOCUMENTS = "match_documents"
 MATCH_DOCUMENTS_JINA = "match_documents_jina"
 MATCH_DOCUMENTS_OLLAMA = "match_documents_ollama"
+MATCH_DOCUMENTS_BGE = "match_documents_bge"
 _ALLOWED_MATCH_FUNCTIONS = frozenset(
-    {MATCH_DOCUMENTS, MATCH_DOCUMENTS_JINA, MATCH_DOCUMENTS_OLLAMA}
+    {MATCH_DOCUMENTS, MATCH_DOCUMENTS_JINA, MATCH_DOCUMENTS_OLLAMA, MATCH_DOCUMENTS_BGE}
 )
 
 
@@ -36,6 +37,7 @@ class KnowledgeBaseRepository:
         embedding: list[float] | None,
         embedding_jina: list[float] | None = None,
         embedding_ollama: list[float] | None = None,
+        embedding_bge: list[float] | None = None,
     ) -> KnowledgeBase:
         """Create one knowledge base document."""
         document = KnowledgeBase(
@@ -43,6 +45,7 @@ class KnowledgeBaseRepository:
             embedding=embedding,
             embedding_jina=embedding_jina,
             embedding_ollama=embedding_ollama,
+            embedding_bge=embedding_bge,
         )
         self.session.add(document)
         await self.session.flush()
@@ -52,7 +55,13 @@ class KnowledgeBaseRepository:
     async def create_batch(
         self,
         items_with_embeddings: Sequence[
-            tuple[dict[str, Any], list[float] | None, list[float] | None, list[float] | None]
+            tuple[
+                dict[str, Any],
+                list[float] | None,
+                list[float] | None,
+                list[float] | None,
+                list[float] | None,
+            ]
         ],
     ) -> list[KnowledgeBase]:
         """Create many knowledge base documents."""
@@ -62,8 +71,11 @@ class KnowledgeBaseRepository:
                 embedding=embedding,
                 embedding_jina=embedding_jina,
                 embedding_ollama=embedding_ollama,
+                embedding_bge=embedding_bge,
             )
-            for item_data, embedding, embedding_jina, embedding_ollama in items_with_embeddings
+            for item_data, embedding, embedding_jina, embedding_ollama, embedding_bge in (
+                items_with_embeddings
+            )
         ]
         self.session.add_all(documents)
         await self.session.flush()
@@ -82,6 +94,7 @@ class KnowledgeBaseRepository:
         embedding: list[float] | None = None,
         embedding_jina: list[float] | None = None,
         embedding_ollama: list[float] | None = None,
+        embedding_bge: list[float] | None = None,
     ) -> KnowledgeBase:
         """Update document fields and optionally embedding."""
         document = await self.get_by_id(kb_id)
@@ -98,6 +111,8 @@ class KnowledgeBaseRepository:
             document.embedding_jina = embedding_jina
         if embedding_ollama is not None:
             document.embedding_ollama = embedding_ollama
+        if embedding_bge is not None:
+            document.embedding_bge = embedding_bge
         await self.session.flush()
         await self.session.refresh(document)
         return document
@@ -189,13 +204,14 @@ class KnowledgeBaseRepository:
         semantic_weight: float = 0.7,
         category_filter: str | None = None,
         match_function: str = MATCH_DOCUMENTS,
+        threshold: float = 0.0,
     ) -> list[KnowledgeBaseSearchResult]:
         """Blend vector similarity with PostgreSQL keyword ranking."""
         try:
             semantic = await self.similarity_search(
                 query_embedding,
                 top_k=max(top_k * 3, top_k),
-                threshold=0.0,
+                threshold=threshold,
                 category_filter=category_filter,
                 match_function=match_function,
             )

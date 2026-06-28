@@ -60,8 +60,25 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL: str = "keepitreal/vietnamese-sbert"
     EMBEDDING_DIMENSIONS: int = 768
     # Retrieval embedding backend. "gemini" keeps Gemini primary -> Jina fallback;
-    # "ollama" embeds queries/documents with the local nomic-embed-text model.
-    EMBEDDING_PROVIDER: Literal["gemini", "ollama"] = "gemini"
+    # "ollama" uses the local nomic-embed-text model (768-d); "bge" uses the local
+    # bge-m3 model (1024-d, stronger Vietnamese retrieval). Default stays "gemini".
+    EMBEDDING_PROVIDER: Literal["gemini", "ollama", "bge"] = "gemini"
+    OLLAMA_BGE_MODEL: str = "bge-m3"
+    BGE_EMBEDDING_DIMENSIONS: int = 1024
+
+    # Per-vector-space similarity thresholds. The threshold filter is gated to the
+    # local providers; the Gemini retrieval path keeps its existing behavior so
+    # production (EMBEDDING_PROVIDER=gemini) output stays identical. RAG_THRESHOLD_GEMINI
+    # is kept for reference and is not applied to the Gemini path.
+    RAG_THRESHOLD_GEMINI: float = 0.5
+    RAG_THRESHOLD_OLLAMA: float = 0.7
+    RAG_THRESHOLD_BGE: float = 0.55
+
+    # Offline LLM reranker (local Ollama model). OFF by default so the production
+    # path is byte-for-byte unchanged.
+    RAG_RERANK_ENABLED: bool = False
+    RAG_RERANK_RETRIEVE_K: int = 8
+    RAG_RERANK_TOP_N: int = 3
 
     LANGFUSE_PUBLIC_KEY: str = ""
     LANGFUSE_SECRET_KEY: str = ""

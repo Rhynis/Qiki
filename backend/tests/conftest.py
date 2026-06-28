@@ -21,6 +21,10 @@ os.environ["JWT_SECRET_KEY"] = "test_secret_key_at_least_32_characters_long"
 os.environ["REDIS_URL"] = "redis://localhost:6379/0"
 os.environ["ENVIRONMENT"] = "development"
 os.environ["DEBUG"] = "false"
+# Pin the default RAG providers so tests are hermetic regardless of a local .env
+# (CI has no .env). Provider-specific tests override these explicitly.
+os.environ["EMBEDDING_PROVIDER"] = "gemini"
+os.environ["RAG_RERANK_ENABLED"] = "false"
 # DeepEval (tests/eval) ships a pytest plugin; keep it offline + deterministic in CI.
 os.environ.setdefault("DEEPEVAL_TELEMETRY_OPT_OUT", "YES")
 os.environ.setdefault("ERROR_REPORTING", "0")

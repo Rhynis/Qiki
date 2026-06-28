@@ -7,12 +7,14 @@ from uuid import UUID
 
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.llm.base import BaseLLMProvider
 from app.llm.exceptions import LLMProviderError
 from app.llm.observability import LLMObservability
 from app.llm.prompts.templates import PromptLibrary
 from app.rag.context_builder import ContextBuilder
+from app.rag.reranker import LlmReranker
 from app.rag.retriever import BaseRetriever
 from app.rag.safety import SafetyChecker
 from app.rag.schemas import RAGResponse, RetrievedDocument
@@ -32,6 +34,7 @@ class RAGPipeline:
         context_builder: ContextBuilder,
         observability: LLMObservability,
         prompt_library: PromptLibrary,
+        reranker: LlmReranker | None = None,
     ) -> None:
         self.retriever = retriever
         self.llm_provider = llm_provider
@@ -39,6 +42,11 @@ class RAGPipeline:
         self.context_builder = context_builder
         self.observability = observability
         self.prompts = prompt_library
+        self.reranker = reranker
+        settings = get_settings()
+        self.rerank_enabled = settings.RAG_RERANK_ENABLED
+        self.rerank_retrieve_k = settings.RAG_RERANK_RETRIEVE_K
+        self.rerank_top_n = settings.RAG_RERANK_TOP_N
         self.logger = get_logger(__name__)
 
     async def query(
@@ -168,21 +176,29 @@ class RAGPipeline:
         ):
             yield chunk.delta
 
+    def _rerank_active(self) -> bool:
+        return self.rerank_enabled and self.reranker is not None
+
     async def _retrieve(
         self,
         query: str,
         top_k: int,
         category_filter: str | None,
     ) -> list[RetrievedDocument]:
+        # With rerank off (production default), retrieve_k == top_k and no rerank
+        # runs, so this path is byte-for-byte identical to before.
+        retrieve_k = self.rerank_retrieve_k if self._rerank_active() else top_k
         try:
             documents = await self.retriever.retrieve(
                 query=query,
-                top_k=top_k,
+                top_k=retrieve_k,
                 category_filter=category_filter,
             )
         except (LLMProviderError, RuntimeError, ValueError, TypeError, SQLAlchemyError) as exc:
             self.logger.error("rag_retrieval_failed", error=str(exc))
             return []
+        if self._rerank_active() and self.reranker is not None:
+            documents = await self.reranker.rerank(query, documents, top_n=self.rerank_top_n)
         return documents
 
     @staticmethod

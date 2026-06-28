@@ -15,12 +15,14 @@ from app.core.logging import get_logger
 from app.llm.exceptions import LLMQuotaExceededError, LLMRateLimitError
 from app.models.knowledge_base import KnowledgeBase
 from app.models.user import User
+from app.rag.bge_embeddings import BgeEmbeddingService
 from app.rag.embeddings import EmbeddingService
 from app.rag.jina_embeddings import JinaEmbeddingService
 from app.rag.ollama_embeddings import OllamaEmbeddingService
 from app.rag.text_processor import VietnameseTextProcessor
 from app.repositories.knowledge_base_repository import (
     MATCH_DOCUMENTS,
+    MATCH_DOCUMENTS_BGE,
     MATCH_DOCUMENTS_JINA,
     MATCH_DOCUMENTS_OLLAMA,
     KnowledgeBaseRepository,
@@ -47,13 +49,16 @@ class KnowledgeBaseService:
         jina_embedding_service: JinaEmbeddingService | None = None,
         text_processor: VietnameseTextProcessor | None = None,
         ollama_embedding_service: OllamaEmbeddingService | None = None,
+        bge_embedding_service: BgeEmbeddingService | None = None,
     ) -> None:
         self.repository = repository
         self.embedding_service = embedding_service or EmbeddingService()
         self.jina_embedding_service = jina_embedding_service or JinaEmbeddingService()
         self.ollama_embedding_service = ollama_embedding_service or OllamaEmbeddingService()
+        self.bge_embedding_service = bge_embedding_service or BgeEmbeddingService()
         self.text_processor = text_processor or VietnameseTextProcessor()
-        self.embedding_provider = get_settings().EMBEDDING_PROVIDER
+        self.settings = get_settings()
+        self.embedding_provider = self.settings.EMBEDDING_PROVIDER
         self.logger = get_logger(__name__)
 
     async def create_document(
@@ -64,12 +69,12 @@ class KnowledgeBaseService:
         """Create a document and generate its embedding."""
         self._ensure_staff(current_user)
         normalized = self._normalize_payload(data.model_dump())
-        embedding, embedding_jina, embedding_ollama = await self._embed_document(
+        embedding, embedding_jina, embedding_ollama, embedding_bge = await self._embed_document(
             str(normalized["title"]),
             str(normalized["content"]),
         )
         document = await self.repository.create(
-            normalized, embedding, embedding_jina, embedding_ollama
+            normalized, embedding, embedding_jina, embedding_ollama, embedding_bge
         )
         return self._response(document)
 
@@ -90,15 +95,16 @@ class KnowledgeBaseService:
         embedding = None
         embedding_jina = None
         embedding_ollama = None
+        embedding_bge = None
         if "content" in normalized or "title" in normalized:
             title = str(normalized.get("title", existing.title))
             content = str(normalized.get("content", existing.content))
-            embedding, embedding_jina, embedding_ollama = await self._embed_document(
+            embedding, embedding_jina, embedding_ollama, embedding_bge = await self._embed_document(
                 title,
                 content,
             )
         document = await self.repository.update(
-            kb_id, normalized, embedding, embedding_jina, embedding_ollama
+            kb_id, normalized, embedding, embedding_jina, embedding_ollama, embedding_bge
         )
         return self._response(document)
 
@@ -155,6 +161,7 @@ class KnowledgeBaseService:
         if not normalized_query:
             return []
         embedding, match_function = await self._embed_query(normalized_query)
+        threshold = self._threshold_for_provider()
         if use_hybrid:
             return await self.repository.hybrid_search(
                 normalized_query,
@@ -162,11 +169,12 @@ class KnowledgeBaseService:
                 top_k=top_k,
                 category_filter=category,
                 match_function=match_function,
+                threshold=threshold,
             )
         return await self.repository.similarity_search(
             embedding,
             top_k=top_k,
-            threshold=0.0,
+            threshold=threshold,
             category_filter=category,
             match_function=match_function,
         )
@@ -190,15 +198,19 @@ class KnowledgeBaseService:
         texts = [
             self._embedding_text(str(item["title"]), str(item["content"])) for item in documents
         ]
-        embeddings: list[list[float] | None]
-        embeddings_jina: list[list[float] | None]
-        embeddings_ollama: list[list[float] | None]
+        count = len(texts)
+        embeddings: list[list[float] | None] = [None] * count
+        embeddings_jina: list[list[float] | None] = [None] * count
+        embeddings_ollama: list[list[float] | None] = [None] * count
+        embeddings_bge: list[list[float] | None] = [None] * count
         if self.embedding_provider == "ollama":
             embeddings_ollama = list(
                 await self.ollama_embedding_service.embed_batch(texts, batch_size=32)
             )
-            embeddings = [None] * len(texts)
-            embeddings_jina = [None] * len(texts)
+        elif self.embedding_provider == "bge":
+            embeddings_bge = list(
+                await self.bge_embedding_service.embed_batch(texts, batch_size=32)
+            )
         else:
             embeddings = list(await self.embedding_service.embed_batch(texts, batch_size=32))
             embeddings_jina = list(
@@ -208,9 +220,17 @@ class KnowledgeBaseService:
                     batch_size=32,
                 )
             )
-            embeddings_ollama = [None] * len(texts)
         created = await self.repository.create_batch(
-            list(zip(documents, embeddings, embeddings_jina, embeddings_ollama, strict=True))
+            list(
+                zip(
+                    documents,
+                    embeddings,
+                    embeddings_jina,
+                    embeddings_ollama,
+                    embeddings_bge,
+                    strict=True,
+                )
+            )
         )
         return KnowledgeBaseImportResponse(count=len(created), errors=[])
 
@@ -283,6 +303,9 @@ class KnowledgeBaseService:
         if self.embedding_provider == "ollama":
             embedding = await self.ollama_embedding_service.embed_text(query)
             return embedding, MATCH_DOCUMENTS_OLLAMA
+        if self.embedding_provider == "bge":
+            embedding = await self.bge_embedding_service.embed_text(query)
+            return embedding, MATCH_DOCUMENTS_BGE
         try:
             return await self.embedding_service.embed_text(query), MATCH_DOCUMENTS
         except (LLMQuotaExceededError, LLMRateLimitError):
@@ -298,12 +321,15 @@ class KnowledgeBaseService:
 
     async def _embed_document(
         self, title: str, content: str
-    ) -> tuple[list[float] | None, list[float] | None, list[float] | None]:
-        """Return (gemini, jina, ollama) embeddings for the active provider."""
+    ) -> tuple[list[float] | None, list[float] | None, list[float] | None, list[float] | None]:
+        """Return (gemini, jina, ollama, bge) embeddings for the active provider."""
         text = self._embedding_text(title, content)
         if self.embedding_provider == "ollama":
             embedding_ollama = await self.ollama_embedding_service.embed_text(text)
-            return None, None, embedding_ollama
+            return None, None, embedding_ollama, None
+        if self.embedding_provider == "bge":
+            embedding_bge = await self.bge_embedding_service.embed_text(text)
+            return None, None, None, embedding_bge
         embedding: list[float] | None
         try:
             embedding = await self.embedding_service.embed_text(text)
@@ -314,7 +340,19 @@ class KnowledgeBaseService:
             text,
             task="retrieval.passage",
         )
-        return embedding, embedding_jina, None
+        return embedding, embedding_jina, None, None
+
+    def _threshold_for_provider(self) -> float:
+        """Return the similarity threshold for the active vector space.
+
+        Gated to the local providers; the Gemini path keeps 0.0 (its existing
+        behavior) so production output stays identical.
+        """
+        if self.embedding_provider == "ollama":
+            return self.settings.RAG_THRESHOLD_OLLAMA
+        if self.embedding_provider == "bge":
+            return self.settings.RAG_THRESHOLD_BGE
+        return 0.0
 
     @staticmethod
     def _ensure_staff(user: User) -> None:
