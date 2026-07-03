@@ -7,7 +7,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, time, timedelta, timezone
 from decimal import Decimal
-from typing import Any, Literal
+from typing import Any, Literal, cast
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from sqlalchemy.exc import DBAPIError
@@ -37,6 +37,11 @@ from app.schemas.order import CheckoutRequest, OrderItemCreate, OrderResponse
 from app.schemas.product import ProductResponse
 from app.services.address_lookup import resolve_ward_delivery_zone, validate_khu_pho
 from app.services.order_service import OrderService, is_serialization_failure
+from app.services.product_query import (
+    ProductQuery,
+    filter_products,
+    parse_product_query,
+)
 from app.services.product_service import ProductService
 from app.services.routing_service import RoutingDecision, RoutingService
 
@@ -268,10 +273,15 @@ class ConversationService:
         product_inquiry_message: str | None = None
         if intent.category == IntentCategory.PRODUCT_INQUIRY and not should_ask_clarification:
             assert catalog_products is not None
-            product_inquiry_message = self._gas_size_inquiry_message(
+            product_inquiry_message = await self._price_inquiry_message(
                 request.content,
                 catalog_products,
             )
+            if product_inquiry_message is None:
+                product_inquiry_message = self._gas_size_inquiry_message(
+                    request.content,
+                    catalog_products,
+                )
             if product_inquiry_message is None:
                 card_products = self._select_card_products(request.content, catalog_products)
                 product_cards = [self._product_to_card(product) for product in card_products]
@@ -1067,10 +1077,11 @@ Tin mới:
         if intent == IntentCategory.SAFETY_EMERGENCY:
             product_context = None
         elif catalog_products is not None:
-            product_context = self._build_product_catalog_context(catalog_products)
+            product_context = self._query_aware_catalog_context(content, catalog_products)
         else:
-            product_context = self._build_product_catalog_context(
-                await self.product_service.list_active_catalog(limit=50)
+            product_context = self._query_aware_catalog_context(
+                content,
+                await self.product_service.list_active_catalog(limit=50),
             )
         response = await self.rag_pipeline.query(
             content,
@@ -1105,6 +1116,80 @@ Tin mới:
         for product in products:
             lines.append(self._format_product_catalog_line(product))
         return "\n".join(lines)
+
+    def _query_aware_catalog_context(
+        self, content: str, catalog_products: Sequence[ProductResponse]
+    ) -> str | None:
+        """Narrow the injected catalog to the products the message targets."""
+        brands = sorted({product.brand for product in catalog_products})
+        query = parse_product_query(content, brands)
+        if query.is_specific():
+            narrowed = cast(list[ProductResponse], filter_products(catalog_products, query))
+            if narrowed:
+                return self._build_product_catalog_context(narrowed)
+        return self._build_product_catalog_context(catalog_products)
+
+    async def _price_inquiry_message(
+        self, content: str, catalog_products: Sequence[ProductResponse]
+    ) -> str | None:
+        """Answer a superlative/range price question deterministically.
+
+        Handles cheapest / most-expensive / around / under / over price intents
+        by resolving the matching products via a SQL query (price-ordered) so the
+        answer is correct regardless of the generator's list-scanning ability.
+        Specific single-product price questions are left to the product cards and
+        the query-aware RAG context. Returns None when there is no such intent.
+        """
+        brands = sorted({product.brand for product in catalog_products})
+        query = parse_product_query(content, brands)
+        if query.price_kind is None:
+            return None
+        matches = await self.product_service.find_products(query)
+        if not matches:
+            return (
+                "Dạ hiện cửa hàng chưa có loại phù hợp với yêu cầu của bạn. "
+                "Bạn tham khảo bảng giá bên dưới giúp Qiki nhé ạ."
+            )
+        if query.price_kind == "cheapest":
+            return self._superlative_price_message(query, matches[0], "rẻ nhất")
+        if query.price_kind == "most_expensive":
+            return self._superlative_price_message(query, matches[-1], "đắt nhất")
+        return self._price_range_message(query, matches)
+
+    def _superlative_price_message(
+        self, query: ProductQuery, product: ProductResponse, label: str
+    ) -> str:
+        scope = self._price_scope_label(query)
+        name = self._format_product_display_name(product)
+        return (
+            f"Dạ loại {scope} {label} là {name} ({product.brand}), "
+            f"giá {self._format_vnd(product.price)} ạ."
+        )
+
+    def _price_range_message(self, query: ProductQuery, matches: Sequence[ProductResponse]) -> str:
+        scope = self._price_scope_label(query)
+        amount = self._format_vnd(query.price_value) if query.price_value is not None else ""
+        phrase = {
+            "around": f"tầm {amount}",
+            "under": f"dưới {amount}",
+            "over": f"trên {amount}",
+        }.get(query.price_kind or "", amount)
+        options = "; ".join(
+            f"{self._format_product_display_name(product)} ({self._format_vnd(product.price)})"
+            for product in matches[:5]
+        )
+        return f"Dạ loại {scope} {phrase} có: {options} ạ."
+
+    def _price_scope_label(self, query: ProductQuery) -> str:
+        parts: list[str] = []
+        if query.category == "nuoc_uong":
+            parts.append("nước")
+        elif query.category == "gas" or query.size_kg is not None:
+            parts.append("gas")
+        if query.size_kg is not None:
+            unit = "lít" if query.category == "nuoc_uong" else "kg"
+            parts.append(f"{self._format_decimal(query.size_kg)}{unit}")
+        return " ".join(parts) if parts else "sản phẩm"
 
     @classmethod
     def _format_product_catalog_line(cls, product: ProductResponse) -> str:

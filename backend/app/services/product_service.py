@@ -1,5 +1,6 @@
 """Product business logic."""
 
+from typing import cast
 from uuid import UUID
 
 from app.core.exceptions import ForbiddenException, NotFoundException
@@ -7,12 +8,14 @@ from app.models.product import Product
 from app.models.user import User
 from app.repositories.product_repository import ProductRepository
 from app.schemas.product import (
+    ALLOWED_SIZES,
     ProductCreate,
     ProductListResponse,
     ProductResponse,
     ProductSearchParams,
     ProductUpdate,
 )
+from app.services.product_query import ProductQuery, filter_products, price_bounds
 
 
 class ProductService:
@@ -65,6 +68,38 @@ class ProductService:
             ProductSearchParams(limit=limit, sort_by="name", sort_order="asc")
         )
         return result.items
+
+    async def find_products(self, query: ProductQuery, *, limit: int = 20) -> list[ProductResponse]:
+        """Resolve a parsed product/price query to matching active products.
+
+        Brand/size/category and any price range are filtered in SQL; the colour
+        variant keyword is matched against the product name. Results are ordered
+        by price ascending so callers can read off the cheapest/most expensive.
+        """
+        min_price, max_price = price_bounds(query)
+        # ProductSearchParams rejects gas sizes outside ALLOWED_SIZES (6/12/45).
+        # A customer can still ask about an unstocked size ("gas 20kg rẻ nhất");
+        # drop it from the SQL filter and let filter_products enforce the exact
+        # size in memory (which yields no match -> a "not available" answer).
+        sql_size_kg = query.size_kg
+        if (
+            sql_size_kg is not None
+            and query.category != "nuoc_uong"
+            and sql_size_kg not in ALLOWED_SIZES
+        ):
+            sql_size_kg = None
+        params = ProductSearchParams(
+            brand=query.brand,
+            category=query.category,
+            size_kg=sql_size_kg,
+            min_price=min_price,
+            max_price=max_price,
+            sort_by="price",
+            sort_order="asc",
+            limit=limit,
+        )
+        result = await self.search_products(params)
+        return cast(list[ProductResponse], filter_products(result.items, query))
 
     async def list_brands(self, category: str | None = None) -> list[str]:
         """Return active product brands for filter controls."""

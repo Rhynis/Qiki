@@ -10,6 +10,7 @@ from app.core.exceptions import ForbiddenException, InsufficientStockException, 
 from app.models.product import Product
 from app.models.user import User
 from app.schemas.product import ProductCreate, ProductSearchParams, ProductUpdate
+from app.services.product_query import ProductQuery
 from app.services.product_service import ProductService
 
 pytestmark = pytest.mark.asyncio
@@ -244,3 +245,124 @@ async def test_check_availability_and_reserve_stock() -> None:
     updated = await service.reserve_stock(product.id, 2)
 
     assert updated.stock_quantity == 1
+
+
+def _catalog_product(
+    *,
+    sku: str,
+    name: str,
+    brand: str,
+    size_kg: str,
+    price: str,
+    category: str = "gas",
+) -> Product:
+    """Build an in-memory catalog product for find_products tests."""
+    now = datetime.now(UTC)
+    return Product(
+        id=uuid4(),
+        sku=sku,
+        name=name,
+        brand=brand,
+        size_kg=Decimal(size_kg),
+        category=category,
+        unit="kg" if category == "gas" else "lít",
+        price=Decimal(price),
+        stock_quantity=10,
+        description=None,
+        image_url="https://example.com/product.jpg",
+        safety_info=None,
+        pricing_note=None,
+        is_active=True,
+        created_at=now,
+        updated_at=now,
+    )
+
+
+def _find_service() -> ProductService:
+    repository = FakeProductRepository()
+    for product in (
+        _catalog_product(
+            sku="GAS-12-PLX-DO",
+            name="Binh gas Petrolimex 12kg (do)",
+            brand="Petrolimex",
+            size_kg="12",
+            price="440000",
+        ),
+        _catalog_product(
+            sku="GAS-12-PLX-BIEN",
+            name="Binh gas Petrolimex 12kg (bien)",
+            brand="Petrolimex",
+            size_kg="12",
+            price="675000",
+        ),
+        _catalog_product(
+            sku="GAS-12-MT",
+            name="Binh gas MT Gas 12kg",
+            brand="MT Gas",
+            size_kg="12",
+            price="420000",
+        ),
+        _catalog_product(
+            sku="GAS-12-SHELL",
+            name="Binh gas Shell 12kg",
+            brand="Shell Gas",
+            size_kg="12",
+            price="450000",
+        ),
+    ):
+        repository.products[product.id] = product
+    return ProductService(repository)  # type: ignore[arg-type]
+
+
+async def test_find_products_by_brand_and_size_sorted_by_price() -> None:
+    service = _find_service()
+
+    matched = await service.find_products(ProductQuery(brand="Petrolimex", size_kg=Decimal("12")))
+
+    assert [product.price for product in matched] == [Decimal("440000"), Decimal("675000")]
+
+
+async def test_find_products_by_colour() -> None:
+    service = _find_service()
+
+    matched = await service.find_products(
+        ProductQuery(brand="Petrolimex", size_kg=Decimal("12"), colour="bien")
+    )
+
+    assert len(matched) == 1
+    assert matched[0].price == Decimal("675000")
+
+
+async def test_find_products_cheapest_first() -> None:
+    service = _find_service()
+
+    matched = await service.find_products(ProductQuery(size_kg=Decimal("12")))
+
+    assert matched[0].brand == "MT Gas"
+    assert matched[0].price == Decimal("420000")
+
+
+async def test_find_products_around_range() -> None:
+    service = _find_service()
+
+    matched = await service.find_products(
+        ProductQuery(size_kg=Decimal("12"), price_kind="around", price_value=Decimal("450000"))
+    )
+    prices = {product.price for product in matched}
+
+    assert Decimal("450000") in prices
+    assert Decimal("440000") in prices
+    assert Decimal("675000") not in prices
+    assert Decimal("420000") not in prices
+
+
+async def test_find_products_nonstandard_gas_size_does_not_raise() -> None:
+    # ProductSearchParams rejects gas sizes outside {6, 12, 45}; find_products
+    # must drop the SQL size filter and return no in-memory match instead of 500.
+    service = _find_service()
+
+    matched = await service.find_products(
+        ProductQuery(size_kg=Decimal("20"), category="gas", price_kind="cheapest")
+    )
+
+    assert matched == []
