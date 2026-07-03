@@ -78,4 +78,7 @@ jobs:
         run: python -m scripts.run_evaluation --suite intent
       # GHSA-8rrh-rw8j-w5fx: dev/build-only `wheel` (deepeval transitive, not in the
       # runtime image); the fix needs packaging>=24 which runtime langfuse pins out.
-      - run: pip-audit --strict --ignore-vuln GHSA-8rrh-rw8j-w5fx
+      # PYSEC-2026-597: nltk 3.9.4 (transitive via underthesea, our VI tokenizer);
+      # 3.9.4 is the latest release and the advisory has no fix version yet. Revisit
+      # once upstream ships a patched nltk.
+      - run: pip-audit --strict --ignore-vuln GHSA-8rrh-rw8j-w5fx --ignore-vuln PYSEC-2026-597

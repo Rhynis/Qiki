@@ -19,13 +19,14 @@ from app.models.conversation import Conversation
 from app.models.message import Message
 from app.models.user import User
 from app.rag.schemas import RAGResponse, SafetyResult
-from app.schemas.conversation import SendMessageRequest
+from app.schemas.conversation import SendMessageRequest, SendMessageResponse
 from app.schemas.product import ProductResponse
 from app.services.conversation_service import (
     ORDER_CONTEXT_CONFIDENCE,
     ChatOrderItem,
     ConversationService,
 )
+from app.services.product_query import ProductQuery, filter_products
 from app.services.routing_service import RoutingDecision
 
 
@@ -241,6 +242,10 @@ class FakeProductService:
     async def list_active_catalog(self, limit: int = 50) -> list[ProductResponse]:
         self.calls += 1
         return self.products[:limit]
+
+    async def find_products(self, query: ProductQuery, *, limit: int = 20) -> list[ProductResponse]:
+        matched = filter_products(self.products, query)
+        return [product for product in matched if isinstance(product, ProductResponse)][:limit]
 
 
 class FakeLLMProvider(BaseLLMProvider):
@@ -4260,3 +4265,104 @@ async def test_decline_callback_records_delivery_window() -> None:
     assert response.assistant_message.flagged_for_review is True
     assert "giao" in response.assistant_message.content.lower()
     assert rag.calls == 0
+
+
+def _price_query_catalog() -> list[ProductResponse]:
+    now = datetime.now(UTC)
+    specs = [
+        ("PLX-12KG-DO", "Bình gas Petrolimex 12kg (đỏ)", "Petrolimex", "12", "440000", 30),
+        ("PLX-12KG-BIEN", "Bình gas Petrolimex 12kg (biển)", "Petrolimex", "12", "675000", 20),
+        ("MT-12KG", "Bình gas MT Gas 12kg", "MT Gas", "12", "420000", 40),
+        ("TOTAL-12KG", "Bình gas Total 12kg", "Total Gas", "12", "445000", 25),
+        ("SHELL-12KG", "Bình gas Shell 12kg", "Shell Gas", "12", "450000", 25),
+    ]
+    return [
+        ProductResponse(
+            id=uuid.uuid4(),
+            sku=sku,
+            name=name,
+            brand=brand,
+            size_kg=Decimal(size),
+            price=Decimal(price),
+            stock_quantity=stock,
+            description=None,
+            image_url=None,
+            safety_info=None,
+            is_active=True,
+            created_at=now,
+            updated_at=now,
+        )
+        for sku, name, brand, size, price, stock in specs
+    ]
+
+
+async def _send(
+    content: str, catalog: list[ProductResponse]
+) -> tuple[SendMessageResponse, FakeRAGPipeline]:
+    product_service = FakeProductService(products=catalog)
+    service, _conversations, _messages, rag, _orders = make_service(product_service=product_service)
+    conversation = await service.start_conversation(user=None, session_id="abc")
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content=content),
+        user=None,
+    )
+    return response, rag
+
+
+@pytest.mark.asyncio
+async def test_specific_product_narrows_context_and_cards() -> None:
+    # "Petrolimex 12kg" must surface the standard 440k variant, not the biển 675k:
+    # the narrowed RAG context leads with 440k and the cards carry the exact price.
+    response, rag = await _send("Petrolimex 12kg giá bao nhiêu?", _price_query_catalog())
+
+    product_context = rag.last_kwargs["product_context"]
+    assert isinstance(product_context, str)
+    assert "MT Gas" not in product_context
+    assert "Shell" not in product_context
+    assert product_context.index("440.000đ") < product_context.index("675.000đ")
+    assert Decimal("440000") in {product.price for product in response.products}
+
+
+@pytest.mark.asyncio
+async def test_cheapest_size_is_resolved_deterministically() -> None:
+    response, rag = await _send("Gas 12kg loại nào rẻ nhất?", _price_query_catalog())
+
+    assert response.assistant_message is not None
+    answer = response.assistant_message.content
+    assert "420.000đ" in answer
+    assert "MT Gas" in answer
+    assert rag.calls == 0  # deterministic answer bypasses the LLM
+
+
+@pytest.mark.asyncio
+async def test_price_range_lists_matching_options() -> None:
+    response, rag = await _send("Gas 12kg tầm 450k có loại nào?", _price_query_catalog())
+
+    assert response.assistant_message is not None
+    answer = response.assistant_message.content
+    assert "445.000đ" in answer
+    assert "450.000đ" in answer
+    assert "675.000đ" not in answer  # biển is outside the ±6% window
+    assert rag.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_specific_product_query_narrows_rag_context() -> None:
+    # A non-price product query narrows the injected catalog to the target rows.
+    _, rag = await _send("Cho hỏi bình Shell 12kg", _price_query_catalog())
+
+    product_context = rag.last_kwargs["product_context"]
+    assert isinstance(product_context, str)
+    assert "Shell" in product_context
+    assert "Petrolimex" not in product_context
+    assert "MT Gas" not in product_context
+
+
+@pytest.mark.asyncio
+async def test_nonstandard_size_price_query_does_not_crash() -> None:
+    # "gas 20kg" is an unstocked, non-standard size; must answer gracefully.
+    response, _ = await _send("Gas 20kg loại nào rẻ nhất?", _price_query_catalog())
+
+    assert response.assistant_message is not None
+    assert "chưa có" in response.assistant_message.content
