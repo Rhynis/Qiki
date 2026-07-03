@@ -1,0 +1,56 @@
+name: Monitor & Failover
+
+# Best-effort free-tier backend health monitor + auto-failover. GitHub's */5 cron is a FLOOR:
+# runs can be delayed or skipped under load, so this is not an SLA. For real monitoring use
+# UptimeRobot (free) or a Cloudflare Load Balancer (see docs/operations.md).
+#
+# All logic lives in scripts/health_failover.sh (which reuses scripts/switch-backend.sh to apply
+# a switch). This job changes production routing, so the script is conservative by default.
+
+on:
+  schedule:
+    - cron: "*/5 * * * *" # GitHub minimum; delayed/skipped under load (documented)
+  workflow_dispatch:
+    inputs:
+      no_apply:
+        description: "Probe only; print the desired host without switching"
+        type: boolean
+        default: false
+
+concurrency:
+  group: monitor-failover
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write # switch / all-down notifications via gh issue
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Needed only when a switch is actually applied (scripts/switch-backend.sh core).
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Probe health and reconcile routing
+        env:
+          RAILWAY_URL: ${{ vars.RAILWAY_URL }}
+          RENDER_URL: ${{ vars.RENDER_URL }}
+          ORACLE_URL: ${{ vars.ORACLE_URL }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          GH_TOKEN: ${{ github.token }}
+          GH_NOTIFY_REPO: ${{ github.repository }}
+          FAILOVER_DISABLED: ${{ vars.FAILOVER_DISABLED }}
+          NO_APPLY: ${{ github.event.inputs.no_apply }}
+        run: |
+          set -euo pipefail
+          if [ "$NO_APPLY" = "true" ]; then
+            bash scripts/health_failover.sh --no-apply
+          else
+            bash scripts/health_failover.sh
+          fi
