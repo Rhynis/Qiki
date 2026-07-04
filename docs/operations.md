@@ -3,6 +3,33 @@
 This runbook covers day-two operations for GasBot after the owner deploys the
 production stack.
 
+## Ops Quick Commands (copy-paste)
+
+Run from anywhere with the `gh` CLI authenticated. `--repo Rhynis/Gas-Rag-bot` is included so
+these work from any directory. All three ops workflows also have a "Run workflow" button under
+GitHub → Actions.
+
+```bash
+# ── Switch which backend prod points at (render | railway | oracle) ──
+gh workflow run "Switch Backend" --repo Rhynis/Gas-Rag-bot -f target=render
+gh run list --workflow "Switch Backend" --repo Rhynis/Gas-Rag-bot --limit 1   # check result
+
+# ── Run the encrypted DB backup now (don't wait for the 03:00 VN cron) ──
+gh workflow run "DB Backup" --repo Rhynis/Gas-Rag-bot
+gh run list --workflow "DB Backup" --repo Rhynis/Gas-Rag-bot --limit 1
+
+# ── Health monitor / failover: probe-only (no switch) then a real run ──
+gh workflow run "Monitor & Failover" --repo Rhynis/Gas-Rag-bot -f no_apply=true
+gh workflow run "Monitor & Failover" --repo Rhynis/Gas-Rag-bot -f no_apply=false
+
+# ── See the logs of the most recent run of any workflow ──
+gh run view "$(gh run list --workflow 'Switch Backend' --repo Rhynis/Gas-Rag-bot --limit 1 --json databaseId --jq '.[0].databaseId')" --repo Rhynis/Gas-Rag-bot --log
+```
+
+Notes: the scheduled failover only *reacts to outages* and does **not** auto-fail-back to the
+primary — use `Switch Backend -f target=render` to move prod back deliberately. Backend URLs come
+from the `RAILWAY_URL` / `RENDER_URL` / `ORACLE_URL` repo variables.
+
 ## View Logs
 
 ### Railway Backend
