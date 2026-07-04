@@ -37,6 +37,7 @@ jobs:
 
       - name: Probe health and reconcile routing
         env:
+          PROD_URL: ${{ vars.PROD_URL }}
           RAILWAY_URL: ${{ vars.RAILWAY_URL }}
           RENDER_URL: ${{ vars.RENDER_URL }}
           ORACLE_URL: ${{ vars.ORACLE_URL }}
