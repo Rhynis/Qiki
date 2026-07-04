@@ -135,7 +135,9 @@ main() {
     return 0
   fi
 
-  upload "$enc" "$base"
+  # Upload under the .dump.gpg name so the object key matches the encrypted payload and the
+  # prune filter (which lists `*.dump.gpg`); otherwise retention would never delete anything.
+  upload "$enc" "$base.gpg"
   prune
   log "backup complete"
 }
