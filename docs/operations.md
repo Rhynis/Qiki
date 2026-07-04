@@ -26,13 +26,19 @@ gh run watch "$(gh run list --workflow 'DB Backup' -R Rhynis/Gas-Rag-bot -L1 --j
 gh workflow run "Monitor & Failover" --repo Rhynis/Gas-Rag-bot -f no_apply=true
 gh run watch "$(gh run list --workflow 'Monitor & Failover' -R Rhynis/Gas-Rag-bot -L1 --json databaseId -q '.[0].databaseId')" -R Rhynis/Gas-Rag-bot
 
-# ── General pattern: watch the latest run of ANY workflow (green ✓ = done, red ✗ = failed) ──
-gh run watch "$(gh run list -R Rhynis/Gas-Rag-bot -L1 --json databaseId -q '.[0].databaseId')" -R Rhynis/Gas-Rag-bot
+# ── Watch the latest run of a SPECIFIC workflow (change the name in quotes) ──
+gh run watch "$(gh run list --workflow 'Switch Backend' -R Rhynis/Gas-Rag-bot -L1 --json databaseId -q '.[0].databaseId')" -R Rhynis/Gas-Rag-bot
 ```
 
+Always pass `--workflow '<Name>'` when watching a run. Do NOT use a bare `gh run list -L1`
+(no `--workflow`): "Monitor & Failover" runs every 5 minutes on a schedule, so the single latest
+run across the repo is almost always that scheduled job, not the one you just triggered.
+
+Run status: `in_progress` = running · `completed` + `success` = done ✓ · `completed` + `failure` = failed ✗.
+
 Notes: the scheduled failover only *reacts to outages* and does **not** auto-fail-back to the
-primary — use `Switch Backend -f target=render` to move prod back deliberately. Backend URLs come
-from the `RAILWAY_URL` / `RENDER_URL` / `ORACLE_URL` repo variables.
+primary — use `Switch Backend -f target=render` (or `scripts/switch.sh render`) to move prod back
+deliberately. Backend URLs come from the `RAILWAY_URL` / `RENDER_URL` / `ORACLE_URL` repo variables.
 
 ## View Logs
 
