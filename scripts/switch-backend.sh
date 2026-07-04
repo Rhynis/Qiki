@@ -37,13 +37,20 @@ vercel_cli() {
 apply_backend_url() {
   local url="$1"
   local label="${2:-custom}"
-  local frontend_dir
+  local frontend_dir root_dir
   frontend_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../frontend" && pwd)"
+  root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+  # Update the env var (cwd-independent; project selected by the link or VERCEL_*_ID).
   (
     cd "$frontend_dir"
     vercel_cli env rm BACKEND_URL production --yes >/dev/null 2>&1 || true
     printf '%s' "$url" | vercel_cli env add BACKEND_URL production
+  )
+  # Redeploy from the REPO ROOT: the Vercel project's Root Directory is "frontend", so deploying
+  # from frontend/ makes Vercel append it again -> ".../frontend/frontend does not exist".
+  (
+    cd "$root_dir"
     vercel_cli --prod --yes
   )
   echo "BACKEND_URL -> $url ($label). Redeploy triggered (~2 min)."
