@@ -44,6 +44,10 @@ jobs:
 
       - name: Run encrypted backup
         env:
+          # Force the v17 client binaries: the runner ships pg_dump 16 and pg_wrapper would
+          # otherwise pick it, failing against the Supabase 17.x server (client must be >= server).
+          PG_DUMP: /usr/lib/postgresql/17/bin/pg_dump
+          PG_RESTORE: /usr/lib/postgresql/17/bin/pg_restore
           BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
           BACKUP_GPG_PASSPHRASE: ${{ secrets.BACKUP_GPG_PASSPHRASE }}
           S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
