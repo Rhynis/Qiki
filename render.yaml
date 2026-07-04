@@ -16,14 +16,28 @@ services:
     healthCheckPath: /health
     autoDeploy: true
     envVars:
-      # Non-secret defaults
+      # Non-secret defaults (blueprint-managed; keep identical to the other hosts).
       - key: ENVIRONMENT
         value: production
       - key: LLM_PROVIDER
         value: gemini
+      # Railway/Render block outbound SMTP -> use the Gmail API (HTTPS) for transactional email.
       - key: EMAIL_PROVIDER
-        value: smtp
-      # Shared infra + secrets — set in the dashboard, identical across hosts
+        value: gmail_api
+      # Generation runs on Vertex AI (the AI Studio key is depleted); match Railway's model.
+      - key: GEMINI_USE_VERTEX
+        value: "true"
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: GEMINI_EMBED_MODEL
+        value: gemini-embedding-001
+      - key: GOOGLE_CLOUD_LOCATION
+        value: us-central1
+      - key: EMBEDDING_PROVIDER
+        value: gemini
+      # Shared infra + secrets — set in the dashboard, IDENTICAL to the other hosts (copy from
+      # Railway). JWT_SECRET_KEY / DATABASE_URL / REDIS_URL especially MUST match (docs/HOSTING.md),
+      # or switching BACKEND_URL between hosts logs everyone out / points at a different DB.
       - key: DATABASE_URL # Supabase pooler URL (postgresql+asyncpg://...)
         sync: false
       - key: REDIS_URL # Upstash rediss://... (TLS)
@@ -36,15 +50,19 @@ services:
         sync: false
       - key: GEMINI_API_KEY
         sync: false
-      - key: GEMINI_USE_VERTEX
+      - key: GOOGLE_CLOUD_PROJECT # GCP project for Vertex
         sync: false
-      - key: GROQ_API_KEY
+      - key: GOOGLE_APPLICATION_CREDENTIALS_JSON # Vertex service-account JSON (single-line)
         sync: false
-      - key: JINA_API_KEY
+      - key: GROQ_API_KEY # fallback LLM
         sync: false
-      - key: SMTP_USERNAME
+      - key: JINA_API_KEY # fallback embeddings
         sync: false
-      - key: SMTP_PASSWORD
+      - key: GMAIL_CLIENT_ID # Gmail API OAuth (transactional email)
+        sync: false
+      - key: GMAIL_CLIENT_SECRET
+        sync: false
+      - key: GMAIL_REFRESH_TOKEN
         sync: false
       - key: EMAIL_FROM
         sync: false
