@@ -16,9 +16,13 @@
 # names), default "render railway oracle" — Render primary, Railway backup. URLs come from the
 # RENDER_URL / RAILWAY_URL / ORACLE_URL env / repo variables; unset or FILL-ME hosts are skipped.
 #
-# Applying a switch needs VERCEL_TOKEN + VERCEL_ORG_ID + VERCEL_PROJECT_ID (to read the current
-# BACKEND_URL and redeploy via scripts/switch-backend.sh). Notifications use `gh` + GH_TOKEN when
-# GH_NOTIFY_REPO is set; otherwise they are logged. Set FAILOVER_DISABLED=true to force probe-only.
+# Current prod health is read by probing PROD_URL/health (the Vercel frontend, which proxies to
+# the active backend) — the Vercel env API does not return decrypted values, so we do NOT read it.
+# This reacts to an outage of the CURRENT backend; it does not auto-fail-back to the primary once
+# it recovers (safer, no flapping). Applying a switch needs VERCEL_TOKEN + VERCEL_ORG_ID +
+# VERCEL_PROJECT_ID (used only by scripts/switch-backend.sh to set BACKEND_URL and redeploy).
+# Notifications use `gh` + GH_TOKEN when GH_NOTIFY_REPO is set; else logged. FAILOVER_DISABLED=true
+# forces probe-only (still keeps hosts warm).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -113,37 +117,19 @@ url_of() {
   return 1
 }
 
-# Read the current production BACKEND_URL from the Vercel API (needs the VERCEL_* vars).
-# Logs the HTTP status / lookup outcome on failure (never the token or the value) so a
-# misconfigured token or a missing env is diagnosable from the workflow log.
-current_backend_url() {
-  [[ -n "${VERCEL_TOKEN:-}" && -n "${VERCEL_PROJECT_ID:-}" && -n "${VERCEL_ORG_ID:-}" ]] || {
-    log "vercel: missing VERCEL_TOKEN/ORG/PROJECT"
-    return 1
-  }
-  local resp http body value
-  resp="$(curl -sS -m 15 -w $'\n%{http_code}' \
-    -H "Authorization: Bearer $VERCEL_TOKEN" \
-    "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID/env?decrypt=true&teamId=$VERCEL_ORG_ID" \
-    2>/dev/null)" || {
-    log "vercel: env API request failed (network/timeout)"
-    return 1
-  }
-  http="${resp##*$'\n'}"
-  body="${resp%$'\n'*}"
-  if [[ "$http" != "200" ]]; then
-    log "vercel: env API HTTP $http (check token scope/team + decrypt permission)"
-    return 1
-  fi
-  value="$(printf '%s' "$body" \
-    | jq -r 'first(.envs[]? | select(.key=="BACKEND_URL" and (.target|index("production"))) | .value) // empty')"
-  if [[ -z "$value" ]]; then
-    # Log env keys + targets + whether a value came back (never the values themselves), so a
-    # missing/mis-targeted BACKEND_URL vs a token that cannot decrypt is distinguishable.
-    log "vercel: BACKEND_URL(production) not found/decrypted. keys=$(printf '%s' "$body" | jq -rc '[.envs[]? | {key, target, hasValue:(.value!=null and .value!="")}]' 2>/dev/null)"
-    return 1
-  fi
-  printf '%s' "${value%/}"
+# Is the LIVE prod site currently served by a healthy backend? The Vercel frontend proxies
+# /health to the active BACKEND_URL, so probing PROD_URL/health reflects whichever host prod
+# points at — WITHOUT reading (and decrypting) the Vercel env, which the API does not return.
+# Follow redirects (-L): Next rewrites /health via a 307 first.
+# Returns 0 = healthy, 1 = down, 2 = unknown (PROD_URL not configured).
+prod_backend_healthy() {
+  local url="${PROD_URL:-}" code
+  [[ -n "$url" ]] || return 2
+  url="${url%/}"
+  code="$(curl -sL -m "$PROBE_TIMEOUT" -o /dev/null -w '%{http_code}' "$url/health" 2>/dev/null || true)"
+  [[ "$code" == "200" ]] && return 0
+  log "prod: $url/health -> ${code:-000}"
+  return 1
 }
 
 # Notify via a single de-duplicated GitHub issue (comment if one is already open), else log only.
@@ -181,61 +167,69 @@ main() {
     exit 0
   fi
 
+  # Probe all candidate hosts first: this both (a) keeps free hosts (e.g. Render, which sleeps
+  # after ~15 min idle) warm, and (b) identifies the highest-priority healthy host to fail over
+  # to if prod is down.
   log "probe round 1:"
   local desired1
   desired1="$(probe_round)"
 
-  # All hosts down: never switch (a dead host is no better); shout.
+  # Is the live prod site currently served by a healthy backend (whichever host it points at)?
+  local ph=0
+  prod_backend_healthy || ph=$?
+  if [[ "$ph" -eq 2 ]]; then
+    log "PROD_URL not set; cannot determine current prod health — refusing to switch blindly. Set the PROD_URL repo variable."
+    exit 2
+  fi
+  if [[ "$ph" -eq 0 ]]; then
+    log "prod backend healthy; no action (hosts pinged to stay warm)"
+    exit 0
+  fi
+  log "prod backend is DOWN -- evaluating failover"
+
+  # Prod is down: fail over to the highest-priority healthy candidate.
   if [[ -z "$desired1" ]]; then
-    notify "ALL BACKENDS DOWN" "No configured backend returned 200 on /health at $(date -u +%FT%TZ). Routing left unchanged."
-    log "all backends down; leaving routing unchanged"
+    notify "ALL BACKENDS DOWN" "Prod /health is failing and no configured backend returned 200 at $(date -u +%FT%TZ). Routing left unchanged."
+    log "prod down and all candidates down; leaving routing unchanged"
     exit 1
   fi
-
   local desired_url
   desired_url="$(url_of "$desired1")"
-  log "desired backend by priority: $desired1 ($desired_url)"
+  log "highest-priority healthy backend: $desired1 ($desired_url)"
 
   if [[ "$APPLY" -eq 0 ]]; then
     [[ "${FAILOVER_DISABLED:-}" == "true" ]] && log "FAILOVER_DISABLED=true (probe-only)"
-    log "--no-apply: not reading Vercel or switching"
+    log "--no-apply: would fail over to $desired1 but not switching"
     exit 0
   fi
 
-  # Reconcile against the current Vercel target.
-  local current
-  if ! current="$(current_backend_url)"; then
-    log "ERROR: cannot read current BACKEND_URL (need VERCEL_TOKEN/ORG/PROJECT); refusing to switch blindly"
-    exit 2
-  fi
-  log "current BACKEND_URL: $current"
-
-  if [[ "$current" == "$desired_url" ]]; then
-    log "already pointing at the highest-priority healthy host; no-op"
-    exit 0
-  fi
-
-  # Anti-flap: require the desired host to hold across a second round before flipping prod.
-  log "switch warranted ($current -> $desired_url); confirming after ${CONFIRM_DELAY}s ..."
+  # Anti-flap: require prod to still be down AND the target stable after a short delay.
+  log "prod down + candidate $desired1 healthy; confirming after ${CONFIRM_DELAY}s ..."
   sleep "$CONFIRM_DELAY"
+  local ph2=0
+  prod_backend_healthy || ph2=$?
+  if [[ "$ph2" -eq 0 ]]; then
+    log "prod recovered during confirmation window; holding"
+    exit 0
+  fi
   log "probe round 2:"
   local desired2 desired2_url
   desired2="$(probe_round)"
+  if [[ -z "$desired2" ]]; then
+    notify "ALL BACKENDS DOWN" "Prod down and all candidates down at $(date -u +%FT%TZ)."
+    exit 1
+  fi
   if [[ "$desired2" != "$desired1" ]]; then
-    log "desired changed between rounds ($desired1 -> ${desired2:-none}); transient, holding"
+    log "target changed between rounds ($desired1 -> $desired2); transient, holding"
     exit 0
   fi
   desired2_url="$(url_of "$desired2")"
-  if [[ "$current" == "$desired2_url" ]]; then
-    log "current recovered to desired between rounds; holding"
-    exit 0
-  fi
 
-  log "failing over: $current -> $desired2_url ($desired2)"
+  log "failing over prod to $desired2 ($desired2_url)"
   if bash "$SCRIPT_DIR/switch-backend.sh" --url "$desired2_url" "$desired2"; then
-    notify "failed over to $desired2" "Backend routing switched $current -> $desired2_url ($desired2) at $(date -u +%FT%TZ) after two consecutive failing rounds for the previous host."
+    notify "failed over to $desired2" "Prod /health was failing; switched BACKEND_URL to $desired2_url ($desired2) at $(date -u +%FT%TZ) after two confirmations."
   else
-    notify "FAILOVER ATTEMPT FAILED" "Tried to switch $current -> $desired2_url ($desired2) but scripts/switch-backend.sh returned non-zero at $(date -u +%FT%TZ). Manual intervention needed."
+    notify "FAILOVER ATTEMPT FAILED" "Tried to switch to $desired2_url ($desired2) but scripts/switch-backend.sh returned non-zero at $(date -u +%FT%TZ). Manual intervention needed."
     exit 1
   fi
 }
