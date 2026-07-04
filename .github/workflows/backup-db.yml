@@ -24,7 +24,7 @@ jobs:
 
       # pg_dump client major version MUST be >= the Supabase server major version, or the
       # dump is refused. Pin postgresql-client-17 from the PGDG apt repo.
-      - name: Install postgresql-client-17, awscli, gnupg
+      - name: Install postgresql-client-17
         run: |
           set -euo pipefail
           # Install the PGDG signing key as an ASCII-armored .asc referenced via signed-by.
@@ -36,7 +36,11 @@ jobs:
           echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
             | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
           sudo apt-get update
-          sudo apt-get install -y postgresql-client-17 awscli gnupg
+          # aws (AWS CLI v2) and gpg are pre-installed on the GitHub ubuntu runner; the apt
+          # `awscli` package was dropped on Ubuntu 24.04 (noble). Only pg_dump 17 is needed.
+          sudo apt-get install -y postgresql-client-17
+          aws --version
+          gpg --version | head -1
 
       - name: Run encrypted backup
         env:
