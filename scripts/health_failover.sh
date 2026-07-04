@@ -138,7 +138,9 @@ current_backend_url() {
   value="$(printf '%s' "$body" \
     | jq -r 'first(.envs[]? | select(.key=="BACKEND_URL" and (.target|index("production"))) | .value) // empty')"
   if [[ -z "$value" ]]; then
-    log "vercel: BACKEND_URL(production) not found or not decrypted (envs=$(printf '%s' "$body" | jq -r '.envs|length' 2>/dev/null))"
+    # Log env keys + targets + whether a value came back (never the values themselves), so a
+    # missing/mis-targeted BACKEND_URL vs a token that cannot decrypt is distinguishable.
+    log "vercel: BACKEND_URL(production) not found/decrypted. keys=$(printf '%s' "$body" | jq -rc '[.envs[]? | {key, target, hasValue:(.value!=null and .value!="")}]' 2>/dev/null)"
     return 1
   fi
   printf '%s' "${value%/}"
