@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { ORDER_STATUS_LABELS_VI } from '@/lib/constants'
 import { useUpdateOrderStatus } from '@/lib/hooks/use-orders'
 import type { Order, OrderStatus } from '@/types/order'
 
@@ -31,7 +32,7 @@ export function OrderStatusUpdater({ order }: { order: Order }) {
       >
         {options.map((status) => (
           <option key={status} value={status}>
-            {status}
+            {ORDER_STATUS_LABELS_VI[status] ?? status}
           </option>
         ))}
       </select>

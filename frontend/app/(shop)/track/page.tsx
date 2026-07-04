@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { PageHeader } from '@/components/shared/page-header'
+import { ORDER_STATUS_LABELS_VI } from '@/lib/constants'
 import { useLookupOrder } from '@/lib/hooks/use-orders'
 import { sanitizeOrderNumberForLookup } from '@/lib/utils/order-lookup'
 import { formatPhone } from '@/lib/utils/format'
@@ -65,7 +66,9 @@ export default function TrackOrderPage() {
         <div className="rounded-lg border bg-white p-5">
           <p className="font-semibold">{lookup.data.order_number}</p>
           <p className="text-sm text-slate-600">SĐT: {formatPhone(lookup.data.customer_phone)}</p>
-          <p className="text-sm text-slate-600">Trạng thái: {lookup.data.status}</p>
+          <p className="text-sm text-slate-600">
+            Trạng thái: {ORDER_STATUS_LABELS_VI[lookup.data.status] ?? lookup.data.status}
+          </p>
           <Button asChild className="mt-3" variant="outline">
             <Link href={`/orders/${lookup.data.id}`}>Xem chi tiết</Link>
           </Button>

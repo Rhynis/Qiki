@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/shared/page-header'
+import { ORDER_STATUS_LABELS_VI } from '@/lib/constants'
 import { useMyOrders } from '@/lib/hooks/use-orders'
 import { formatDate, formatPrice } from '@/lib/utils/format'
 
@@ -33,7 +34,7 @@ export default function OrdersPage() {
               <p className="font-medium">{order.order_number}</p>
               <p className="text-sm text-slate-600">{formatDate(order.created_at)}</p>
             </div>
-            <span className="text-sm capitalize">{order.status}</span>
+            <span className="text-sm">{ORDER_STATUS_LABELS_VI[order.status] ?? order.status}</span>
             <span className="font-semibold md:text-right">{formatPrice(order.total_amount)}</span>
           </Link>
         ))}

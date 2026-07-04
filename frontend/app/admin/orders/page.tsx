@@ -6,6 +6,7 @@ import { OrderStatusUpdater } from '@/components/admin/order/order-status-update
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/shared/page-header'
+import { ORDER_STATUS_LABELS_VI } from '@/lib/constants'
 import { useAdminOrders } from '@/lib/hooks/use-orders'
 import { formatDate, formatPhone, formatPrice } from '@/lib/utils/format'
 import type { Order, OrderSearchParams, OrderStatus } from '@/types/order'
@@ -36,11 +37,11 @@ export default function AdminOrdersPage() {
           onChange={(event) => setStatus(event.target.value as OrderStatus | '')}
         >
           <option value="">Tất cả trạng thái</option>
-          <option value="pending">pending</option>
-          <option value="confirmed">confirmed</option>
-          <option value="shipping">shipping</option>
-          <option value="delivered">delivered</option>
-          <option value="cancelled">cancelled</option>
+          <option value="pending">{ORDER_STATUS_LABELS_VI.pending}</option>
+          <option value="confirmed">{ORDER_STATUS_LABELS_VI.confirmed}</option>
+          <option value="shipping">{ORDER_STATUS_LABELS_VI.shipping}</option>
+          <option value="delivered">{ORDER_STATUS_LABELS_VI.delivered}</option>
+          <option value="cancelled">{ORDER_STATUS_LABELS_VI.cancelled}</option>
         </select>
         <Button onClick={() => setApplied({ limit: 50, search, status: status || undefined })}>
           Lọc
@@ -79,7 +80,7 @@ export default function AdminOrdersPage() {
                 </td>
                 <td className="p-3">{formatDate(order.created_at)}</td>
                 <td className="p-3">{formatPrice(order.total_amount)}</td>
-                <td className="p-3">{order.status}</td>
+                <td className="p-3">{ORDER_STATUS_LABELS_VI[order.status] ?? order.status}</td>
                 <td className="p-3" onClick={(event) => event.stopPropagation()}>
                   <OrderStatusUpdater order={order} />
                 </td>
