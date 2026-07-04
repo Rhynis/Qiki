@@ -1,0 +1,45 @@
+name: Switch Backend
+
+# Manual button to point the Vercel prod frontend at a chosen backend and redeploy.
+# Use it to fail back to the primary after the auto-failover moved prod to a backup, or to
+# switch hosts on demand (e.g. off Railway when the trial ends). The scheduled Monitor & Failover
+# only reacts to outages and does NOT auto-fail-back, so this is the deliberate way to move back.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Backend to point prod at"
+        type: choice
+        options:
+          - render
+          - railway
+          - oracle
+        required: true
+
+concurrency:
+  group: switch-backend
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  switch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Switch BACKEND_URL and redeploy
+        env:
+          TARGET: ${{ github.event.inputs.target }}
+          RAILWAY_URL: ${{ vars.RAILWAY_URL }}
+          RENDER_URL: ${{ vars.RENDER_URL }}
+          ORACLE_URL: ${{ vars.ORACLE_URL }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: bash scripts/switch-backend.sh "$TARGET"
