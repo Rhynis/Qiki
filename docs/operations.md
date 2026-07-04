@@ -9,21 +9,25 @@ Run from anywhere with the `gh` CLI authenticated. `--repo Rhynis/Gas-Rag-bot` i
 these work from any directory. All three ops workflows also have a "Run workflow" button under
 GitHub → Actions.
 
+**IMPORTANT:** `gh workflow run` only *triggers* the workflow and returns immediately — it does
+NOT tell you whether it succeeded. To see the result you must watch the run (below). Do not paste
+lines starting with `#` into zsh (they error); they are comments here.
+
 ```bash
-# ── Switch which backend prod points at (render | railway | oracle) ──
-gh workflow run "Switch Backend" --repo Rhynis/Gas-Rag-bot -f target=render
-gh run list --workflow "Switch Backend" --repo Rhynis/Gas-Rag-bot --limit 1   # check result
+# ── Switch which backend prod points at, AND wait + report the result (recommended) ──
+bash scripts/switch.sh render        # or: railway | oracle
+#   → prints "✅ SWITCHED …" or "❌ FAILED …" and checks the live site
 
-# ── Run the encrypted DB backup now (don't wait for the 03:00 VN cron) ──
+# ── Run the encrypted DB backup now, then watch it to completion ──
 gh workflow run "DB Backup" --repo Rhynis/Gas-Rag-bot
-gh run list --workflow "DB Backup" --repo Rhynis/Gas-Rag-bot --limit 1
+gh run watch "$(gh run list --workflow 'DB Backup' -R Rhynis/Gas-Rag-bot -L1 --json databaseId -q '.[0].databaseId')" -R Rhynis/Gas-Rag-bot
 
-# ── Health monitor / failover: probe-only (no switch) then a real run ──
+# ── Health monitor / failover: probe-only (no switch) then a real run, watching each ──
 gh workflow run "Monitor & Failover" --repo Rhynis/Gas-Rag-bot -f no_apply=true
-gh workflow run "Monitor & Failover" --repo Rhynis/Gas-Rag-bot -f no_apply=false
+gh run watch "$(gh run list --workflow 'Monitor & Failover' -R Rhynis/Gas-Rag-bot -L1 --json databaseId -q '.[0].databaseId')" -R Rhynis/Gas-Rag-bot
 
-# ── See the logs of the most recent run of any workflow ──
-gh run view "$(gh run list --workflow 'Switch Backend' --repo Rhynis/Gas-Rag-bot --limit 1 --json databaseId --jq '.[0].databaseId')" --repo Rhynis/Gas-Rag-bot --log
+# ── General pattern: watch the latest run of ANY workflow (green ✓ = done, red ✗ = failed) ──
+gh run watch "$(gh run list -R Rhynis/Gas-Rag-bot -L1 --json databaseId -q '.[0].databaseId')" -R Rhynis/Gas-Rag-bot
 ```
 
 Notes: the scheduled failover only *reacts to outages* and does **not** auto-fail-back to the
