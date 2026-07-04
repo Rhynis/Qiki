@@ -114,15 +114,33 @@ url_of() {
 }
 
 # Read the current production BACKEND_URL from the Vercel API (needs the VERCEL_* vars).
+# Logs the HTTP status / lookup outcome on failure (never the token or the value) so a
+# misconfigured token or a missing env is diagnosable from the workflow log.
 current_backend_url() {
-  [[ -n "${VERCEL_TOKEN:-}" && -n "${VERCEL_PROJECT_ID:-}" && -n "${VERCEL_ORG_ID:-}" ]] || return 1
-  local value
-  value="$(curl -fsS -m 15 \
+  [[ -n "${VERCEL_TOKEN:-}" && -n "${VERCEL_PROJECT_ID:-}" && -n "${VERCEL_ORG_ID:-}" ]] || {
+    log "vercel: missing VERCEL_TOKEN/ORG/PROJECT"
+    return 1
+  }
+  local resp http body value
+  resp="$(curl -sS -m 15 -w $'\n%{http_code}' \
     -H "Authorization: Bearer $VERCEL_TOKEN" \
     "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID/env?decrypt=true&teamId=$VERCEL_ORG_ID" \
-    2>/dev/null \
+    2>/dev/null)" || {
+    log "vercel: env API request failed (network/timeout)"
+    return 1
+  }
+  http="${resp##*$'\n'}"
+  body="${resp%$'\n'*}"
+  if [[ "$http" != "200" ]]; then
+    log "vercel: env API HTTP $http (check token scope/team + decrypt permission)"
+    return 1
+  fi
+  value="$(printf '%s' "$body" \
     | jq -r 'first(.envs[]? | select(.key=="BACKEND_URL" and (.target|index("production"))) | .value) // empty')"
-  [[ -n "$value" ]] || return 1
+  if [[ -z "$value" ]]; then
+    log "vercel: BACKEND_URL(production) not found or not decrypted (envs=$(printf '%s' "$body" | jq -r '.envs|length' 2>/dev/null))"
+    return 1
+  fi
   printf '%s' "${value%/}"
 }
 
