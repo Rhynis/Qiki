@@ -12,8 +12,9 @@
 #   scripts/health_failover.sh              # probe + reconcile (used by CI)
 #   scripts/health_failover.sh --no-apply   # probe only: print per-host health + desired host
 #
-# Hosts by priority (highest first), from env / repo variables; unset or FILL-ME hosts skipped:
-#   RAILWAY_URL > RENDER_URL > ORACLE_URL
+# Hosts by priority (highest first): the FAILOVER_PRIORITY repo variable (space-separated host
+# names), default "render railway oracle" — Render primary, Railway backup. URLs come from the
+# RENDER_URL / RAILWAY_URL / ORACLE_URL env / repo variables; unset or FILL-ME hosts are skipped.
 #
 # Applying a switch needs VERCEL_TOKEN + VERCEL_ORG_ID + VERCEL_PROJECT_ID (to read the current
 # BACKEND_URL and redeploy via scripts/switch-backend.sh). Notifications use `gh` + GH_TOKEN when
@@ -54,9 +55,20 @@ add_host() {
   NAMES+=("$name")
   URLS+=("$url")
 }
-add_host railway "${RAILWAY_URL:-}"
-add_host render "${RENDER_URL:-}"
-add_host oracle "${ORACLE_URL:-}"
+# Priority is configurable so hosts can be reordered/dropped without a code change (e.g. when the
+# Railway trial ends). Default puts Render first, Railway as backup, Oracle last.
+url_for_name() {
+  case "$1" in
+    railway) printf '%s' "${RAILWAY_URL:-}" ;;
+    render) printf '%s' "${RENDER_URL:-}" ;;
+    oracle) printf '%s' "${ORACLE_URL:-}" ;;
+    *) printf '' ;;
+  esac
+}
+read -ra _priority <<<"${FAILOVER_PRIORITY:-render railway oracle}"
+for _host in "${_priority[@]}"; do
+  add_host "$_host" "$(url_for_name "$_host")"
+done
 
 # GET {url}/health, healthy iff an attempt returns HTTP 200. Prints nothing sensitive.
 probe() {
