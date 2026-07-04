@@ -114,7 +114,9 @@ def create_app() -> FastAPI:
             },
         )
 
-    @app.get("/health", tags=["Health"])
+    # HEAD is allowed so lightweight uptime checks (e.g. UptimeRobot free tier, which only
+    # sends HEAD) get a 200 instead of 405 — GET returns the JSON body as before.
+    @app.api_route("/health", methods=["GET", "HEAD"], tags=["Health"])
     async def health() -> dict[str, str]:
         """Basic health check endpoint."""
         return {"status": "ok"}
