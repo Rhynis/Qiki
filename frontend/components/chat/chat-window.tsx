@@ -1,6 +1,6 @@
 'use client'
 
-import { useQueryClient } from '@tanstack/react-query'
+import { useIsMutating, useQueryClient } from '@tanstack/react-query'
 import { MessageCircle, MessageSquarePlus, Minus, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -34,7 +34,11 @@ export function ChatWindow() {
   const [rateLimited, setRateLimited] = useState(false)
   const startConversation = useStartConversation()
   const sendMessage = useSendMessage()
-  const messages = useMessages(conversationId, true, sendMessage.isPending)
+  // Track the send globally so the "typing" indicator survives the window being
+  // closed and reopened while a reply is still in flight (the mutation outlives
+  // this component because it lives on the shared QueryClient).
+  const isSending = useIsMutating({ mutationKey: conversationKeys.send }) > 0
+  const messages = useMessages(conversationId, true, isSending)
 
   function clearRateLimitTimer() {
     if (rateLimitTimeoutRef.current) {
@@ -115,7 +119,7 @@ export function ChatWindow() {
   const latestConversation = startConversation.data
   const isEscalated = latestConversation?.status === 'escalated'
   const startFailed = startConversation.isError && !conversationId
-  const isBusy = sendMessage.isPending || (startConversation.isPending && !startFailed)
+  const isBusy = isSending || (startConversation.isPending && !startFailed)
   const conversationReady = Boolean(conversationId)
 
   function handleRetryStart() {
@@ -162,7 +166,7 @@ export function ChatWindow() {
   }
 
   return (
-    <section className="fixed bottom-24 right-4 z-50 w-[calc(100vw-2rem)] max-w-md overflow-hidden rounded-lg border bg-slate-50 shadow-xl md:right-6">
+    <section className="fixed bottom-24 right-4 z-50 w-[calc(100vw-2rem)] max-w-md origin-bottom-right overflow-hidden rounded-lg border bg-slate-50 shadow-xl duration-200 ease-out animate-in fade-in zoom-in-95 slide-in-from-bottom-4 md:right-6">
       <header className="flex items-center justify-between border-b bg-slate-900 px-4 py-3 text-white">
         <div className="flex items-center gap-2">
           <MessageCircle className="h-5 w-5" />
@@ -178,30 +182,38 @@ export function ChatWindow() {
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-10 w-10 text-primary hover:bg-primary/10 hover:text-primary focus-visible:ring-ring"
-                aria-label="Trò chuyện mới"
+                className="h-11 w-11 text-primary hover:bg-primary/10 hover:text-primary focus-visible:ring-ring"
+                title="Tạo cuộc trò chuyện mới"
+                aria-label="Tạo cuộc trò chuyện mới"
                 onClick={handleNewConversation}
               >
                 <MessageSquarePlus className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Trò chuyện mới</TooltipContent>
+            <TooltipContent>Tạo cuộc trò chuyện mới</TooltipContent>
+          </Tooltip>
+          <Tooltip delayDuration={150}>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-11 w-11 text-white hover:bg-slate-700"
+                title="Thu nhỏ"
+                aria-label="Thu nhỏ"
+                onClick={close}
+              >
+                <Minus className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Thu nhỏ</TooltipContent>
           </Tooltip>
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="h-10 w-10 text-white hover:bg-slate-700"
-            aria-label="Thu gọn"
-            onClick={close}
-          >
-            <Minus className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-10 w-10 text-white hover:bg-slate-700"
+            className="h-11 w-11 text-white hover:bg-slate-700"
+            title="Đóng"
             aria-label="Đóng chat"
             onClick={close}
           >
@@ -240,7 +252,7 @@ export function ChatWindow() {
         key={sessionId}
         disabled={!conversationReady || startConversation.isPending || startFailed}
         rateLimited={rateLimited}
-        sending={sendMessage.isPending}
+        sending={isSending}
         onSend={handleSend}
       />
     </section>

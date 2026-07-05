@@ -26,9 +26,16 @@ describe('format utilities', () => {
     expect(formatDate(date, true)).toContain('25/05/2026')
   })
 
-  it('formats phone numbers', () => {
-    expect(formatPhone('+84901234567')).toBe('0901234567')
-    expect(formatPhone('0901234567')).toBe('0901234567')
+  it('formats mobile numbers as 4-3-3 and converts +84 to 0', () => {
+    expect(formatPhone('+84901234567')).toBe('0901 234 567')
+    expect(formatPhone('0901234567')).toBe('0901 234 567')
+    expect(formatPhone('0708277925')).toBe('0708 277 925')
+  })
+
+  it('leaves landlines and non-mobile numbers unchanged', () => {
+    expect(formatPhone('(028) 37269435')).toBe('(028) 37269435')
+    expect(formatPhone('02837269435')).toBe('02837269435')
+    expect(formatPhone('')).toBe('')
   })
 
   it('masks phone numbers', () => {

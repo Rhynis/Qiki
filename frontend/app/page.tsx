@@ -140,10 +140,10 @@ export default function HomePage() {
                 <div className="mt-5 grid gap-3">
                   {heroDetails.map(({ label, value }) => (
                     <div
-                      className="flex items-center justify-between gap-4 rounded-md bg-white/[0.06] px-4 py-3"
+                      className="flex items-start justify-between gap-4 rounded-md bg-white/[0.06] px-4 py-3"
                       key={label}
                     >
-                      <span className="text-sm text-slate-400">{label}</span>
+                      <span className="shrink-0 text-sm text-slate-400">{label}</span>
                       <span className="text-right text-sm font-semibold text-white">
                         {protectVi(value)}
                       </span>

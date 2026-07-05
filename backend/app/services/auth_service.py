@@ -227,6 +227,28 @@ class AuthService:
             await self._blacklist_payload(payload)
         return True
 
+    async def update_profile(self, user_id: UUID, changes: dict[str, Any]) -> User:
+        """Apply a partial profile update for the authenticated user.
+
+        ``changes`` holds only the fields the client sent (validated at the schema
+        layer). Reject a phone number already used by another account before
+        writing, so the partial unique index cannot raise a raw IntegrityError.
+        """
+        user = await self.user_repository.get_by_id(user_id)
+        if not user:  # pragma: no cover - guarded by auth dependency
+            raise UnauthorizedException(INVALID_SESSION_MESSAGE, error_code="invalid_session")
+        new_phone = changes.get("phone")
+        if new_phone and new_phone != user.phone:
+            existing = await self.user_repository.get_by_phone(new_phone)
+            if existing and existing.id != user_id:
+                raise ConflictException(
+                    "Số điện thoại này đã được sử dụng.", error_code="phone_taken"
+                )
+        updated = await self.user_repository.update(user_id, changes)
+        if not updated:  # pragma: no cover - user existence checked above
+            raise UnauthorizedException(INVALID_SESSION_MESSAGE, error_code="invalid_session")
+        return updated
+
     async def request_password_reset(self, email: str) -> bool:
         """Create a reset token when the email exists without revealing account state."""
         user = await self.user_repository.get_by_email(email.lower())

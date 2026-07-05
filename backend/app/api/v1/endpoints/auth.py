@@ -21,6 +21,7 @@ from app.schemas.user import (
     PasswordChangeRequest,
     PasswordResetConfirm,
     PasswordResetRequest,
+    ProfileUpdate,
     TokenRefreshRequest,
     TokenRefreshResponse,
     UserCreate,
@@ -215,3 +216,20 @@ async def me(
 ) -> User:
     """Return current authenticated user."""
     return user
+
+
+@router.patch("/me", response_model=UserResponse, summary="Update current user profile")
+@limiter.limit("30/minute")
+async def update_me(
+    request: Request,
+    payload: ProfileUpdate,
+    user: Annotated[User, Depends(get_current_active_user)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+) -> User:
+    """Update the caller's profile and default delivery info.
+
+    Only fields present in the request are applied (partial update), so saving
+    one field never clears another.
+    """
+    changes = payload.model_dump(exclude_unset=True)
+    return await auth_service.update_profile(user.id, changes)

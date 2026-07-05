@@ -219,6 +219,90 @@ async def test_me_endpoint_without_auth_returns_401(test_client: AsyncClient) ->
     assert response.status_code == 401
 
 
+async def _register_and_login(test_client: AsyncClient, **overrides: str | None) -> None:
+    await test_client.post("/api/v1/auth/register", json=register_payload(**overrides))
+    email = overrides.get("email", "user@example.com")
+    await test_client.post(
+        "/api/v1/auth/login",
+        json={"identifier": email, "password": PASSWORD},
+    )
+
+
+async def test_update_me_saves_delivery_defaults(test_client: AsyncClient) -> None:
+    await _register_and_login(test_client)
+
+    response = await test_client.patch(
+        "/api/v1/auth/me",
+        json={
+            "full_name": "Tran Thi B",
+            "address": "15 đường số 5, Khu phố 36",
+            "delivery_ward": "Phường Hiệp Bình",
+            "delivery_city": "TP. Hồ Chí Minh",
+            "delivery_notes": "Giao giờ hành chính",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["full_name"] == "Tran Thi B"
+    assert body["address"] == "15 đường số 5, Khu phố 36"
+    assert body["delivery_ward"] == "Phường Hiệp Bình"
+    assert body["delivery_city"] == "TP. Hồ Chí Minh"
+    assert body["delivery_notes"] == "Giao giờ hành chính"
+
+    me = await test_client.get("/api/v1/auth/me")
+    assert me.json()["delivery_ward"] == "Phường Hiệp Bình"
+
+
+async def test_update_me_partial_does_not_clear_other_fields(test_client: AsyncClient) -> None:
+    await _register_and_login(test_client)
+
+    await test_client.patch("/api/v1/auth/me", json={"full_name": "Keep Me"})
+    response = await test_client.patch("/api/v1/auth/me", json={"address": "New street 1"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["full_name"] == "Keep Me"
+    assert body["address"] == "New street 1"
+
+
+async def test_update_me_normalizes_phone(test_client: AsyncClient) -> None:
+    await _register_and_login(test_client)
+
+    # The backend stores phones in E.164 (+84…); the frontend formats them for display.
+    response = await test_client.patch("/api/v1/auth/me", json={"phone": "0708277925"})
+
+    assert response.status_code == 200
+    assert response.json()["phone"] == "+84708277925"
+
+
+async def test_update_me_invalid_phone_returns_422(test_client: AsyncClient) -> None:
+    await _register_and_login(test_client)
+
+    response = await test_client.patch("/api/v1/auth/me", json={"phone": "123"})
+
+    assert response.status_code == 422
+
+
+async def test_update_me_duplicate_phone_returns_409(test_client: AsyncClient) -> None:
+    await test_client.post(
+        "/api/v1/auth/register",
+        json=register_payload(email="taken@example.com", phone="0908888888"),
+    )
+    await _register_and_login(test_client)
+
+    response = await test_client.patch("/api/v1/auth/me", json={"phone": "0908888888"})
+
+    assert response.status_code == 409
+    assert response.json()["error_code"] == "phone_taken"
+
+
+async def test_update_me_without_auth_returns_401(test_client: AsyncClient) -> None:
+    response = await test_client.patch("/api/v1/auth/me", json={"full_name": "No Auth"})
+
+    assert response.status_code == 401
+
+
 async def test_protected_endpoint_with_blacklisted_token_returns_401(
     test_client: AsyncClient,
 ) -> None:

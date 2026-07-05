@@ -25,6 +25,11 @@ class User(Base, UUIDMixin, TimestampMixin):
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
     address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    delivery_ward: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    delivery_city: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, server_default="TP. Hồ Chí Minh"
+    )
+    delivery_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     role: Mapped[str] = mapped_column(String(20), default="customer", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 

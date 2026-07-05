@@ -24,6 +24,9 @@ export const conversationKeys = {
     [...conversationKeys.all, 'messages', conversationId] as const,
   staffList: (params: Record<string, unknown>) =>
     [...conversationKeys.all, 'staff', params] as const,
+  // Stable key so the in-flight send can be observed globally (via useIsMutating)
+  // even after the chat window unmounts on close — the typing state then resumes.
+  send: ['conversations', 'send'] as const,
 }
 
 const DEFAULT_MESSAGE_LIST: MessageListResponse = { items: [], total: 0, skip: 0, limit: 50 }
@@ -125,6 +128,7 @@ export function useSendMessage() {
   const queryClient = useQueryClient()
 
   return useMutation({
+    mutationKey: conversationKeys.send,
     mutationFn: ({ conversationId, data }: { conversationId: string; data: SendMessageRequest }) =>
       conversationsApi.sendMessage(conversationId, data),
     onMutate: async ({ conversationId, data }) => {

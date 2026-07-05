@@ -232,6 +232,68 @@ async def test_authenticated_conversation_prefills_contact_from_endpoint_user(
         app.dependency_overrides.clear()
 
 
+async def test_authenticated_order_reuses_saved_default_address(
+    test_client: AsyncClient,
+    order_session: AsyncSession,
+) -> None:
+    await order_session.execute(
+        text(
+            "TRUNCATE TABLE messages, conversations, order_items, orders, products, users "
+            "RESTART IDENTITY CASCADE"
+        )
+    )
+    saved_address = "15 đường số 5, Khu phố 36, Phường Hiệp Bình, TP. Hồ Chí Minh"
+    user = User(
+        email="saved@example.com",
+        hashed_password="hashed",
+        full_name="Tran Minh Quan",
+        phone="0903026306",
+        address=saved_address,
+        delivery_notes="Giao giờ hành chính",
+        role="customer",
+        is_active=True,
+    )
+    order_session.add(user)
+    await order_session.commit()
+    await order_session.refresh(user)
+    await create_catalog_product(order_session)
+
+    # The extractor returns no contact/address: the saved account defaults must fill them.
+    payload = {
+        "product": "Saigon Petro 12kg",
+        "quantity": 1,
+        "customer_name": None,
+        "customer_phone": None,
+        "delivery_address": None,
+        "payment_method": "cod",
+        "confirmed": False,
+    }
+
+    app.dependency_overrides[get_current_user_optional] = lambda: user
+    app.dependency_overrides[get_intent_classifier] = lambda: PlaceOrderClassifier()
+    app.dependency_overrides[get_llm_provider] = lambda: JSONLLMProvider(payload)
+    app.dependency_overrides[get_rag_pipeline] = lambda: UnusedRAGPipeline()
+    try:
+        started = await test_client.post(
+            "/api/v1/conversations/start",
+            json={"session_id": "chat-order-saved-address"},
+        )
+        conversation_id = started.json()["id"]
+
+        confirmation = await test_client.post(
+            f"/api/v1/conversations/{conversation_id}/messages",
+            json={"content": "Đặt 1 bình Saigon Petro 12kg"},
+        )
+
+        assert confirmation.status_code == 200
+        answer = confirmation.json()["assistant_message"]["content"]
+        # Qiki confirms the saved address instead of asking for a full address again.
+        assert "địa chỉ đã lưu" in answer
+        assert saved_address in answer
+    finally:
+        app.dependency_overrides.clear()
+
+
 async def test_chat_order_confirm_endpoint_creates_real_order(
     test_client: AsyncClient,
     order_session: AsyncSession,

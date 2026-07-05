@@ -51,9 +51,18 @@ export function formatPhoneMasked(phone: string): string {
   return normalized.slice(0, 4) + '****' + normalized.slice(-3)
 }
 
-/** Format phone number for display without masking. */
+/**
+ * Format a phone number for display: convert `+84…` to a local `0…` number and
+ * group 10-digit VN mobiles as 4-3-3 (e.g. `0708 277 925`).
+ *
+ * Landlines (area-code prefixes like `028…`) and already-formatted numbers such
+ * as `(028) 37269435` are returned unchanged — only mobiles get 4-3-3 grouping.
+ */
 export function formatPhone(phone: string): string {
   if (!phone) return ''
-  if (phone.startsWith('+84')) return '0' + phone.slice(3)
-  return phone
+  const local = phone.startsWith('+84') ? '0' + phone.slice(3) : phone
+  if (/^0[35789]\d{8}$/.test(local)) {
+    return `${local.slice(0, 4)} ${local.slice(4, 7)} ${local.slice(7)}`
+  }
+  return local
 }

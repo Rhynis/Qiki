@@ -31,12 +31,31 @@ export function CustomerDeliveryStep({ onNext }: { onNext: () => void }) {
 
   useEffect(() => {
     if (!user) return
+    // Prefill from the saved account profile, but only fields the user has not
+    // already filled, so an in-progress edit is never overwritten.
+    const prefilledWard = form.delivery_ward || user.delivery_ward || ''
     updateForm({
       customer_name: form.customer_name || user.full_name || '',
       customer_phone: form.customer_phone || user.phone || '',
       customer_email: form.customer_email || user.email || '',
+      delivery_address: form.delivery_address || user.address || '',
+      delivery_ward: prefilledWard,
+      delivery_district: form.delivery_district || getDeliveryZoneByWard(prefilledWard) || '',
+      delivery_city: form.delivery_city || user.delivery_city || '',
+      delivery_notes: form.delivery_notes || user.delivery_notes || '',
     })
-  }, [form.customer_email, form.customer_name, form.customer_phone, updateForm, user])
+  }, [
+    form.customer_email,
+    form.customer_name,
+    form.customer_phone,
+    form.delivery_address,
+    form.delivery_city,
+    form.delivery_district,
+    form.delivery_notes,
+    form.delivery_ward,
+    updateForm,
+    user,
+  ])
 
   const submit = () => {
     const result = customerDeliverySchema.safeParse(form)
