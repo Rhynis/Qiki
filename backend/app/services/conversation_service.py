@@ -811,10 +811,16 @@ class ConversationService:
             matched_items,
             account_contact_slots,
         ):
-            account_slots = self._merge_order_slots(slots, account_contact_slots)
+            # Account defaults only FILL gaps: anything the customer typed in this
+            # message (e.g. a one-off delivery address) must win over the saved
+            # profile, so account_contact_slots goes first and slots last.
+            account_slots = self._merge_order_slots(account_contact_slots, slots)
             return result(
                 await order_state_message(
-                    self._format_account_contact_question(account_contact_slots),
+                    self._format_account_contact_question(
+                        account_contact_slots,
+                        include_saved_address=not slots.delivery_address,
+                    ),
                     "awaiting_account_contact_confirmation",
                     account_slots,
                 )
@@ -2529,7 +2535,14 @@ Tin mới:
     def _account_default_contact_slots(user: User | None) -> ChatOrderSlots | None:
         if user is None:
             return None
-        return ChatOrderSlots(customer_name=user.full_name, customer_phone=user.phone)
+        # Reuse the saved default delivery info (same source checkout prefills from)
+        # so an authenticated customer is not asked for name/phone/address again.
+        return ChatOrderSlots(
+            customer_name=user.full_name,
+            customer_phone=user.phone,
+            delivery_address=user.address,
+            delivery_notes=user.delivery_notes,
+        )
 
     @classmethod
     def _should_confirm_account_contact(
@@ -2552,7 +2565,12 @@ Tin mới:
         )
 
     @classmethod
-    def _format_account_contact_question(cls, slots: ChatOrderSlots | None) -> str:
+    def _format_account_contact_question(
+        cls,
+        slots: ChatOrderSlots | None,
+        *,
+        include_saved_address: bool = True,
+    ) -> str:
         if slots is None:
             return "Bạn cho Qiki xin tên người nhận và số điện thoại để lên đơn nhé."
         parts: list[str] = []
@@ -2560,6 +2578,9 @@ Tin mới:
             parts.append(f"tên người nhận là **{slots.customer_name}** (theo tài khoản)")
         if slots.customer_phone:
             parts.append(f"số **{cls._format_phone_display(slots.customer_phone)}**")
+        # Only offer the saved address when the customer did not type a new one.
+        if include_saved_address and slots.delivery_address:
+            parts.append(f"giao tới địa chỉ đã lưu **{slots.delivery_address}**")
         detail = ", ".join(parts) if parts else "thông tin tài khoản"
         return f"Dạ {detail} phải không ạ? Nếu khác bạn cho Qiki biết nhé."
 

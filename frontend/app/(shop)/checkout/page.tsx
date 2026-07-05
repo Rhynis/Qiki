@@ -12,7 +12,6 @@ import { useCheckoutStore } from '@/lib/stores/checkout-store'
 export default function CheckoutPage() {
   const step = useCheckoutStore((state) => state.step)
   const nextStep = useCheckoutStore((state) => state.nextStep)
-  const form = useCheckoutStore((state) => state.form)
 
   return (
     <section className="mx-auto max-w-6xl space-y-6 px-4 py-8">
@@ -25,7 +24,7 @@ export default function CheckoutPage() {
           {step === 3 ? <PaymentStep onNext={nextStep} /> : null}
           {step === 4 ? <ConfirmStep /> : null}
         </div>
-        <OrderSummarySidebar city={form.delivery_city} />
+        <OrderSummarySidebar />
       </div>
     </section>
   )

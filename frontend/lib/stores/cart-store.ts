@@ -2,17 +2,33 @@
 
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
-import type { Product } from '@/types/product'
+import type { Product, ProductCategory } from '@/types/product'
+
+/** Water delivery fee per unit (VND). Mirrors the server's OrderService. */
+export const WATER_DELIVERY_FEE_PER_UNIT = 5000
 
 export interface CartItem {
   productId: string
   name: string
   brand: string
+  category?: ProductCategory
   sizeKg: number
   unit: string
   price: number
   quantity: number
   imageUrl?: string | null
+}
+
+/**
+ * Compute the display-only delivery fee, mirroring the server: water is charged
+ * per unit, gas (and anything else) ships free, and an empty cart is always 0.
+ * The server recomputes the authoritative total at checkout.
+ */
+export function calculateCartShipping(items: CartItem[]): number {
+  const waterUnits = items
+    .filter((item) => item.category === 'nuoc_uong')
+    .reduce((sum, item) => sum + item.quantity, 0)
+  return WATER_DELIVERY_FEE_PER_UNIT * waterUnits
 }
 
 interface CartState {
@@ -47,6 +63,7 @@ export const useCartStore = create<CartState>()(
               productId: product.id,
               name: product.name,
               brand: product.brand,
+              category: product.category,
               sizeKg: Number(product.size_kg),
               unit: product.unit,
               price: Number(product.price),

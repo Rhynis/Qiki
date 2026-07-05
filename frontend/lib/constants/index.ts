@@ -1,24 +1,30 @@
 /** Application-wide constants. */
 
+import { formatPhone } from '@/lib/utils/format'
+
 export const APP_NAME = 'Gas Quốc Cường'
 export const APP_DESCRIPTION = 'Mua gas LPG an toàn tại Bình Thạnh và Thủ Đức'
 export const API_BASE_URL = ''
 
 // Address/area strings use plain spaces; wrap them with protectVi() (lib/utils)
 // at render time so proper-noun phrases (Bình Thạnh, Thủ Đức...) don't line-break.
+// Phone labels run through the shared formatPhone (4-3-3 for mobiles) so every
+// user-facing number matches; the landline keeps its own area-code format.
 export const SHOP_INFO = {
   name: APP_NAME,
   hotline: {
-    label: '090 3026306',
+    label: formatPhone('0903026306'),
     value: '0903026306',
     href: 'tel:0903026306',
   },
   zalo: {
-    label: 'Zalo 090 3026306',
+    label: `Zalo ${formatPhone('0903026306')}`,
+    value: '0903026306',
     href: 'https://zalo.me/0903026306',
   },
   landline: {
     label: '(028) 37269435',
+    value: '02837269435',
     href: 'tel:02837269435',
   },
   hours: {

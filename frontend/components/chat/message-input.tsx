@@ -48,6 +48,9 @@ export function MessageInput({ disabled, rateLimited, sending, onSend }: Message
         <Button
           type="submit"
           size="icon"
+          className="h-11 w-11 shrink-0"
+          title="Gửi"
+          aria-label="Gửi"
           disabled={disabled || rateLimited || sending || !content.trim()}
         >
           <SendHorizonal className="h-4 w-4" />

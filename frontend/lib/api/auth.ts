@@ -8,9 +8,22 @@ export interface User {
   email_verified: boolean
   full_name: string | null
   phone: string | null
+  address: string | null
+  delivery_ward: string | null
+  delivery_city: string | null
+  delivery_notes: string | null
   role: UserRole
   is_active: boolean
   created_at: string
+}
+
+export interface ProfileUpdate {
+  full_name?: string
+  phone?: string
+  address?: string
+  delivery_ward?: string
+  delivery_city?: string
+  delivery_notes?: string
 }
 
 export interface RegisterData {
@@ -51,6 +64,11 @@ export async function refreshToken(): Promise<TokenResponse> {
 
 export async function getCurrentUser(): Promise<User> {
   const response = await apiClient.get<User>('/api/v1/auth/me')
+  return response.data
+}
+
+export async function updateProfile(data: ProfileUpdate): Promise<User> {
+  const response = await apiClient.patch<User>('/api/v1/auth/me', data)
   return response.data
 }
 

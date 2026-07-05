@@ -2,7 +2,6 @@
  * Derive human-readable summaries for admin chat conversation rows
  * (title, intent label, last activity, relative time, search matching).
  */
-import { formatPhone } from '@/lib/utils/format'
 import type { Conversation, Message } from '@/types/conversation'
 
 export type ChatFilter = 'all' | 'escalated' | 'emergency' | 'flagged'
@@ -64,7 +63,12 @@ export function conversationFollowupNote(conversation: Conversation): FollowupNo
 export function conversationPhone(conversation: Conversation): string | null {
   for (const message of conversation.messages) {
     const match = VN_PHONE.exec(message.content)
-    if (match?.[1]) return formatPhone(match[1])
+    // Return the normalized local digits (an identifier/title), not the spaced
+    // display format from formatPhone.
+    if (match?.[1]) {
+      const raw = match[1]
+      return raw.startsWith('+84') ? '0' + raw.slice(3) : raw
+    }
   }
   return null
 }

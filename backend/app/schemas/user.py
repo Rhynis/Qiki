@@ -75,6 +75,28 @@ class UserUpdate(BaseModel):
         return VietnamesePhoneValidator.validate(value)
 
 
+class ProfileUpdate(BaseModel):
+    """Self-service profile update payload (PATCH /auth/me).
+
+    All fields are optional; only fields present in the request are applied, so a
+    partial update never clears an unrelated field.
+    """
+
+    full_name: str | None = Field(default=None, min_length=2, max_length=255)
+    phone: str | None = None
+    address: str | None = None
+    delivery_ward: str | None = Field(default=None, max_length=100)
+    delivery_city: str | None = Field(default=None, max_length=100)
+    delivery_notes: str | None = None
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, value: str | None) -> str | None:
+        if value is None or value == "":
+            return None
+        return VietnamesePhoneValidator.validate(value)
+
+
 class UserResponse(UserBase):
     """Public user response without password fields."""
 
@@ -84,6 +106,10 @@ class UserResponse(UserBase):
     role: str
     is_active: bool
     email_verified: bool = False
+    address: str | None = None
+    delivery_ward: str | None = None
+    delivery_city: str | None = None
+    delivery_notes: str | None = None
     created_at: datetime
 
 

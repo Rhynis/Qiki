@@ -3,19 +3,14 @@
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
-import { useCartStore } from '@/lib/stores/cart-store'
+import { calculateCartShipping, useCartStore } from '@/lib/stores/cart-store'
 import { formatPrice } from '@/lib/utils/format'
 
-export function getShippingFee(subtotal: number, city = 'TP. Hồ Chí Minh') {
-  if (subtotal >= 1000000) return 0
-  if (city.includes('Hồ Chí Minh')) return 30000
-  return 50000
-}
-
-export function OrderSummarySidebar({ city = 'TP. Hồ Chí Minh' }: { city?: string }) {
+export function OrderSummarySidebar() {
   const items = useCartStore((state) => state.items)
   const subtotal = useCartStore((state) => state.getTotal())
-  const shippingFee = getShippingFee(subtotal, city)
+  // Shipping is display-only and mirrors the server; an empty cart is always 0đ.
+  const shippingFee = calculateCartShipping(items)
   const total = subtotal + shippingFee
 
   return (

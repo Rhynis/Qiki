@@ -1,4 +1,5 @@
 import { AlertTriangle, Phone } from 'lucide-react'
+import { SHOP_INFO } from '@/lib/constants'
 
 export function EmergencyBanner() {
   return (
@@ -8,9 +9,9 @@ export function EmergencyBanner() {
         <div className="space-y-1">
           <p className="font-semibold">Khẩn cấp an toàn gas</p>
           <p>Khóa van gas, mở cửa thông gió, không bật/tắt thiết bị điện.</p>
-          <a className="inline-flex items-center gap-1 font-semibold" href="tel:0903026306">
+          <a className="inline-flex items-center gap-1 font-semibold" href={SHOP_INFO.hotline.href}>
             <Phone className="h-4 w-4" />
-            090 3026306
+            {SHOP_INFO.hotline.label}
           </a>
         </div>
       </div>

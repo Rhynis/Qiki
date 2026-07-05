@@ -65,8 +65,12 @@ export function Header() {
                   <ChevronDown aria-hidden="true" className="h-4 w-4" />
                 </button>
               </DropdownMenuTrigger>
+              {/* The trigger is the chevron to the right of the "Sản phẩm" link;
+                  shift the menu left by the fixed label width so it opens flush,
+                  left-aligned under "Sản phẩm" instead of drifting toward "Tra cứu". */}
               <DropdownMenuContent
                 align="start"
+                alignOffset={-72}
                 onMouseEnter={openProductMenu}
                 onMouseLeave={scheduleProductMenuClose}
               >

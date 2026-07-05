@@ -84,6 +84,15 @@ export function useAuth() {
     router.push('/login')
   }
 
+  const updateProfile = useCallback(
+    async (data: authApi.ProfileUpdate) => {
+      const updated = await authApi.updateProfile(data)
+      setUser(updated)
+      return updated
+    },
+    [setUser]
+  )
+
   return {
     user,
     session,
@@ -96,6 +105,7 @@ export function useAuth() {
     logout,
     register,
     changePassword,
+    updateProfile,
     refreshUser,
   }
 }

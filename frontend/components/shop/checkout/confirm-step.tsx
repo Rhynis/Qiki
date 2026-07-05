@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { useCreateOrder } from '@/lib/hooks/use-orders'
 import { useCartStore } from '@/lib/stores/cart-store'
 import { useCheckoutStore } from '@/lib/stores/checkout-store'
-import { formatPrice } from '@/lib/utils/format'
+import { formatPhone, formatPrice } from '@/lib/utils/format'
 import type { CheckoutRequest } from '@/types/order'
 import { getDeliveryZoneByWard } from '@/utils/vietnamese-address'
 
@@ -86,7 +86,7 @@ export function ConfirmStep() {
           <div>
             <p className="text-slate-600">Khách hàng</p>
             <p className="font-medium">{form.customer_name}</p>
-            <p>{form.customer_phone}</p>
+            <p>{formatPhone(form.customer_phone)}</p>
           </div>
           <div>
             <p className="text-slate-600">Giao đến</p>
