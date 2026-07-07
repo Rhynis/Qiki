@@ -1,4 +1,5 @@
-import { MessageCircle, Phone } from 'lucide-react'
+import { Phone } from 'lucide-react'
+import { ZaloIcon } from '@/components/icons/zalo-icon'
 import { SHOP_INFO } from '@/lib/constants'
 
 export function FloatingContact() {
@@ -14,13 +15,12 @@ export function FloatingContact() {
       </a>
       <a
         aria-label="Nhắn Zalo Gas Quốc Cường"
-        className="inline-flex h-12 items-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        className="inline-flex h-12 items-center rounded-full bg-white px-2 shadow-lg ring-1 ring-black/5 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         href={SHOP_INFO.zalo.href}
         rel="noreferrer"
         target="_blank"
       >
-        <MessageCircle className="h-4 w-4" />
-        <span className="hidden sm:inline">Zalo</span>
+        <ZaloIcon className="h-8 w-8 rounded-lg" />
       </a>
     </div>
   )
