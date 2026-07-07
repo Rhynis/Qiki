@@ -15,12 +15,12 @@ export function FloatingContact() {
       </a>
       <a
         aria-label="Nhắn Zalo Gas Quốc Cường"
-        className="inline-flex h-12 items-center rounded-full bg-white px-2 shadow-lg ring-1 ring-black/5 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        className="inline-flex h-12 w-12 items-center justify-center rounded-2xl shadow-lg transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         href={SHOP_INFO.zalo.href}
         rel="noreferrer"
         target="_blank"
       >
-        <ZaloIcon className="h-8 w-8 rounded-lg" />
+        <ZaloIcon className="h-12 w-12 rounded-2xl" />
       </a>
     </div>
   )
