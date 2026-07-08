@@ -66,11 +66,13 @@ export function Header() {
                 </button>
               </DropdownMenuTrigger>
               {/* The trigger is the chevron to the right of the "Sản phẩm" link;
-                  shift the menu left by the fixed label width so it opens flush,
-                  left-aligned under "Sản phẩm" instead of drifting toward "Tra cứu". */}
+                  shift the menu left so the item labels (not just the box) line up
+                  under the start of "Sản phẩm" instead of drifting right. The extra
+                  ~24px past the label width accounts for the menu's own left inset
+                  (content + item padding) so "Gas"/"Nước Uống" sit under the "S". */}
               <DropdownMenuContent
                 align="start"
-                alignOffset={-72}
+                alignOffset={-96}
                 onMouseEnter={openProductMenu}
                 onMouseLeave={scheduleProductMenuClose}
               >
