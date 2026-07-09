@@ -47,7 +47,8 @@ const sections: GuideSection[] = [
         items: [
           {
             term: 'Quản trị viên (admin)',
-            description: 'Toàn quyền: sản phẩm, đơn hàng, chat, kho tri thức, người dùng và dashboard.',
+            description:
+              'Toàn quyền: sản phẩm, đơn hàng, chat, kho tri thức, người dùng và dashboard.',
           },
           {
             term: 'Nhân viên (staff)',
@@ -131,8 +132,14 @@ const sections: GuideSection[] = [
       {
         kind: 'definitions',
         items: [
-          { term: 'Chờ xác nhận (pending)', description: 'Đơn mới, có thể chuyển sang Đã xác nhận hoặc Đã hủy.' },
-          { term: 'Đã xác nhận (confirmed)', description: 'Có thể chuyển sang Đang giao hoặc Đã hủy.' },
+          {
+            term: 'Chờ xác nhận (pending)',
+            description: 'Đơn mới, có thể chuyển sang Đã xác nhận hoặc Đã hủy.',
+          },
+          {
+            term: 'Đã xác nhận (confirmed)',
+            description: 'Có thể chuyển sang Đang giao hoặc Đã hủy.',
+          },
           { term: 'Đang giao (shipping)', description: 'Có thể chuyển sang Đã giao hoặc Đã hủy.' },
           { term: 'Đã giao (delivered)', description: 'Trạng thái cuối, không chuyển tiếp được.' },
           { term: 'Đã hủy (cancelled)', description: 'Trạng thái cuối, không chuyển tiếp được.' },
@@ -164,7 +171,8 @@ const sections: GuideSection[] = [
           },
           {
             term: 'Tồn kho (stock)',
-            description: 'Số lượng còn bán; hết hàng sẽ được cảnh báo ở ô "Tồn kho thấp" trên dashboard.',
+            description:
+              'Số lượng còn bán; hết hàng sẽ được cảnh báo ở ô "Tồn kho thấp" trên dashboard.',
           },
           {
             term: 'Biến thể',
@@ -223,7 +231,8 @@ const sections: GuideSection[] = [
           },
           {
             term: 'Đang hoạt động / Vô hiệu hóa',
-            description: 'Tài khoản bị vô hiệu hóa không đăng nhập được cho tới khi được kích hoạt lại.',
+            description:
+              'Tài khoản bị vô hiệu hóa không đăng nhập được cho tới khi được kích hoạt lại.',
           },
         ],
       },
@@ -242,7 +251,10 @@ const sections: GuideSection[] = [
           { term: 'Đơn chờ xử lý', description: 'Số đơn đang ở trạng thái Chờ xác nhận.' },
           { term: 'Doanh thu hôm nay', description: 'Tổng tiền các đơn trong ngày.' },
           { term: 'Tồn kho thấp', description: 'Số sản phẩm sắp/đã hết cần nhập thêm.' },
-          { term: 'Người dùng / Người dùng mới', description: 'Tổng số tài khoản và số mới gần đây.' },
+          {
+            term: 'Người dùng / Người dùng mới',
+            description: 'Tổng số tài khoản và số mới gần đây.',
+          },
           {
             term: 'Ô chat (Cần hỗ trợ / Khẩn cấp / Bị flag)',
             description: 'Đếm nhanh các cuộc trò chuyện cần chú ý (xem mục Chat).',
