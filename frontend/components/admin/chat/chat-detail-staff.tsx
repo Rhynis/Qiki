@@ -1,6 +1,6 @@
 'use client'
 
-import { CheckCircle2, PhoneCall, SendHorizonal } from 'lucide-react'
+import { PhoneCall, SendHorizonal } from 'lucide-react'
 import { FormEvent, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -10,12 +10,19 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   useConversation,
   useMessages,
-  useResolveConversation,
   useSendStaffMessage,
+  useUpdateConversationStatus,
 } from '@/lib/hooks/use-conversation'
 import { cn } from '@/lib/utils'
-import { conversationFollowupNote } from '@/lib/utils/conversation-summary'
+import {
+  conversationCode,
+  conversationFollowupNote,
+  conversationStatusLabel,
+  settableStatusOptions,
+} from '@/lib/utils/conversation-summary'
+import { formatDate } from '@/lib/utils/format'
 import { EmergencyBanner } from '@/components/chat/emergency-banner'
+import type { SettableConversationStatus } from '@/types/conversation'
 
 type ChatDetailStaffProps = {
   conversationId: string
@@ -26,7 +33,9 @@ export function ChatDetailStaff({ conversationId }: ChatDetailStaffProps) {
   const conversation = useConversation(conversationId)
   const messages = useMessages(conversationId, true)
   const sendStaffMessage = useSendStaffMessage()
-  const resolveConversation = useResolveConversation()
+  const updateStatus = useUpdateConversationStatus()
+  const currentStatus = conversation.data?.status
+  const settableStatusValues = new Set<string>(settableStatusOptions.map((option) => option.value))
   const hasEmergency = messages.data?.items.some((message) => message.is_emergency)
   const followup = conversation.data
     ? conversationFollowupNote({
@@ -45,24 +54,49 @@ export function ChatDetailStaff({ conversationId }: ChatDetailStaffProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold text-slate-900">Chi tiết chat</h1>
           <p className="text-sm text-slate-600">
-            {conversation.data?.session_id ?? conversationId}
+            <span className="font-mono">
+              {conversation.data ? conversationCode(conversation.data) : conversationId}
+            </span>
+            {conversation.data ? ` · Bắt đầu ${formatDate(conversation.data.created_at)}` : null}
           </p>
         </div>
-        <div className="flex gap-2">
-          <Badge variant="outline">{conversation.data?.status ?? 'loading'}</Badge>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={resolveConversation.isPending}
-            onClick={() => resolveConversation.mutate({ conversationId, data: {} })}
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline">
+            {conversation.data ? conversationStatusLabel(conversation.data.status) : '...'}
+          </Badge>
+          <label className="sr-only" htmlFor="conversation-status">
+            Trạng thái
+          </label>
+          <select
+            id="conversation-status"
+            className="h-9 rounded-md border bg-white px-2 text-sm"
+            value={conversation.data?.status ?? 'active'}
+            disabled={!conversation.data || updateStatus.isPending}
+            onChange={(event) =>
+              updateStatus.mutate({
+                conversationId,
+                status: event.target.value as SettableConversationStatus,
+              })
+            }
           >
-            <CheckCircle2 className="mr-2 h-4 w-4" />
-            Kết thúc
-          </Button>
+            {/* Show a read-only entry for a legacy status (e.g. "abandoned") that
+                is not one of the settable options, so the control never renders
+                with a value that has no matching option. */}
+            {currentStatus && !settableStatusValues.has(currentStatus) ? (
+              <option value={currentStatus} disabled>
+                {conversationStatusLabel(currentStatus)}
+              </option>
+            ) : null}
+            {settableStatusOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -99,6 +133,14 @@ export function ChatDetailStaff({ conversationId }: ChatDetailStaffProps) {
                       )}
                     >
                       <p>{message.content}</p>
+                      <p
+                        className={cn(
+                          'mt-1 text-xs',
+                          message.role === 'staff' ? 'text-slate-300' : 'text-slate-500'
+                        )}
+                      >
+                        {formatDate(message.created_at)}
+                      </p>
                       {message.flagged_for_review ? (
                         <p className="mt-1 text-xs font-semibold text-red-700">Cần xem lại</p>
                       ) : null}

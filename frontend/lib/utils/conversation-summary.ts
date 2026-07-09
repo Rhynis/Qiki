@@ -2,12 +2,48 @@
  * Derive human-readable summaries for admin chat conversation rows
  * (title, intent label, last activity, relative time, search matching).
  */
-import type { Conversation, Message } from '@/types/conversation'
+import type {
+  Conversation,
+  ConversationStatus,
+  Message,
+  SettableConversationStatus,
+} from '@/types/conversation'
 
 export type ChatFilter = 'all' | 'escalated' | 'emergency' | 'flagged'
 
 const VN_PHONE = /(?:^|[^\d])((?:\+84|0)\d{9})(?!\d)/
 const SNIPPET_MAX = 60
+
+/** Vietnamese labels for every conversation status. */
+export const conversationStatusLabels: Record<ConversationStatus, string> = {
+  active: 'Đang hoạt động',
+  escalated: 'Cần hỗ trợ',
+  flagged: 'Bị flag',
+  resolved: 'Đã xử lý',
+  closed: 'Đã kết thúc',
+  abandoned: 'Bỏ dở',
+}
+
+/** Statuses (with labels) staff can set from the detail view. */
+export const settableStatusOptions: Array<{
+  value: SettableConversationStatus
+  label: string
+}> = [
+  { value: 'active', label: conversationStatusLabels.active },
+  { value: 'escalated', label: conversationStatusLabels.escalated },
+  { value: 'flagged', label: conversationStatusLabels.flagged },
+  { value: 'resolved', label: conversationStatusLabels.resolved },
+  { value: 'closed', label: conversationStatusLabels.closed },
+]
+
+export function conversationStatusLabel(status: string): string {
+  return conversationStatusLabels[status as ConversationStatus] ?? status
+}
+
+/** Short human code (CT-…) if present, else a session-id fallback. */
+export function conversationCode(conversation: Conversation): string {
+  return conversation.code ?? `Phiên ${conversation.session_id.slice(0, 8)}`
+}
 
 const intentLabels: Record<string, string> = {
   place_order: 'Đặt hàng',
@@ -92,7 +128,7 @@ export function conversationTitle(conversation: Conversation): string {
     return firstUser.length > SNIPPET_MAX ? `${firstUser.slice(0, SNIPPET_MAX)}…` : firstUser
   }
 
-  return `Phiên ${conversation.session_id.slice(0, 8)}`
+  return conversationCode(conversation)
 }
 
 export function conversationLastText(conversation: Conversation): string {
@@ -129,6 +165,7 @@ export function matchesChatFilter(conversation: Conversation, filter: ChatFilter
 export function matchesConversationSearch(conversation: Conversation, query: string): boolean {
   const needle = query.trim().toLowerCase()
   if (!needle) return true
+  if (conversation.code?.toLowerCase().includes(needle)) return true
   if (conversation.session_id.toLowerCase().includes(needle)) return true
   const phone = conversationPhone(conversation)
   if (phone && phone.includes(needle)) return true

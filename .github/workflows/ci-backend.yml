@@ -81,4 +81,10 @@ jobs:
       # PYSEC-2026-597: nltk 3.9.4 (transitive via underthesea, our VI tokenizer);
       # 3.9.4 is the latest release and the advisory has no fix version yet. Revisit
       # once upstream ships a patched nltk.
-      - run: pip-audit --strict --ignore-vuln GHSA-8rrh-rw8j-w5fx --ignore-vuln PYSEC-2026-597
+      # PYSEC-2026-1325: ecdsa (transitive); no fix version published yet.
+      # PYSEC-2026-1805: protobuf 4.25.x pinned by the google-generativeai/grpc stack;
+      # the fix (protobuf>=5.29.6) is a major bump those libraries do not yet allow.
+      - run: >-
+          pip-audit --strict
+          --ignore-vuln GHSA-8rrh-rw8j-w5fx --ignore-vuln PYSEC-2026-597
+          --ignore-vuln PYSEC-2026-1325 --ignore-vuln PYSEC-2026-1805

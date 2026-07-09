@@ -22,8 +22,8 @@ describe('format utilities', () => {
 
   it('formats dates with and without time', () => {
     const date = new Date('2026-05-25T14:30:00+07:00')
-    expect(formatDate(date, false)).toContain('25/05/2026')
-    expect(formatDate(date, true)).toContain('25/05/2026')
+    expect(formatDate(date, false)).toBe('25-05-2026')
+    expect(formatDate(date, true)).toContain('25-05-2026')
   })
 
   it('formats mobile numbers as 4-3-3 and converts +84 to 0', () => {

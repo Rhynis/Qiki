@@ -8,6 +8,7 @@ import type {
   ResolveRequest,
   SendMessageRequest,
   SendMessageResponse,
+  SettableConversationStatus,
   StaffMessageRequest,
   StartConversationRequest,
   TransferRequest,
@@ -67,6 +68,17 @@ export async function resolveConversation(
   const response = await apiClient.post<Conversation>(
     `/api/v1/conversations/${conversationId}/resolve`,
     data
+  )
+  return response.data
+}
+
+export async function updateConversationStatus(
+  conversationId: string,
+  status: SettableConversationStatus
+): Promise<Conversation> {
+  const response = await apiClient.patch<Conversation>(
+    `/api/v1/staff/conversations/${conversationId}/status`,
+    { status }
   )
   return response.data
 }

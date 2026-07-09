@@ -24,14 +24,16 @@ export function formatProductSize(size: number | string, unit = 'kg'): string {
   return `${formatted} ${unit}`
 }
 
-/** Format a date in Vietnamese format. */
+/** Format a date in Vietnamese format as dd-mm-yyyy (with time when requested). */
 export function formatDate(date: Date | string, includeTime = true): string {
   const d = typeof date === 'string' ? new Date(date) : date
   const dateStr = new Intl.DateTimeFormat('vi-VN', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
-  }).format(d)
+  })
+    .format(d)
+    .replace(/\//g, '-')
 
   if (!includeTime) return dateStr
 

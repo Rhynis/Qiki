@@ -31,6 +31,7 @@ from app.schemas.conversation import (
     ConversationCreateRequest,
     ConversationListResponse,
     ConversationResponse,
+    ConversationStatusUpdate,
     FeedbackRequest,
     ResolveRequest,
     SendMessageRequest,
@@ -220,6 +221,22 @@ async def staff_send_message(
 ) -> MessageResponse:
     """Send a staff reply."""
     return await service.staff_send_message(conversation_id, payload.content, staff)
+
+
+@router.patch(
+    "/staff/conversations/{conversation_id}/status",
+    response_model=ConversationResponse,
+    summary="Set a conversation status",
+)
+async def set_conversation_status(
+    conversation_id: UUID,
+    payload: ConversationStatusUpdate,
+    staff: Annotated[User, Depends(get_current_staff)],
+    service: Annotated[ConversationService, Depends(get_conversation_service)],
+) -> ConversationResponse:
+    """Set a conversation status directly (staff action)."""
+    del staff
+    return await service.set_conversation_status(conversation_id, payload.status)
 
 
 @router.post(

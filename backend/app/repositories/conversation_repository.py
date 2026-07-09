@@ -1,15 +1,19 @@
 """Repository for chatbot conversations."""
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import CursorResult, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import NotFoundException
 from app.models.conversation import Conversation
+
+# Human-friendly conversation code, mirroring the orders GB-YYYYMMDD-NNNN scheme.
+CONVERSATION_CODE_PREFIX = "CT"
+CONVERSATION_CODE_COUNTER_WIDTH = 3
 
 
 class ConversationRepository:
@@ -19,12 +23,34 @@ class ConversationRepository:
         self.session = session
 
     async def create(self, data: dict[str, Any]) -> Conversation:
-        """Create a conversation."""
+        """Create a conversation, assigning a human-friendly code if unset."""
+        if not data.get("code"):
+            data["code"] = await self._next_conversation_code()
         conversation = Conversation(**data)
         self.session.add(conversation)
         await self.session.flush()
         await self.session.refresh(conversation)
         return conversation
+
+    async def _next_conversation_code(self) -> str:
+        """Generate a daily sequential code under a transaction advisory lock."""
+        today = datetime.now(UTC).strftime("%Y%m%d")
+        await self.session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext(:lock_key))"),
+            {"lock_key": f"conversations:{today}"},
+        )
+        result = await self.session.execute(
+            text(
+                """
+                SELECT COALESCE(MAX(CAST(SUBSTRING(code FROM 13) AS INTEGER)), 0) + 1
+                FROM conversations
+                WHERE code ~ :pattern
+                """
+            ),
+            {"pattern": rf"^{CONVERSATION_CODE_PREFIX}-{today}-[0-9]+$"},
+        )
+        counter = int(result.scalar_one())
+        return f"{CONVERSATION_CODE_PREFIX}-{today}-{counter:0{CONVERSATION_CODE_COUNTER_WIDTH}d}"
 
     async def get_by_id(self, conversation_id: UUID) -> Conversation | None:
         """Fetch a conversation with messages."""
@@ -111,6 +137,48 @@ class ConversationRepository:
         await self.session.flush()
         await self.session.refresh(conversation)
         return conversation
+
+    async def set_status(self, conversation_id: UUID, status: str) -> Conversation:
+        """Set a conversation status directly and stamp the relevant timestamp."""
+        conversation = await self._require(conversation_id)
+        conversation.status = status
+        now = datetime.now(UTC)
+        if status == "resolved":
+            conversation.resolved_at = now
+        elif status == "escalated" and conversation.escalated_at is None:
+            conversation.escalated_at = now
+        elif status == "active":
+            # Reopening: drop stale terminal timestamps so they don't misrepresent
+            # an active conversation.
+            conversation.resolved_at = None
+            conversation.escalated_at = None
+        await self.session.flush()
+        await self.session.refresh(conversation)
+        return conversation
+
+    async def close_stale(self, cutoff: datetime) -> int:
+        """Close active conversations whose last activity is older than ``cutoff``.
+
+        Staleness is measured from the most recent message (falling back to the
+        conversation's own ``created_at`` when it has none). Returns the count of
+        conversations closed.
+        """
+        result = await self.session.execute(
+            text(
+                """
+                UPDATE conversations AS c
+                SET status = 'closed'
+                WHERE c.status = 'active'
+                  AND COALESCE(
+                        (SELECT MAX(m.created_at) FROM messages m
+                         WHERE m.conversation_id = c.id),
+                        c.created_at
+                      ) < :cutoff
+                """
+            ),
+            {"cutoff": cutoff},
+        )
+        return cast("CursorResult[Any]", result).rowcount or 0
 
     async def assign_to_staff(
         self,

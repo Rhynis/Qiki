@@ -9,7 +9,12 @@ from pydantic import BaseModel, Field
 
 from app.schemas.message import MessageResponse
 
-ConversationStatus = Literal["active", "escalated", "resolved", "abandoned"]
+# "abandoned" is a legacy value kept so existing rows validate; new terminal
+# closures use "closed". "flagged" lets staff mark a conversation for follow-up.
+ConversationStatus = Literal["active", "escalated", "flagged", "resolved", "closed", "abandoned"]
+
+# Statuses staff can set directly from the admin detail view.
+SettableConversationStatus = Literal["active", "escalated", "flagged", "resolved", "closed"]
 
 
 class ConversationCreateRequest(BaseModel):
@@ -57,12 +62,19 @@ class ResolveRequest(BaseModel):
     satisfaction_rating: int | None = Field(default=None, ge=1, le=5)
 
 
+class ConversationStatusUpdate(BaseModel):
+    """Staff request to set a conversation status directly."""
+
+    status: SettableConversationStatus
+
+
 class ConversationResponse(BaseModel):
     """Conversation returned by API responses."""
 
     id: UUID
     user_id: UUID | None = None
     session_id: str
+    code: str | None = None
     status: ConversationStatus
     assigned_to: UUID | None = None
     escalated_at: datetime | None = None

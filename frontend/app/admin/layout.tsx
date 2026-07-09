@@ -4,6 +4,7 @@ import {
   BookOpenText,
   ClipboardList,
   LayoutDashboard,
+  LifeBuoy,
   MessageSquareText,
   Package,
   Users,
@@ -25,6 +26,7 @@ const navItems = [
   { href: '/admin/chat', label: 'Chat', icon: MessageSquareText },
   { href: '/admin/knowledge-base', label: 'Knowledge Base', icon: BookOpenText },
   { href: '/admin/users', label: 'Người dùng', icon: Users },
+  { href: '/admin/guide', label: 'Cẩm nang', icon: LifeBuoy },
 ]
 
 export default function AdminLayout({ children }: AdminLayoutProps) {

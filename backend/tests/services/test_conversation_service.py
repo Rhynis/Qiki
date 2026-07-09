@@ -101,6 +101,33 @@ class FakeConversationRepository:
         conversation.resolved_at = datetime.now(UTC)
         return conversation
 
+    async def set_status(self, conversation_id: uuid.UUID, status: str) -> Conversation:
+        conversation = self.items[conversation_id]
+        conversation.status = status
+        now = datetime.now(UTC)
+        if status == "resolved":
+            conversation.resolved_at = now
+        elif status == "escalated" and conversation.escalated_at is None:
+            conversation.escalated_at = now
+        elif status == "active":
+            conversation.resolved_at = None
+            conversation.escalated_at = None
+        return conversation
+
+    async def close_stale(self, cutoff: datetime) -> int:
+        count = 0
+        for item in self.items.values():
+            if item.status != "active":
+                continue
+            last_activity = max(
+                (message.created_at for message in item.messages),
+                default=item.created_at,
+            )
+            if last_activity < cutoff:
+                item.status = "closed"
+                count += 1
+        return count
+
 
 class FakeMessageRepository:
     def __init__(self, conversations: FakeConversationRepository) -> None:
@@ -400,6 +427,62 @@ async def test_starts_conversation() -> None:
 
     assert response.session_id == "abc"
     assert response.status == "active"
+
+
+@pytest.mark.asyncio
+async def test_start_conversation_greets_guest() -> None:
+    service, _conversations, _messages, rag, _orders = make_service()
+
+    response = await service.start_conversation(user=None, session_id="abc")
+
+    assert len(response.messages) == 1
+    greeting = response.messages[0]
+    assert greeting.role == "assistant"
+    assert greeting.content.startswith("Chào quý khách!")
+    assert "Qiki" in greeting.content
+    assert rag.calls == 0  # greeting is deterministic, no LLM call
+
+
+@pytest.mark.asyncio
+async def test_start_conversation_greets_authenticated_user_by_name() -> None:
+    service, _conversations, _messages, _rag, _orders = make_service()
+
+    response = await service.start_conversation(
+        user=account_user(full_name="Tran Minh Quan"), session_id="abc"
+    )
+
+    assert response.messages[0].content.startswith("Chào anh/chị Tran Minh Quan!")
+
+
+@pytest.mark.asyncio
+async def test_set_conversation_status_stamps_resolved() -> None:
+    service, _conversations, _messages, _rag, _orders = make_service()
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    updated = await service.set_conversation_status(conversation.id, "resolved")
+
+    assert updated.status == "resolved"
+    assert updated.resolved_at is not None
+
+
+@pytest.mark.asyncio
+async def test_list_staff_conversations_auto_closes_stale() -> None:
+    service, conversations, _messages, _rag, _orders = make_service()
+    stale_time = datetime.now(UTC) - timedelta(days=10)
+    stale = Conversation(
+        id=uuid.uuid4(),
+        session_id="stale",
+        status="active",
+        created_at=stale_time,
+        updated_at=stale_time,
+        messages=[],
+    )
+    conversations.items[stale.id] = stale
+    staff = User(id=uuid.uuid4(), email="staff@example.com", role="staff", is_active=True)
+
+    await service.list_staff_conversations(staff, None, 0, 20)
+
+    assert stale.status == "closed"
 
 
 @pytest.mark.asyncio
