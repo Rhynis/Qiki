@@ -13,6 +13,7 @@ from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.exceptions import NotFoundException
 from app.core.input_validation import VietnamesePhoneValidator
 from app.intent.base import BaseIntentClassifier
@@ -82,6 +83,15 @@ AMBIGUOUS_DELIVERY_PERIODS = {"sang", "trua", "chieu", "toi", "dem"}
 # Accent-stripped buổi keyword -> display label for follow-up time windows.
 FOLLOWUP_PERIOD_LABELS = {"sang": "sáng", "trua": "trưa", "chieu": "chiều", "toi": "tối"}
 
+# Deterministic first-message greeting (no LLM call) shown when a chat opens.
+# Kept consistent with the Qiki persona in system_chatbot_vi.txt.
+GREETING_INTRO_VI = (
+    "Em là Qiki, trợ lý ảo của Cửa hàng Gas Quốc Cường ạ. "
+    "Em có thể giúp anh/chị tìm sản phẩm, xem giá, đặt gas hoặc nước uống, "
+    "tra cứu thông tin giao hàng và giải đáp các thắc mắc. "
+    "Anh/chị cần Qiki hỗ trợ gì hôm nay ạ?"
+)
+
 
 @dataclass(frozen=True)
 class ChatOrderItem:
@@ -143,12 +153,19 @@ class ConversationService:
         session_id: str | None = None,
         initial_message: str | None = None,
     ) -> ConversationResponse:
-        """Start a new conversation."""
+        """Start a new conversation, greeting the customer as the first message."""
         conversation = await self.conversation_repository.create(
             {
                 "user_id": user.id if user else None,
                 "session_id": session_id or str(uuid4()),
                 "status": "active",
+            }
+        )
+        await self.message_repository.create(
+            {
+                "conversation_id": conversation.id,
+                "role": "assistant",
+                "content": self._build_greeting(user),
             }
         )
         if initial_message:
@@ -157,8 +174,17 @@ class ConversationService:
                 SendMessageRequest(content=initial_message, session_id=conversation.session_id),
                 user,
             )
-            conversation = await self._require_conversation(conversation.id)
+        # Re-read so the response includes the greeting (and any initial-message turn).
+        conversation = await self._require_conversation(conversation.id)
         return self._conversation_to_response(conversation)
+
+    @staticmethod
+    def _build_greeting(user: User | None) -> str:
+        """Build the deterministic Vietnamese opening message (no LLM call)."""
+        salutation = (
+            f"Chào anh/chị {user.full_name}!" if user and user.full_name else "Chào quý khách!"
+        )
+        return f"{salutation} {GREETING_INTRO_VI}"
 
     async def get_active_conversation(
         self,
@@ -382,7 +408,8 @@ class ConversationService:
         skip: int = 0,
         limit: int = 20,
     ) -> tuple[list[ConversationResponse], int]:
-        """List staff conversations."""
+        """List staff conversations, auto-closing stale ones first (lazy sweep)."""
+        await self._close_stale_conversations()
         conversations, total = await self.conversation_repository.list_for_staff(
             staff.id,
             status_filter,
@@ -390,6 +417,20 @@ class ConversationService:
             limit,
         )
         return [self._conversation_to_response(item) for item in conversations], total
+
+    async def _close_stale_conversations(self) -> int:
+        """Move conversations inactive for CONVERSATION_STALE_DAYS to 'closed'."""
+        stale_days = get_settings().CONVERSATION_STALE_DAYS
+        cutoff = datetime.now(UTC) - timedelta(days=stale_days)
+        return await self.conversation_repository.close_stale(cutoff)
+
+    async def set_conversation_status(
+        self, conversation_id: UUID, status: str
+    ) -> ConversationResponse:
+        """Set a conversation status directly (staff action)."""
+        return self._conversation_to_response(
+            await self.conversation_repository.set_status(conversation_id, status)
+        )
 
     async def transfer_conversation(
         self, conversation_id: UUID, staff_id: UUID
@@ -3523,6 +3564,7 @@ Tin mới:
             id=conversation.id,
             user_id=conversation.user_id,
             session_id=conversation.session_id,
+            code=conversation.code,
             status=conversation.status,  # type: ignore[arg-type]
             assigned_to=conversation.assigned_to,
             escalated_at=conversation.escalated_at,

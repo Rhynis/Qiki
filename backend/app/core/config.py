@@ -80,6 +80,9 @@ class Settings(BaseSettings):
     RAG_RERANK_RETRIEVE_K: int = 8
     RAG_RERANK_TOP_N: int = 3
 
+    # Auto-close active conversations with no activity for this many days.
+    CONVERSATION_STALE_DAYS: int = 3
+
     LANGFUSE_PUBLIC_KEY: str = ""
     LANGFUSE_SECRET_KEY: str = ""
     LANGFUSE_HOST: str = "https://cloud.langfuse.com"

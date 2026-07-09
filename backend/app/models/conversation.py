@@ -27,6 +27,8 @@ class Conversation(Base, UUIDMixin, TimestampMixin):
         nullable=True,
     )
     session_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    # Human-friendly code (CT-YYYYMMDD-NNN), filled by a DB trigger on insert.
+    code: Mapped[str | None] = mapped_column(String(20), unique=True, nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
     assigned_to: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),

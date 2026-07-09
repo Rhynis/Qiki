@@ -1,4 +1,13 @@
-export type ConversationStatus = 'active' | 'escalated' | 'resolved' | 'abandoned'
+export type ConversationStatus =
+  | 'active'
+  | 'escalated'
+  | 'flagged'
+  | 'resolved'
+  | 'closed'
+  | 'abandoned'
+
+/** Statuses staff can set directly from the admin detail view. */
+export type SettableConversationStatus = Exclude<ConversationStatus, 'abandoned'>
 export type MessageRole = 'user' | 'assistant' | 'staff' | 'system'
 
 export type ProductCard = {
@@ -36,6 +45,7 @@ export type Conversation = {
   id: string
   user_id?: string | null
   session_id: string
+  code?: string | null
   status: ConversationStatus
   assigned_to?: string | null
   escalated_at?: string | null

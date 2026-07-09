@@ -11,6 +11,7 @@ import type {
   MessageListResponse,
   ResolveRequest,
   SendMessageRequest,
+  SettableConversationStatus,
   StaffMessageRequest,
   StartConversationRequest,
   TransferRequest,
@@ -305,6 +306,24 @@ export function useResolveConversation() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: conversationKeys.all })
       toast.success('Đã kết thúc cuộc trò chuyện')
+    },
+  })
+}
+
+export function useUpdateConversationStatus() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      conversationId,
+      status,
+    }: {
+      conversationId: string
+      status: SettableConversationStatus
+    }) => conversationsApi.updateConversationStatus(conversationId, status),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: conversationKeys.all })
+      toast.success('Đã cập nhật trạng thái')
     },
   })
 }

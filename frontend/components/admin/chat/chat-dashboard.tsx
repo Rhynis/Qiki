@@ -9,28 +9,23 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useStaffConversations } from '@/lib/hooks/use-conversation'
 import { cn } from '@/lib/utils'
+import { formatDate } from '@/lib/utils/format'
 import {
   type ChatFilter,
+  conversationCode,
   conversationFollowupNote,
   conversationHasEmergency,
   conversationHasFlag,
   conversationIntent,
   conversationLastActivity,
   conversationLastText,
+  conversationStatusLabel,
   conversationTitle,
   matchesChatFilter,
   matchesConversationSearch,
-  relativeTime,
 } from '@/lib/utils/conversation-summary'
 
 const LIST_CAP = 100
-
-const statusLabels: Record<string, string> = {
-  active: 'Đang hoạt động',
-  escalated: 'Cần hỗ trợ',
-  resolved: 'Đã xử lý',
-  abandoned: 'Bỏ dở',
-}
 
 const filters: Array<{ value: ChatFilter; label: string }> = [
   { value: 'escalated', label: 'Cần hỗ trợ' },
@@ -114,7 +109,7 @@ export function ChatDashboard() {
           <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
           <Input
             className="pl-9"
-            placeholder="Tìm theo session, SĐT hoặc nội dung"
+            placeholder="Tìm theo mã, SĐT hoặc nội dung"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
@@ -138,6 +133,9 @@ export function ChatDashboard() {
                   <div className="min-w-0 space-y-1">
                     <div className="flex items-center gap-2">
                       <MessageSquareText className="h-4 w-4 shrink-0 text-slate-500" />
+                      <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-600">
+                        {conversationCode(conversation)}
+                      </span>
                       <p className="truncate text-sm font-semibold text-slate-900">
                         {conversationTitle(conversation)}
                       </p>
@@ -159,7 +157,7 @@ export function ChatDashboard() {
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
                     <span className="text-xs text-slate-500">
-                      {relativeTime(conversationLastActivity(conversation))}
+                      {formatDate(conversationLastActivity(conversation))}
                     </span>
                     <div className="flex items-center gap-2">
                       {hasEmergency ? <AlertTriangle className="h-4 w-4 text-red-700" /> : null}
@@ -168,11 +166,13 @@ export function ChatDashboard() {
                         variant="outline"
                         className={cn(
                           conversation.status === 'escalated' && 'border-sky-300 text-sky-800',
+                          conversation.status === 'flagged' && 'border-amber-300 text-amber-800',
                           conversation.status === 'resolved' &&
-                            'border-emerald-300 text-emerald-800'
+                            'border-emerald-300 text-emerald-800',
+                          conversation.status === 'closed' && 'border-slate-300 text-slate-500'
                         )}
                       >
-                        {statusLabels[conversation.status] ?? conversation.status}
+                        {conversationStatusLabel(conversation.status)}
                       </Badge>
                     </div>
                   </div>
