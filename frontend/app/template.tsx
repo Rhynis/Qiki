@@ -4,7 +4,7 @@
  */
 export default function Template({ children }: { children: React.ReactNode }) {
   return (
-    <div className="duration-300 ease-out animate-in fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none">
+    <div className="duration-200 ease-out animate-in fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none">
       {children}
     </div>
   )
