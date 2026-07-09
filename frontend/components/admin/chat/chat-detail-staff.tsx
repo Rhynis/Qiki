@@ -17,6 +17,13 @@ import { cn } from '@/lib/utils'
 import { conversationFollowupNote } from '@/lib/utils/conversation-summary'
 import { EmergencyBanner } from '@/components/chat/emergency-banner'
 
+const STATUS_LABELS: Record<string, string> = {
+  active: 'Đang hoạt động',
+  escalated: 'Cần hỗ trợ',
+  resolved: 'Đã xử lý',
+  closed: 'Đã kết thúc',
+}
+
 type ChatDetailStaffProps = {
   conversationId: string
 }
@@ -53,7 +60,11 @@ export function ChatDetailStaff({ conversationId }: ChatDetailStaffProps) {
           </p>
         </div>
         <div className="flex gap-2">
-          <Badge variant="outline">{conversation.data?.status ?? 'loading'}</Badge>
+          <Badge variant="outline">
+            {conversation.data?.status
+              ? (STATUS_LABELS[conversation.data.status] ?? conversation.data.status)
+              : 'Đang tải…'}
+          </Badge>
           <Button
             type="button"
             variant="outline"

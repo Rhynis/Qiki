@@ -54,7 +54,9 @@ async function getInitialProducts(params: ProductSearchParams): Promise<ProductL
   })
 
   try {
-    const response = await fetch(url, { cache: 'no-store' })
+    // Cache the catalog briefly so switching category/brand is instant on repeat
+    // navigations instead of blocking on a fresh server fetch every time.
+    const response = await fetch(url, { next: { revalidate: 30 } })
     if (!response.ok) return emptyProductList
     return (await response.json()) as ProductListResponse
   } catch {
