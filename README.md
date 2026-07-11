@@ -111,7 +111,7 @@ See [docs/architecture-decisions.md](docs/architecture-decisions.md) for the ful
 
 ## Documentation
 
-[architecture](docs/architecture.md) · [decisions](docs/architecture-decisions.md) · [api](docs/api.md) · [chatbot pipeline](docs/chatbot-pipeline.md) · [local RAG](docs/LOCAL_RAG.md) · [local demo mode](docs/local-demo-mode.md) · [security](docs/security.md) · [deployment](docs/deployment.md) · [hosting](docs/HOSTING.md) · [operations](docs/operations.md) · [development](docs/development.md)
+[architecture](docs/architecture.md) · [decisions](docs/architecture-decisions.md) · [api](docs/api.md) · [chatbot pipeline](docs/chatbot-pipeline.md) · [local RAG](docs/LOCAL_RAG.md) · [local demo mode](docs/local-demo-mode.md) · [security](docs/security.md) · [deployment](docs/deployment.md) · [hosting](docs/HOSTING.md) · [operations](docs/operations.md) · [development](docs/development.md) · [future work](docs/future-work.md)
 
 ## Contributing
 
