@@ -6,5 +6,15 @@ from app.models.message import Message
 from app.models.order import Order, OrderItem
 from app.models.product import Product
 from app.models.user import User
+from app.models.wishlist import Wishlist
 
-__all__ = ["Conversation", "KnowledgeBase", "Message", "Order", "OrderItem", "Product", "User"]
+__all__ = [
+    "Conversation",
+    "KnowledgeBase",
+    "Message",
+    "Order",
+    "OrderItem",
+    "Product",
+    "User",
+    "Wishlist",
+]

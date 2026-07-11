@@ -1,5 +1,6 @@
 'use client'
 
+import { useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { useCallback } from 'react'
 import { toast } from 'sonner'
@@ -9,6 +10,7 @@ import type { RegisterFormValues } from '@/lib/validations/auth'
 
 export function useAuth() {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const { user, session, isLoading, error, setUser, setSession, setLoading, setError, clearAuth } =
     useAuthStore()
 
@@ -72,6 +74,9 @@ export function useAuth() {
       await authApi.logout()
     } finally {
       clearAuth()
+      // Drop per-user cached data (e.g. the wishlist) so a guest or the next
+      // user never sees the previous user's saved state.
+      queryClient.removeQueries({ queryKey: ['wishlist'] })
       setLoading(false)
       router.push('/')
     }

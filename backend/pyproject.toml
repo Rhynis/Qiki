@@ -31,6 +31,7 @@ module = [
   "app.api.v1.endpoints.rag",
   "app.api.v1.endpoints.conversations",
   "app.api.v1.endpoints.review",
+  "app.api.v1.endpoints.wishlist",
 ]
 disable_error_code = ["type-arg"]
 

@@ -3,6 +3,7 @@
 import {
   BadgeCheck,
   ClipboardList,
+  Heart,
   KeyRound,
   Mail,
   MapPin,
@@ -182,6 +183,12 @@ export default function AccountPage() {
             <Link href="/orders">
               <ClipboardList className="mr-2 h-4 w-4" />
               Đơn hàng của tôi
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/wishlist">
+              <Heart className="mr-2 h-4 w-4" />
+              Sản phẩm yêu thích
             </Link>
           </Button>
         </div>

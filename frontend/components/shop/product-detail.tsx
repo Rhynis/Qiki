@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { StockBadge } from '@/components/shop/stock-badge'
+import { WishlistButton } from '@/components/shop/wishlist-button'
 import { useCartStore } from '@/lib/stores/cart-store'
 import { formatPrice, formatProductSize } from '@/lib/utils/format'
 import type { Product } from '@/types/product'
@@ -108,6 +109,7 @@ export function ProductDetail({ product }: ProductDetailProps) {
             >
               Mua ngay
             </Button>
+            <WishlistButton productId={product.id} withLabel />
           </div>
         </div>
       </div>
