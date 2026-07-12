@@ -87,6 +87,31 @@ export interface DeliveryStatusUpdate {
   notes?: string | null
 }
 
+export interface ReorderItem {
+  product_id: string
+  sku: string
+  name: string
+  brand: string
+  size_kg: string
+  category: string
+  unit: string
+  price: string
+  quantity: number
+  image_url: string | null
+  stock_quantity: number
+}
+
+export interface SkippedReorderItem {
+  product_id: string | null
+  product_name: string
+  reason: 'inactive' | 'out_of_stock' | 'not_found'
+}
+
+export interface ReorderResponse {
+  items: ReorderItem[]
+  skipped: SkippedReorderItem[]
+}
+
 export interface Order {
   id: string
   order_number: string

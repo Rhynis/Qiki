@@ -21,7 +21,16 @@ from app.models.product import Product
 from app.models.user import User
 from app.repositories.order_repository import ALLOWED_STATUS_TRANSITIONS, OrderRepository
 from app.repositories.product_repository import ProductRepository
-from app.schemas.order import CheckoutRequest, OrderListResponse, OrderResponse, OrderSearchParams
+from app.schemas.order import (
+    CheckoutRequest,
+    OrderListResponse,
+    OrderResponse,
+    OrderSearchParams,
+    ReorderItem,
+    ReorderResponse,
+    SkippedReorderItem,
+)
+from app.schemas.product import BestSellerProduct, ProductResponse
 
 logger = get_logger(__name__)
 WATER_DELIVERY_FEE_PER_UNIT = Decimal("5000")
@@ -168,6 +177,84 @@ class OrderService:
         normalized_phone = VietnamesePhoneValidator.validate(phone) if phone else None
         self._ensure_can_view(order, current_user, normalized_phone)
         return self._to_response(order)
+
+    async def reorder(self, order_id: UUID, current_user: User) -> ReorderResponse:
+        """Rebuild a cart from a past order using current prices, stock, and status.
+
+        The customer must own the order. Each line is re-priced from the live
+        product row; a product that is now missing, inactive, or out of stock is
+        dropped into ``skipped`` with a reason instead of being re-added, so the
+        cart the caller receives is always safe to check out.
+        """
+        order = await self.order_repo.get_by_id(order_id)
+        if not order:
+            raise NotFoundException("Order not found", error_code="order_not_found")
+        if order.user_id != current_user.id:
+            raise ForbiddenException("Order access denied", error_code="order_forbidden")
+
+        items: list[ReorderItem] = []
+        skipped: list[SkippedReorderItem] = []
+        for line in order.items:
+            product = (
+                await self.product_repo.get_by_id(line.product_id) if line.product_id else None
+            )
+            if product is None:
+                skipped.append(
+                    SkippedReorderItem(
+                        product_id=line.product_id,
+                        product_name=line.product_name,
+                        reason="not_found",
+                    )
+                )
+                continue
+            if not product.is_active:
+                skipped.append(
+                    SkippedReorderItem(
+                        product_id=product.id,
+                        product_name=product.name,
+                        reason="inactive",
+                    )
+                )
+                continue
+            if product.stock_quantity <= 0:
+                skipped.append(
+                    SkippedReorderItem(
+                        product_id=product.id,
+                        product_name=product.name,
+                        reason="out_of_stock",
+                    )
+                )
+                continue
+            # Cap the reordered quantity at the stock currently on hand so the
+            # rebuilt cart never exceeds availability.
+            quantity = min(line.quantity, product.stock_quantity)
+            items.append(
+                ReorderItem(
+                    product_id=product.id,
+                    sku=product.sku,
+                    name=product.name,
+                    brand=product.brand,
+                    size_kg=product.size_kg,
+                    category=product.category,
+                    unit=product.unit,
+                    price=product.price,
+                    quantity=quantity,
+                    image_url=product.image_url,
+                    stock_quantity=product.stock_quantity,
+                )
+            )
+        return ReorderResponse(items=items, skipped=skipped)
+
+    async def get_best_sellers(self, limit: int = 8) -> list[BestSellerProduct]:
+        """Return the most-ordered active products for storefront display."""
+        rows = await self.order_repo.get_best_sellers(limit)
+        return [
+            BestSellerProduct(
+                **ProductResponse.model_validate(product).model_dump(),
+                total_sold=total_sold,
+            )
+            for product, total_sold in rows
+        ]
 
     async def list_all_orders(self, admin: User, params: OrderSearchParams) -> OrderListResponse:
         """List orders for an administrator."""

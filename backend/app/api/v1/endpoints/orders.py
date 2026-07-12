@@ -1,9 +1,10 @@
 """Order endpoints."""
 
+import time
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
@@ -27,11 +28,18 @@ from app.schemas.order import (
     OrderResponse,
     OrderSearchParams,
     OrderStatusUpdate,
+    ReorderResponse,
 )
+from app.schemas.product import BestSellerProduct
 from app.services.einvoice import EInvoiceService
 from app.services.order_service import OrderService, is_serialization_failure
 
 router = APIRouter()
+
+# Best-sellers change slowly, so cache them in-process for a short window to
+# spare the DB a fresh aggregation on every storefront visit.
+BEST_SELLERS_CACHE_TTL_SECONDS = 60
+_best_sellers_cache: dict[int, tuple[float, list[BestSellerProduct]]] = {}
 
 
 def build_order_service(session: AsyncSession) -> OrderService:
@@ -108,6 +116,31 @@ async def my_orders(
     return await service.get_user_orders(user, params)
 
 
+@router.get(
+    "/orders/best-sellers",
+    response_model=list[BestSellerProduct],
+    summary="List best-selling products",
+)
+@limiter.limit("60/minute")
+async def best_sellers(
+    request: Request,
+    response: Response,
+    session: Annotated[AsyncSession, Depends(get_db)],
+    limit: Annotated[int, Query(ge=1, le=20)] = 8,
+) -> list[BestSellerProduct]:
+    """Return the most-ordered active products, cached briefly per limit."""
+    now = time.monotonic()
+    cached = _best_sellers_cache.get(limit)
+    if cached and now - cached[0] < BEST_SELLERS_CACHE_TTL_SECONDS:
+        response.headers["Cache-Control"] = f"public, max-age={BEST_SELLERS_CACHE_TTL_SECONDS}"
+        return cached[1]
+    service = build_order_service(session)
+    products = await service.get_best_sellers(limit)
+    _best_sellers_cache[limit] = (now, products)
+    response.headers["Cache-Control"] = f"public, max-age={BEST_SELLERS_CACHE_TTL_SECONDS}"
+    return products
+
+
 @router.get("/orders/{order_id}", response_model=OrderResponse, summary="Get order")
 @limiter.limit("60/minute")
 async def get_order(
@@ -120,6 +153,23 @@ async def get_order(
     """Return one order for an owner, staff member, or verified guest phone."""
     service = build_order_service(session)
     return await service.get_order(order_id, current_user, phone)
+
+
+@router.post(
+    "/orders/{order_id}/reorder",
+    response_model=ReorderResponse,
+    summary="Rebuild a cart from a past order",
+)
+@limiter.limit("30/minute")
+async def reorder(
+    request: Request,
+    order_id: UUID,
+    user: Annotated[User, Depends(get_current_active_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ReorderResponse:
+    """Return current-priced cart items rebuilt from the caller's past order."""
+    service = build_order_service(session)
+    return await service.reorder(order_id, user)
 
 
 @router.post("/orders/{order_id}/cancel", response_model=OrderResponse, summary="Cancel order")
