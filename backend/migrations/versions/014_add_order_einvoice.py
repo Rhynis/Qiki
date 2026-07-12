@@ -1,7 +1,7 @@
 """Add an einvoice JSONB column to orders (e-invoice adapter stub).
 
-Revision ID: 012_add_order_einvoice
-Revises: 011_widen_conversation_status
+Revision ID: 014_add_order_einvoice
+Revises: 013_add_deliveries
 Create Date: 2026-07-12
 
 Stores the result of issuing a legal e-invoice for an order (invoice number,
@@ -17,8 +17,8 @@ from collections.abc import Sequence
 
 from alembic import op
 
-revision: str = "012_add_order_einvoice"
-down_revision: str | None = "011_widen_conversation_status"
+revision: str = "014_add_order_einvoice"
+down_revision: str | None = "013_add_deliveries"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

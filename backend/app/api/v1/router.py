@@ -7,20 +7,24 @@ from app.api.v1.endpoints import (
     admin_users,
     auth,
     conversations,
+    deliveries,
     knowledge_base,
     orders,
     products,
     rag,
     review,
+    wishlist,
 )
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 api_router.include_router(products.router, tags=["Products"])
 api_router.include_router(orders.router, tags=["Orders"])
+api_router.include_router(deliveries.router, tags=["Deliveries"])
 api_router.include_router(admin_dashboard.router, tags=["Admin"])
 api_router.include_router(admin_users.router, tags=["Admin"])
 api_router.include_router(knowledge_base.router, tags=["Knowledge Base"])
 api_router.include_router(rag.router, tags=["RAG"])
 api_router.include_router(conversations.router, tags=["Conversations"])
 api_router.include_router(review.router, tags=["Review"])
+api_router.include_router(wishlist.router, tags=["Wishlist"])
