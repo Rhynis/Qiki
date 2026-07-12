@@ -59,6 +59,11 @@ def upgrade() -> None:
     )
     op.execute("CREATE INDEX idx_delivery_items_delivery ON delivery_items(delivery_id)")
     op.execute("COMMENT ON TABLE deliveries IS 'One fulfilment trip for part or all of an order'")
+    # Match the RLS baseline of the original tables (migration 001). The backend
+    # role bypasses RLS; enabling it with no policy denies anon/PostgREST direct
+    # access to these backend-only tables.
+    op.execute("ALTER TABLE deliveries ENABLE ROW LEVEL SECURITY")
+    op.execute("ALTER TABLE delivery_items ENABLE ROW LEVEL SECURITY")
 
 
 def downgrade() -> None:
