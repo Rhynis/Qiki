@@ -25,6 +25,7 @@ module = [
   "app.api.v1.endpoints.auth",
   "app.api.v1.endpoints.products",
   "app.api.v1.endpoints.orders",
+  "app.api.v1.endpoints.deliveries",
   "app.api.v1.endpoints.admin_users",
   "app.api.v1.endpoints.admin_dashboard",
   "app.api.v1.endpoints.knowledge_base",

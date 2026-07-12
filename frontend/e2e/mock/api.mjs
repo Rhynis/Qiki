@@ -82,6 +82,7 @@ function buildOrder(overrides = {}) {
     created_at: now,
     updated_at: now,
     items: [item],
+    deliveries: [],
     ...overrides,
   }
 }

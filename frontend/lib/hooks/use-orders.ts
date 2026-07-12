@@ -5,6 +5,8 @@ import { toast } from 'sonner'
 import * as ordersApi from '@/lib/api/orders'
 import type {
   CheckoutRequest,
+  DeliveryCreate,
+  DeliveryStatusUpdate,
   GuestOrderLookup,
   OrderCancelRequest,
   OrderSearchParams,
@@ -85,5 +87,39 @@ export function useOrderStatistics() {
   return useQuery({
     queryKey: orderKeys.statistics(),
     queryFn: ordersApi.getOrderStatistics,
+  })
+}
+
+export function useCreateDelivery() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ orderId, data }: { orderId: string; data: DeliveryCreate }) =>
+      ordersApi.createDelivery(orderId, data),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: orderKeys.all })
+      toast.success('Đã tạo chuyến giao')
+    },
+    onError: () => {
+      toast.error('Không thể tạo chuyến giao. Kiểm tra số lượng còn lại.')
+    },
+  })
+}
+
+export function useUpdateDeliveryStatus() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      orderId,
+      deliveryId,
+      data,
+    }: {
+      orderId: string
+      deliveryId: string
+      data: DeliveryStatusUpdate
+    }) => ordersApi.updateDeliveryStatus(orderId, deliveryId, data),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: orderKeys.all })
+      toast.success('Đã cập nhật chuyến giao')
+    },
   })
 }

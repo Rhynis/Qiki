@@ -47,7 +47,9 @@ class OrderRepository:
         for item_data in items:
             active_session.add(OrderItem(order_id=order.id, **item_data))
         await active_session.flush()
-        await active_session.refresh(order, attribute_names=["items"])
+        # Load items + the (empty) deliveries collection so the response can
+        # serialize deliveries without emitting an async lazy load.
+        await active_session.refresh(order, attribute_names=["items", "deliveries"])
         return order
 
     async def _next_order_number(self, session: AsyncSession) -> str:

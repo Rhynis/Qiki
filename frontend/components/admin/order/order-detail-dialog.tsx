@@ -1,5 +1,6 @@
 'use client'
 
+import { OrderDeliveries } from '@/components/admin/order/order-deliveries'
 import { OrderStatusUpdater } from '@/components/admin/order/order-status-updater'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -168,6 +169,8 @@ export function OrderDetailDialog({ order, open, onOpenChange }: OrderDetailDial
                   <OrderStatusUpdater order={order} />
                 </div>
               </DetailBlock>
+
+              <OrderDeliveries order={order} />
             </div>
           </>
         ) : null}

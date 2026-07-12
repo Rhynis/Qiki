@@ -12,6 +12,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDMixin
 
+if TYPE_CHECKING:
+    from app.models.delivery import Delivery
+
 
 class Order(Base, UUIDMixin, TimestampMixin):
     """Customer order with embedded delivery and payment details."""
@@ -62,6 +65,13 @@ class Order(Base, UUIDMixin, TimestampMixin):
         back_populates="order",
         cascade="all, delete-orphan",
         lazy="selectin",
+    )
+    deliveries: Mapped[list["Delivery"]] = relationship(
+        "Delivery",
+        back_populates="order",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        order_by="Delivery.created_at",
     )
 
     if TYPE_CHECKING:
