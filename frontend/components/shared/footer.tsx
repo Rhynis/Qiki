@@ -21,6 +21,12 @@ export function Footer() {
           >
             Xem sản phẩm
           </Link>
+          <Link
+            className="mt-2 block font-medium text-primary hover:underline"
+            href="/price-alerts"
+          >
+            Đăng ký nhận giá gas
+          </Link>
         </div>
         <div className="space-y-2">
           <p className="font-semibold text-slate-950">Liên hệ</p>

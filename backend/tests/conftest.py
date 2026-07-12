@@ -175,6 +175,42 @@ async def order_session() -> AsyncGenerator[AsyncSession, None]:
     await engine.dispose()
 
 
+@pytest_asyncio.fixture
+async def price_alert_session() -> AsyncGenerator[AsyncSession, None]:
+    """Create an isolated Postgres-backed session for price-alert tests."""
+    from app.db.base import Base
+    from app.db.session import AsyncSessionLocal, engine
+
+    await engine.dispose()
+    async with engine.begin() as conn:
+        await conn.execute(text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"'))
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+        tables = [table for table in Base.metadata.sorted_tables if table.name != "knowledge_base"]
+        await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn, tables=tables))
+        await conn.execute(
+            text(
+                "TRUNCATE TABLE price_subscriptions, order_items, orders, products, users "
+                "RESTART IDENTITY CASCADE"
+            )
+        )
+
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+        finally:
+            await session.rollback()
+
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                "TRUNCATE TABLE price_subscriptions, order_items, orders, products, users "
+                "RESTART IDENTITY CASCADE"
+            )
+        )
+
+    await engine.dispose()
+
+
 def product_data(
     sku: str = "GAS-12-SAIGON",
     name: str = "Binh gas 12kg",
