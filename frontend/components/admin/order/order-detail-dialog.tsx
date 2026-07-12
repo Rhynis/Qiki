@@ -3,6 +3,7 @@
 import { OrderDeliveries } from '@/components/admin/order/order-deliveries'
 import { OrderStatusUpdater } from '@/components/admin/order/order-status-updater'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -10,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { useIssueInvoice } from '@/lib/hooks/use-orders'
 import { formatDate, formatPhone, formatPrice } from '@/lib/utils/format'
 import type { Order, OrderStatus, PaymentMethod, PaymentStatus } from '@/types/order'
 
@@ -44,6 +46,7 @@ type OrderDetailDialogProps = {
 }
 
 export function OrderDetailDialog({ order, open, onOpenChange }: OrderDetailDialogProps) {
+  const issueInvoice = useIssueInvoice()
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
@@ -171,6 +174,31 @@ export function OrderDetailDialog({ order, open, onOpenChange }: OrderDetailDial
               </DetailBlock>
 
               <OrderDeliveries order={order} />
+
+              <DetailBlock title="Hóa đơn điện tử">
+                {order.einvoice ? (
+                  <p className="text-slate-700">
+                    Trạng thái: {order.einvoice.status}
+                    {order.einvoice.invoice_no ? ` · Số ${order.einvoice.invoice_no}` : ''}
+                  </p>
+                ) : (
+                  <p className="text-slate-500">Chưa xuất hóa đơn.</p>
+                )}
+                {order.status === 'delivered' ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="mt-2"
+                    disabled={issueInvoice.isPending}
+                    onClick={() => issueInvoice.mutate(order.id)}
+                  >
+                    Xuất hóa đơn điện tử
+                  </Button>
+                ) : (
+                  <p className="text-xs text-slate-500">Chỉ xuất hóa đơn được cho đơn đã giao.</p>
+                )}
+              </DetailBlock>
             </div>
           </>
         ) : null}

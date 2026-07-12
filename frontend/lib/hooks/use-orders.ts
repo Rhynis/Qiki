@@ -90,6 +90,20 @@ export function useOrderStatistics() {
   })
 }
 
+export function useIssueInvoice() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (orderId: string) => ordersApi.issueInvoice(orderId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: orderKeys.all })
+      toast.success('Đã xuất hóa đơn')
+    },
+    onError: () => {
+      toast.error('Không thể xuất hóa đơn')
+    },
+  })
+}
+
 export function useCreateDelivery() {
   const queryClient = useQueryClient()
   return useMutation({

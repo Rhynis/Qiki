@@ -42,6 +42,7 @@ class Order(Base, UUIDMixin, TimestampMixin):
     total_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     vat_invoice_requested: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     vat_info: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    einvoice: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     payment_method: Mapped[str] = mapped_column(String(20), default="cod", nullable=False)
     payment_status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
