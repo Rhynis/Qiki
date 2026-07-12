@@ -145,6 +145,12 @@ export function resolveApi({ method, path, query, body = {}, cookie }) {
     return json(201, product('new-1', body.sku ?? 'NEW', body.name ?? 'Mới', body.brand ?? 'Elf Gas', '12', body.category ?? 'gas', 'kg', String(body.price ?? '100000')))
   }
 
+  // --- Wishlist ------------------------------------------------------------
+  if (method === 'GET' && path === '/api/v1/wishlist') return json(200, [])
+  if (/^\/api\/v1\/wishlist\/[^/]+$/.test(path) && (method === 'POST' || method === 'DELETE')) {
+    return json(204, undefined)
+  }
+
   // --- Orders --------------------------------------------------------------
   if (method === 'POST' && path === '/api/v1/orders/checkout') {
     return json(201, buildOrder({

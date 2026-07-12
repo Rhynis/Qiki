@@ -1,7 +1,7 @@
 """Add deliveries and delivery_items tables (multi-delivery per order).
 
-Revision ID: 012_add_deliveries
-Revises: 011_widen_conversation_status
+Revision ID: 013_add_deliveries
+Revises: 012_add_wishlists
 Create Date: 2026-07-12
 
 An order can be fulfilled in several trips. A ``delivery`` groups part (or all) of
@@ -18,8 +18,8 @@ from collections.abc import Sequence
 
 from alembic import op
 
-revision: str = "012_add_deliveries"
-down_revision: str | None = "011_widen_conversation_status"
+revision: str = "013_add_deliveries"
+down_revision: str | None = "012_add_wishlists"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
