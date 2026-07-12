@@ -59,8 +59,8 @@ export function PriceAlertSubscribeForm() {
           {...register('consent')}
         />
         <label className="text-sm text-slate-600" htmlFor="consent">
-          Tôi đồng ý nhận email thông báo khi Gas Quốc Cường thay đổi giá gas. Bạn có thể hủy đăng ký
-          bất cứ lúc nào.
+          Tôi đồng ý nhận email thông báo khi Gas Quốc Cường thay đổi giá gas. Bạn có thể hủy đăng
+          ký bất cứ lúc nào.
         </label>
       </div>
       {errors.consent ? <p className="text-sm text-red-600">{errors.consent.message}</p> : null}

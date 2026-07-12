@@ -49,9 +49,7 @@ describe('PriceAlertSubscribeForm', () => {
     await user.click(screen.getByLabelText(/Tôi đồng ý nhận email/)) // uncheck consent
     await user.click(screen.getByRole('button', { name: 'Đăng ký nhận giá' }))
 
-    expect(
-      await screen.findByText('Vui lòng đồng ý nhận email thông báo giá')
-    ).toBeInTheDocument()
+    expect(await screen.findByText('Vui lòng đồng ý nhận email thông báo giá')).toBeInTheDocument()
     expect(apiMocks.subscribePriceAlerts).not.toHaveBeenCalled()
   })
 })
@@ -65,9 +63,7 @@ describe('TokenActionClient', () => {
     searchParams.value = new URLSearchParams()
     render(<TokenActionClient variant="confirm" />)
 
-    expect(
-      screen.getByText('Liên kết xác nhận không hợp lệ hoặc đã hết hạn.')
-    ).toBeInTheDocument()
+    expect(screen.getByText('Liên kết xác nhận không hợp lệ hoặc đã hết hạn.')).toBeInTheDocument()
   })
 
   it('runs the action with the token only when the button is clicked', async () => {
