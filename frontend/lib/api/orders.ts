@@ -1,6 +1,9 @@
 import { apiClient } from '@/lib/api/client'
 import type {
   CheckoutRequest,
+  Delivery,
+  DeliveryCreate,
+  DeliveryStatusUpdate,
   GuestOrderLookup,
   Order,
   OrderCancelRequest,
@@ -45,6 +48,26 @@ export async function getAdminOrders(params: OrderSearchParams = {}): Promise<Or
 
 export async function updateOrderStatus(orderId: string, data: OrderStatusUpdate): Promise<Order> {
   const response = await apiClient.patch<Order>(`/api/v1/admin/orders/${orderId}/status`, data)
+  return response.data
+}
+
+export async function createDelivery(orderId: string, data: DeliveryCreate): Promise<Delivery> {
+  const response = await apiClient.post<Delivery>(
+    `/api/v1/admin/orders/${orderId}/deliveries`,
+    data
+  )
+  return response.data
+}
+
+export async function updateDeliveryStatus(
+  orderId: string,
+  deliveryId: string,
+  data: DeliveryStatusUpdate
+): Promise<Delivery> {
+  const response = await apiClient.patch<Delivery>(
+    `/api/v1/admin/orders/${orderId}/deliveries/${deliveryId}`,
+    data
+  )
   return response.data
 }
 

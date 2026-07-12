@@ -8,6 +8,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from app.core.input_validation import VietnamesePhoneValidator, VietnameseTaxCodeValidator
+from app.schemas.delivery import DeliveryResponse
 
 OrderStatus = Literal["pending", "confirmed", "shipping", "delivered", "cancelled"]
 PaymentMethod = Literal["cod", "bank_transfer"]
@@ -134,6 +135,7 @@ class OrderResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     items: list[OrderItemResponse]
+    deliveries: list[DeliveryResponse] = Field(default_factory=list)
 
 
 class OrderListResponse(BaseModel):
