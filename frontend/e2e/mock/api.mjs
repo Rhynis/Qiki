@@ -137,6 +137,29 @@ export function resolveApi({ method, path, query, body = {}, cookie }) {
     return json(200, [...new Set(PRODUCTS.map((p) => p.brand))])
   }
   if (method === 'GET' && path === '/api/v1/admin/products/low-stock') return json(200, [])
+  if (method === 'GET' && path === '/api/v1/admin/insights') {
+    return json(200, {
+      period_start: '2026-05-16T00:00:00Z',
+      period_end: '2026-06-15T00:00:00Z',
+      summary: {
+        total_conversations: 12,
+        total_messages: 84,
+        user_messages: 40,
+        assistant_messages: 44,
+        escalated_conversations: 2,
+        flagged_messages: 3,
+        low_confidence_messages: 5,
+        negative_feedback_messages: 1,
+        unanswered_messages: 4,
+        escalation_rate: 0.17,
+        flag_rate: 0.04,
+      },
+      top_intents: [{ intent: 'price_inquiry', count: 20 }],
+      top_questions: [{ question: 'Giá bình gas 12kg bao nhiêu?', count: 8 }],
+      trend: [{ date: '2026-06-15', conversations: 3, flagged: 1, escalated: 0 }],
+      knowledge_gaps: [],
+    })
+  }
   const productMatch = /^\/api\/v1\/products\/([^/]+)$/.exec(path)
   if (method === 'GET' && productMatch) {
     const found = PRODUCTS.find((p) => p.id === productMatch[1])

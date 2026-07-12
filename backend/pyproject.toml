@@ -28,6 +28,7 @@ module = [
   "app.api.v1.endpoints.deliveries",
   "app.api.v1.endpoints.admin_users",
   "app.api.v1.endpoints.admin_dashboard",
+  "app.api.v1.endpoints.admin_insights",
   "app.api.v1.endpoints.knowledge_base",
   "app.api.v1.endpoints.rag",
   "app.api.v1.endpoints.conversations",
