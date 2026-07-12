@@ -88,6 +88,9 @@ export function UserMenu() {
           <DropdownMenuItem asChild>
             <Link href="/orders">Đơn hàng của tôi</Link>
           </DropdownMenuItem>
+          <DropdownMenuItem asChild>
+            <Link href="/wishlist">Sản phẩm yêu thích</Link>
+          </DropdownMenuItem>
           {isAdmin ? (
             <DropdownMenuItem asChild>
               <Link href="/admin">Quản trị</Link>

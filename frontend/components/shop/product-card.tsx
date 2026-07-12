@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatPrice, formatProductSize } from '@/lib/utils/format'
 import { StockBadge } from '@/components/shop/stock-badge'
+import { WishlistButton } from '@/components/shop/wishlist-button'
 import type { Product } from '@/types/product'
 
 type ProductCardProps = {
@@ -23,7 +24,7 @@ export function ProductCard({ product }: ProductCardProps) {
       >
         <span className="sr-only">Xem chi tiết {product.name}</span>
       </Link>
-      <div className="flex aspect-[4/3] items-center justify-center bg-slate-100">
+      <div className="relative flex aspect-[4/3] items-center justify-center bg-slate-100">
         {product.image_url ? (
           <div
             aria-label={product.name}
@@ -33,6 +34,10 @@ export function ProductCard({ product }: ProductCardProps) {
         ) : (
           <Flame className="h-12 w-12 text-primary" />
         )}
+        <WishlistButton
+          productId={product.id}
+          className="absolute right-2 top-2 z-20 bg-white/80 hover:bg-white"
+        />
       </div>
       <CardHeader className="space-y-3">
         <div className="flex items-start justify-between gap-3">
