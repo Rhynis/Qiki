@@ -13,6 +13,8 @@ from app.models.wishlist import Wishlist
 
 __all__ = [
     "Conversation",
+    "Coupon",
+    "CouponRedemption",
     "Delivery",
     "DeliveryItem",
     "KnowledgeBase",

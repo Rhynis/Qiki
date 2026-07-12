@@ -70,9 +70,7 @@ def upgrade() -> None:
         "CREATE INDEX idx_coupon_redemptions_user_id ON coupon_redemptions(user_id) "
         "WHERE user_id IS NOT NULL"
     )
-    op.execute(
-        "COMMENT ON TABLE coupon_redemptions IS 'One recorded use of a coupon per order'"
-    )
+    op.execute("COMMENT ON TABLE coupon_redemptions IS 'One recorded use of a coupon per order'")
 
     op.execute(
         "ALTER TABLE orders ADD COLUMN discount_amount NUMERIC(10,2) NOT NULL DEFAULT 0 "

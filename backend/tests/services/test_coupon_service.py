@@ -25,7 +25,8 @@ from app.schemas.product import ProductCreate
 from app.services.coupon_service import CouponError, CouponService
 from app.services.order_service import OrderService
 
-pytestmark = pytest.mark.asyncio
+# asyncio_mode = "auto" (pyproject) marks async tests automatically; a module-level
+# asyncio mark would wrongly apply to the sync tests in this file.
 
 
 def user_model(role: str = "customer", *, phone: str = "+84901234567") -> User:
@@ -456,7 +457,9 @@ async def test_admin_can_disable_coupon(order_session: AsyncSession) -> None:
 
 async def test_update_rejects_percent_over_100(order_session: AsyncSession) -> None:
     admin = user_model("admin")
-    coupon = await seed_coupon(order_session, code="PCT", discount_type="percent", value=Decimal("10"))
+    coupon = await seed_coupon(
+        order_session, code="PCT", discount_type="percent", value=Decimal("10")
+    )
 
     with pytest.raises(ValidationException):
         await coupon_service(order_session).update_coupon(
