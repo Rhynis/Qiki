@@ -29,7 +29,9 @@ describe('delivery utils', () => {
   it('sums allocated quantities across non-cancelled deliveries', () => {
     const allocated = allocatedByOrderItem(
       order([
-        delivery({ items: [{ id: 'x', delivery_id: 'd', order_item_id: 'i1', quantity: 2, created_at: '' }] }),
+        delivery({
+          items: [{ id: 'x', delivery_id: 'd', order_item_id: 'i1', quantity: 2, created_at: '' }],
+        }),
         delivery({
           status: 'cancelled',
           items: [{ id: 'y', delivery_id: 'd', order_item_id: 'i1', quantity: 5, created_at: '' }],

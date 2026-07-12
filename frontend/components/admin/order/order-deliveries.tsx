@@ -88,10 +88,14 @@ export function OrderDeliveries({ order }: { order: Order }) {
                 {deliveryItemLines(order, delivery).join(', ')}
               </p>
               {delivery.scheduled_at ? (
-                <p className="text-xs text-slate-500">Hẹn giao: {formatDate(delivery.scheduled_at)}</p>
+                <p className="text-xs text-slate-500">
+                  Hẹn giao: {formatDate(delivery.scheduled_at)}
+                </p>
               ) : null}
               {delivery.delivered_at ? (
-                <p className="text-xs text-slate-500">Đã giao: {formatDate(delivery.delivered_at)}</p>
+                <p className="text-xs text-slate-500">
+                  Đã giao: {formatDate(delivery.delivered_at)}
+                </p>
               ) : null}
             </div>
           ))}
