@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.exceptions import NotFoundException
 from app.core.input_validation import VietnamesePhoneValidator
+from app.core.language import detect_language
 from app.intent.base import BaseIntentClassifier
 from app.intent.categories import IntentCategory
 from app.intent.schemas import IntentResult
@@ -91,6 +92,12 @@ GREETING_INTRO_VI = (
     "tra cứu thông tin giao hàng và giải đáp các thắc mắc. "
     "Anh/chị cần Qiki hỗ trợ gì hôm nay ạ?"
 )
+GREETING_INTRO_EN = (
+    "I'm Qiki, the virtual assistant of Gas Quốc Cường Store. "
+    "I can help you find products, check prices, order gas or drinking water, "
+    "look up delivery info, and answer your questions. "
+    "How can Qiki help you today?"
+)
 
 
 @dataclass(frozen=True)
@@ -161,11 +168,12 @@ class ConversationService:
                 "status": "active",
             }
         )
+        greeting_language = detect_language(initial_message) if initial_message else "vi"
         await self.message_repository.create(
             {
                 "conversation_id": conversation.id,
                 "role": "assistant",
-                "content": self._build_greeting(user),
+                "content": self._build_greeting(user, greeting_language),
             }
         )
         if initial_message:
@@ -179,11 +187,13 @@ class ConversationService:
         return self._conversation_to_response(conversation)
 
     @staticmethod
-    def _build_greeting(user: User | None) -> str:
-        """Build the deterministic Vietnamese opening message (no LLM call)."""
-        salutation = (
-            f"Chào anh/chị {user.full_name}!" if user and user.full_name else "Chào quý khách!"
-        )
+    def _build_greeting(user: User | None, language: str = "vi") -> str:
+        """Build the deterministic opening message in the given language (no LLM)."""
+        name = user.full_name if user and user.full_name else None
+        if language == "en":
+            salutation = f"Hello {name}!" if name else "Hello there!"
+            return f"{salutation} {GREETING_INTRO_EN}"
+        salutation = f"Chào anh/chị {name}!" if name else "Chào quý khách!"
         return f"{salutation} {GREETING_INTRO_VI}"
 
     async def get_active_conversation(
@@ -1136,6 +1146,7 @@ Tin mới:
             conversation_id=conversation.id,
             user_id=user.id if user else None,
             product_context=product_context,
+            language=detect_language(content),
         )
         return await self.message_repository.create(
             {

@@ -58,6 +58,7 @@ class RAGPipeline:
         conversation_id: UUID | None = None,
         user_id: UUID | None = None,
         product_context: str | None = None,
+        language: str = "vi",
     ) -> RAGResponse:
         """Execute safety check, retrieval, context construction, and generation."""
         start_time = time.monotonic()
@@ -70,7 +71,7 @@ class RAGPipeline:
                 latency_ms=total_latency_ms,
             )
             return RAGResponse(
-                answer=self.safety_checker.get_emergency_response(),
+                answer=self.safety_checker.get_emergency_response(language),
                 sources=[],
                 query=query,
                 processed_query=query,
@@ -91,7 +92,8 @@ class RAGPipeline:
         if address_note:
             context = f"{address_note}\n\n{context}"
         history = self.context_builder.format_conversation_history(conversation_history or [])
-        system_prompt = self.prompts.get("system_chatbot_vi").render(
+        prompt_name = "system_chatbot_en" if language == "en" else "system_chatbot_vi"
+        system_prompt = self.prompts.get(prompt_name).render(
             context=context,
             conversation_history=history,
             current_date=self._current_date_vn(),
@@ -147,11 +149,12 @@ class RAGPipeline:
         category_filter: str | None = None,
         top_k: int = 5,
         product_context: str | None = None,
+        language: str = "vi",
     ) -> AsyncIterator[str]:
         """Stream an answer while keeping the same safety-first behavior."""
         safety = await self.safety_checker.check_query(query)
         if safety.is_emergency:
-            yield self.safety_checker.get_emergency_response()
+            yield self.safety_checker.get_emergency_response(language)
             return
 
         documents = await self._retrieve(query, top_k, category_filter)
@@ -163,7 +166,8 @@ class RAGPipeline:
         if address_note:
             context = f"{address_note}\n\n{context}"
         history = self.context_builder.format_conversation_history(conversation_history or [])
-        system_prompt = self.prompts.get("system_chatbot_vi").render(
+        prompt_name = "system_chatbot_en" if language == "en" else "system_chatbot_vi"
+        system_prompt = self.prompts.get(prompt_name).render(
             context=context,
             conversation_history=history,
             current_date=self._current_date_vn(),
