@@ -109,6 +109,78 @@ def render_email_otp(code: str, *, ttl_minutes: int) -> tuple[str, str, str]:
     return subject, text, html
 
 
+def render_price_alert_confirm(confirm_url: str, *, unsubscribe_url: str) -> tuple[str, str, str]:
+    """Build the Vietnamese double-opt-in confirmation email: (subject, text, html)."""
+    subject = "Xác nhận đăng ký nhận thông báo giá gas"
+    text = (
+        "Dạ chào bạn,\n\n"
+        "Bạn vừa đăng ký nhận email thông báo khi Gas Quốc Cường thay đổi giá gas.\n"
+        f"Vui lòng mở liên kết sau để xác nhận đăng ký: {confirm_url}\n\n"
+        "Nếu bạn không đăng ký, hãy bỏ qua email này hoặc hủy tại: "
+        f"{unsubscribe_url}"
+    )
+    body_html = (
+        '<p style="margin:0 0 16px">Dạ chào bạn,</p>'
+        '<p style="margin:0 0 16px">Bạn vừa đăng ký nhận email thông báo mỗi khi '
+        "Gas Quốc Cường cập nhật giá gas. Nhấn nút bên dưới để xác nhận đăng ký.</p>"
+        '<p style="margin:0;color:#64748b;font-size:14px">Nếu bạn không đăng ký, '
+        f'vui lòng bỏ qua email này hoặc <a href="{html_lib.escape(unsubscribe_url, quote=True)}" '
+        'style="color:#64748b">hủy đăng ký</a>.</p>'
+    )
+    html = render_email_layout(
+        "Xác nhận đăng ký nhận giá gas",
+        body_html,
+        cta_label="Xác nhận đăng ký",
+        cta_url=confirm_url,
+    )
+    return subject, text, html
+
+
+def render_price_alert_notification(
+    price_rows: Sequence[tuple[str, str]], *, unsubscribe_url: str
+) -> tuple[str, str, str]:
+    """Build the Vietnamese price-change notification email: (subject, text, html).
+
+    ``price_rows`` is a sequence of (product display name, formatted price)
+    pairs already rendered by the caller.
+    """
+    subject = "Cập nhật bảng giá gas Gas Quốc Cường"
+    text_lines = "\n".join(f"- {name}: {price}" for name, price in price_rows)
+    text = (
+        "Dạ chào bạn,\n\n"
+        "Gas Quốc Cường vừa cập nhật bảng giá gas. Giá mới như sau:\n"
+        f"{text_lines}\n\n"
+        f"Liên hệ đặt hàng: hotline {BRAND_HOTLINE}.\n"
+        f"Hủy nhận thông báo giá: {unsubscribe_url}"
+    )
+    rows_html = "".join(
+        "<tr>"
+        f'<td style="padding:8px 10px;border-bottom:1px solid #f1f5f9">{html_lib.escape(name)}</td>'
+        '<td style="padding:8px 10px;border-bottom:1px solid #f1f5f9;text-align:right;'
+        f'font-weight:600;color:{BRAND_ORANGE};white-space:nowrap">{html_lib.escape(price)}</td>'
+        "</tr>"
+        for name, price in price_rows
+    )
+    body_html = (
+        '<p style="margin:0 0 16px">Dạ chào bạn,</p>'
+        '<p style="margin:0 0 16px">Gas Quốc Cường vừa cập nhật bảng giá gas. '
+        "Giá mới như sau:</p>"
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" '
+        'style="border-collapse:collapse;font-size:15px;margin:0 0 18px">'
+        f"{rows_html}"
+        "</table>"
+        '<p style="margin:0;color:#64748b;font-size:14px">Liên hệ đặt hàng: hotline '
+        f"{BRAND_HOTLINE}.</p>"
+    )
+    html = render_email_layout(
+        "Bảng giá gas mới",
+        body_html,
+        cta_label="Hủy nhận thông báo",
+        cta_url=unsubscribe_url,
+    )
+    return subject, text, html
+
+
 class EmailService:
     """Send transactional emails through Gmail SMTP, Resend, or the Gmail API."""
 

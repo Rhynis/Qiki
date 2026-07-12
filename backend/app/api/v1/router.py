@@ -10,6 +10,7 @@ from app.api.v1.endpoints import (
     deliveries,
     knowledge_base,
     orders,
+    price_alerts,
     products,
     rag,
     review,
@@ -27,4 +28,5 @@ api_router.include_router(knowledge_base.router, tags=["Knowledge Base"])
 api_router.include_router(rag.router, tags=["RAG"])
 api_router.include_router(conversations.router, tags=["Conversations"])
 api_router.include_router(review.router, tags=["Review"])
+api_router.include_router(price_alerts.router, tags=["Price Alerts"])
 api_router.include_router(wishlist.router, tags=["Wishlist"])
