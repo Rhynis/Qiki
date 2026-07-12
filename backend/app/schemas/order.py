@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
@@ -121,6 +121,7 @@ class OrderResponse(BaseModel):
     total_amount: Decimal
     vat_invoice_requested: bool
     vat_info: VatInfo | None
+    einvoice: dict[str, Any] | None = None
     payment_method: PaymentMethod
     payment_status: PaymentStatus
     status: OrderStatus

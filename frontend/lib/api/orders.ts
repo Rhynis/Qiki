@@ -2,12 +2,18 @@ import { apiClient } from '@/lib/api/client'
 import type {
   CheckoutRequest,
   GuestOrderLookup,
+  InvoiceResult,
   Order,
   OrderCancelRequest,
   OrderListResponse,
   OrderSearchParams,
   OrderStatusUpdate,
 } from '@/types/order'
+
+export async function issueInvoice(orderId: string): Promise<InvoiceResult> {
+  const response = await apiClient.post<InvoiceResult>(`/api/v1/admin/orders/${orderId}/invoice`)
+  return response.data
+}
 
 export async function createOrder(data: CheckoutRequest, idempotencyKey: string): Promise<Order> {
   const response = await apiClient.post<Order>('/api/v1/orders/checkout', data, {

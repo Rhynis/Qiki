@@ -18,6 +18,7 @@ from app.db.session import get_db
 from app.models.user import User
 from app.repositories.order_repository import OrderRepository
 from app.repositories.product_repository import ProductRepository
+from app.schemas.einvoice import InvoiceResult
 from app.schemas.order import (
     CheckoutRequest,
     GuestOrderLookup,
@@ -27,6 +28,7 @@ from app.schemas.order import (
     OrderSearchParams,
     OrderStatusUpdate,
 )
+from app.services.einvoice import EInvoiceService
 from app.services.order_service import OrderService, is_serialization_failure
 
 router = APIRouter()
@@ -163,6 +165,23 @@ async def update_order_status(
     """Update an order status using valid transitions only."""
     service = build_order_service(session)
     return await service.update_order_status(order_id, payload.new_status, staff, payload.notes)
+
+
+@router.post(
+    "/admin/orders/{order_id}/invoice",
+    response_model=InvoiceResult,
+    summary="Issue an e-invoice",
+)
+@limiter.limit("30/minute")
+async def issue_invoice(
+    request: Request,
+    order_id: UUID,
+    staff: Annotated[User, Depends(get_current_staff)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InvoiceResult:
+    """Issue (or stub) a legal e-invoice for a delivered order."""
+    del request, staff
+    return await EInvoiceService(OrderRepository(session)).issue_for_order(order_id)
 
 
 @router.get("/admin/orders/statistics", summary="Get order statistics")

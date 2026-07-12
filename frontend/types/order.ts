@@ -68,6 +68,7 @@ export interface Order {
   total_amount: string
   vat_invoice_requested: boolean
   vat_info: VatInfo | null
+  einvoice: InvoiceResult | null
   payment_method: PaymentMethod
   payment_status: PaymentStatus
   status: OrderStatus
@@ -81,6 +82,15 @@ export interface Order {
   created_at: string
   updated_at: string
   items: OrderItem[]
+}
+
+export interface InvoiceResult {
+  provider: string
+  status: string
+  invoice_no: string | null
+  pdf_url: string | null
+  payload: Record<string, unknown> | null
+  issued_at: string | null
 }
 
 export interface OrderListResponse {

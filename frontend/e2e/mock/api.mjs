@@ -69,6 +69,7 @@ function buildOrder(overrides = {}) {
     total_amount: item.subtotal,
     vat_invoice_requested: false,
     vat_info: null,
+    einvoice: null,
     payment_method: 'cod',
     payment_status: 'pending',
     status: 'pending',
