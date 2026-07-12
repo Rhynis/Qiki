@@ -1,6 +1,7 @@
 """Database models."""
 
 from app.models.conversation import Conversation
+from app.models.coupon import Coupon, CouponRedemption
 from app.models.delivery import Delivery, DeliveryItem
 from app.models.knowledge_base import KnowledgeBase
 from app.models.message import Message
