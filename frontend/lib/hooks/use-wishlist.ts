@@ -18,7 +18,7 @@ export function useWishlist() {
     queryFn: wishlistApi.getWishlist,
     enabled: isAuthenticated,
   })
-  const products = useMemo(() => query.data ?? [], [query.data])
+  const products = useMemo(() => (Array.isArray(query.data) ? query.data : []), [query.data])
   const savedIds = useMemo(() => new Set(products.map((product) => product.id)), [products])
 
   return { ...query, products, savedIds, isAuthenticated }
