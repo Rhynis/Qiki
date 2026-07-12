@@ -37,6 +37,10 @@ def upgrade() -> None:
     )
     op.execute("CREATE INDEX idx_wishlists_user ON wishlists(user_id)")
     op.execute("COMMENT ON TABLE wishlists IS 'Products a customer saved to their wishlist'")
+    # Match the RLS baseline of the original tables (migration 001). The backend
+    # connects with a role that bypasses RLS, so enabling it with no policy only
+    # denies the anon/PostgREST API direct access to this backend-only table.
+    op.execute("ALTER TABLE wishlists ENABLE ROW LEVEL SECURITY")
 
 
 def downgrade() -> None:

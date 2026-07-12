@@ -45,6 +45,10 @@ def upgrade() -> None:
         "CREATE INDEX ix_price_subscriptions_confirmed "
         "ON price_subscriptions (confirmed) WHERE unsubscribed_at IS NULL"
     )
+    # Match the RLS baseline of the original tables (migration 001). The backend
+    # role bypasses RLS; enabling it with no policy denies anon/PostgREST direct
+    # access to this backend-only table (which also holds guest emails).
+    op.execute("ALTER TABLE price_subscriptions ENABLE ROW LEVEL SECURITY")
 
 
 def downgrade() -> None:
