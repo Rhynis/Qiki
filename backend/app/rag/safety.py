@@ -160,11 +160,23 @@ class SafetyChecker:
         re.compile(r"d[aâ]y.*gas.*n[uứ]t", re.IGNORECASE),
     ]
 
+    # Typographic apostrophes phones emit via autocorrect (e.g. U+2019 in
+    # "can't breathe"). Fold them to a straight ASCII apostrophe so emergency
+    # keyword matching is not defeated by curly quotes.
+    _APOSTROPHE_FOLD: ClassVar[dict[int, int]] = {
+        0x2019: 0x27,  # right single quotation mark -> '
+        0x2018: 0x27,  # left single quotation mark -> '
+        0x02BC: 0x27,  # modifier letter apostrophe -> '
+        0xFF07: 0x27,  # fullwidth apostrophe -> '
+        0x0060: 0x27,  # grave accent -> '
+    }
+
     def __init__(self) -> None:
         self.logger = get_logger(__name__)
 
     def _normalize(self, query: str) -> str:
         normalized = unicodedata.normalize("NFC", query).lower()
+        normalized = normalized.translate(self._APOSTROPHE_FOLD)
         return " ".join(normalized.split())
 
     def _ascii_fold(self, query: str) -> str:

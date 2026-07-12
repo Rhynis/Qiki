@@ -141,6 +141,9 @@ async def test_vietnamese_safety_query_returns_vietnamese_constant() -> None:
         "the cylinder is on fire",
         "I think it will explode",
         "I can't breathe, help",
+        # Phone autocorrect emits a curly apostrophe (U+2019); it must still match.
+        "I can’t breathe, help",  # noqa: RUF001
+        "I can’t breathe",  # noqa: RUF001
     ],
 )
 @pytest.mark.asyncio
