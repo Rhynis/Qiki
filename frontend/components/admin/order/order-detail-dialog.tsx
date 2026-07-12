@@ -193,9 +193,7 @@ export function OrderDetailDialog({ order, open, onOpenChange }: OrderDetailDial
                     Xuất hóa đơn điện tử
                   </Button>
                 ) : (
-                  <p className="text-xs text-slate-500">
-                    Chỉ xuất hóa đơn được cho đơn đã giao.
-                  </p>
+                  <p className="text-xs text-slate-500">Chỉ xuất hóa đơn được cho đơn đã giao.</p>
                 )}
               </DetailBlock>
             </div>

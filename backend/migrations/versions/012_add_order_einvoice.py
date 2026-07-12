@@ -26,7 +26,9 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     """Add the einvoice column."""
     op.execute("ALTER TABLE orders ADD COLUMN einvoice JSONB")
-    op.execute("COMMENT ON COLUMN orders.einvoice IS 'Issued e-invoice result (see EInvoiceService)'")
+    op.execute(
+        "COMMENT ON COLUMN orders.einvoice IS 'Issued e-invoice result (see EInvoiceService)'"
+    )
 
 
 def downgrade() -> None:
