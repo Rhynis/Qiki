@@ -1,13 +1,22 @@
 import { apiClient } from '@/lib/api/client'
 import type {
   CheckoutRequest,
+  Delivery,
+  DeliveryCreate,
+  DeliveryStatusUpdate,
   GuestOrderLookup,
+  InvoiceResult,
   Order,
   OrderCancelRequest,
   OrderListResponse,
   OrderSearchParams,
   OrderStatusUpdate,
 } from '@/types/order'
+
+export async function issueInvoice(orderId: string): Promise<InvoiceResult> {
+  const response = await apiClient.post<InvoiceResult>(`/api/v1/admin/orders/${orderId}/invoice`)
+  return response.data
+}
 
 export async function createOrder(data: CheckoutRequest, idempotencyKey: string): Promise<Order> {
   const response = await apiClient.post<Order>('/api/v1/orders/checkout', data, {
@@ -45,6 +54,26 @@ export async function getAdminOrders(params: OrderSearchParams = {}): Promise<Or
 
 export async function updateOrderStatus(orderId: string, data: OrderStatusUpdate): Promise<Order> {
   const response = await apiClient.patch<Order>(`/api/v1/admin/orders/${orderId}/status`, data)
+  return response.data
+}
+
+export async function createDelivery(orderId: string, data: DeliveryCreate): Promise<Delivery> {
+  const response = await apiClient.post<Delivery>(
+    `/api/v1/admin/orders/${orderId}/deliveries`,
+    data
+  )
+  return response.data
+}
+
+export async function updateDeliveryStatus(
+  orderId: string,
+  deliveryId: string,
+  data: DeliveryStatusUpdate
+): Promise<Delivery> {
+  const response = await apiClient.patch<Delivery>(
+    `/api/v1/admin/orders/${orderId}/deliveries/${deliveryId}`,
+    data
+  )
   return response.data
 }
 

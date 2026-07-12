@@ -69,6 +69,7 @@ function buildOrder(overrides = {}) {
     total_amount: item.subtotal,
     vat_invoice_requested: false,
     vat_info: null,
+    einvoice: null,
     payment_method: 'cod',
     payment_status: 'pending',
     status: 'pending',
@@ -82,6 +83,7 @@ function buildOrder(overrides = {}) {
     created_at: now,
     updated_at: now,
     items: [item],
+    deliveries: [],
     ...overrides,
   }
 }
@@ -142,6 +144,12 @@ export function resolveApi({ method, path, query, body = {}, cookie }) {
   }
   if (method === 'POST' && path === '/api/v1/products') {
     return json(201, product('new-1', body.sku ?? 'NEW', body.name ?? 'Mới', body.brand ?? 'Elf Gas', '12', body.category ?? 'gas', 'kg', String(body.price ?? '100000')))
+  }
+
+  // --- Wishlist ------------------------------------------------------------
+  if (method === 'GET' && path === '/api/v1/wishlist') return json(200, [])
+  if (/^\/api\/v1\/wishlist\/[^/]+$/.test(path) && (method === 'POST' || method === 'DELETE')) {
+    return json(204, undefined)
   }
 
   // --- Orders --------------------------------------------------------------

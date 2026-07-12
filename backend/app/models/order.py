@@ -12,6 +12,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDMixin
 
+if TYPE_CHECKING:
+    from app.models.delivery import Delivery
+
 
 class Order(Base, UUIDMixin, TimestampMixin):
     """Customer order with embedded delivery and payment details."""
@@ -39,6 +42,7 @@ class Order(Base, UUIDMixin, TimestampMixin):
     total_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     vat_invoice_requested: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     vat_info: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    einvoice: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     payment_method: Mapped[str] = mapped_column(String(20), default="cod", nullable=False)
     payment_status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
@@ -62,6 +66,13 @@ class Order(Base, UUIDMixin, TimestampMixin):
         back_populates="order",
         cascade="all, delete-orphan",
         lazy="selectin",
+    )
+    deliveries: Mapped[list["Delivery"]] = relationship(
+        "Delivery",
+        back_populates="order",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        order_by="Delivery.created_at",
     )
 
     if TYPE_CHECKING:

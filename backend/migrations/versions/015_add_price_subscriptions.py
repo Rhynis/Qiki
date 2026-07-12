@@ -1,7 +1,7 @@
 """Add price_subscriptions table for gas-price-change email alerts.
 
-Revision ID: 012_add_price_subscriptions
-Revises: 011_widen_conversation_status
+Revision ID: 015_add_price_subscriptions
+Revises: 014_add_order_einvoice
 Create Date: 2026-07-12
 
 Stores double-opt-in subscriptions (logged-in users and guest emails) for the
@@ -13,8 +13,8 @@ from collections.abc import Sequence
 
 from alembic import op
 
-revision: str = "012_add_price_subscriptions"
-down_revision: str | None = "011_widen_conversation_status"
+revision: str = "015_add_price_subscriptions"
+down_revision: str | None = "014_add_order_einvoice"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

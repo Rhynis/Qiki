@@ -88,6 +88,10 @@ class Settings(BaseSettings):
     LANGFUSE_HOST: str = "https://cloud.langfuse.com"
     SENTRY_DSN: str = ""
 
+    # Legal Vietnamese e-invoice provider. "none" uses the local Noop stub (no
+    # external call). "vnpt"/"viettel" are reserved for future real adapters.
+    EINVOICE_PROVIDER: Literal["none", "vnpt", "viettel"] = "none"
+
     # "smtp" (Gmail App Password) | "resend" | "gmail_api" (Gmail API over HTTPS,
     # for hosts that block outbound SMTP such as Railway).
     EMAIL_PROVIDER: Literal["smtp", "resend", "gmail_api"] = "smtp"

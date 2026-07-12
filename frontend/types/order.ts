@@ -49,6 +49,44 @@ export interface OrderItem {
   created_at: string
 }
 
+export type DeliveryStatus = 'pending' | 'shipping' | 'delivered' | 'cancelled'
+
+export interface DeliveryItem {
+  id: string
+  delivery_id: string
+  order_item_id: string
+  quantity: number
+  created_at: string
+}
+
+export interface Delivery {
+  id: string
+  order_id: string
+  code: string
+  status: DeliveryStatus
+  scheduled_at: string | null
+  delivered_at: string | null
+  notes: string | null
+  items: DeliveryItem[]
+  created_at: string
+}
+
+export interface DeliveryItemCreate {
+  order_item_id: string
+  quantity: number
+}
+
+export interface DeliveryCreate {
+  items: DeliveryItemCreate[]
+  scheduled_at?: string | null
+  notes?: string | null
+}
+
+export interface DeliveryStatusUpdate {
+  status: DeliveryStatus
+  notes?: string | null
+}
+
 export interface Order {
   id: string
   order_number: string
@@ -68,6 +106,7 @@ export interface Order {
   total_amount: string
   vat_invoice_requested: boolean
   vat_info: VatInfo | null
+  einvoice: InvoiceResult | null
   payment_method: PaymentMethod
   payment_status: PaymentStatus
   status: OrderStatus
@@ -81,6 +120,16 @@ export interface Order {
   created_at: string
   updated_at: string
   items: OrderItem[]
+  deliveries: Delivery[]
+}
+
+export interface InvoiceResult {
+  provider: string
+  status: string
+  invoice_no: string | null
+  pdf_url: string | null
+  payload: Record<string, unknown> | null
+  issued_at: string | null
 }
 
 export interface OrderListResponse {

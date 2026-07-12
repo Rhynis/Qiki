@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { OrderStatusTimeline } from '@/components/shop/order/order-status-timeline'
 import { PageHeader } from '@/components/shared/page-header'
 import { useCancelOrder, useOrder } from '@/lib/hooks/use-orders'
+import { deliveryItemLines, deliveryStatusLabels } from '@/lib/utils/delivery'
 import { formatDate, formatPhone, formatPrice } from '@/lib/utils/format'
 
 export function OrderDetailClient({ orderId }: { orderId: string }) {
@@ -60,6 +61,36 @@ export function OrderDetailClient({ orderId }: { orderId: string }) {
             ) : null}
           </div>
           <OrderStatusTimeline status={order.status} />
+          {order.deliveries.length > 0 ? (
+            <div className="space-y-2">
+              <h2 className="font-semibold">Tiến độ giao hàng</h2>
+              {order.deliveries.map((delivery) => (
+                <div
+                  key={delivery.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3"
+                >
+                  <div className="min-w-0">
+                    <p className="font-mono text-sm">{delivery.code}</p>
+                    <p className="text-sm text-slate-600">
+                      {deliveryItemLines(order, delivery).join(', ')}
+                    </p>
+                    {delivery.delivered_at ? (
+                      <p className="text-xs text-slate-500">
+                        Đã giao: {formatDate(delivery.delivered_at)}
+                      </p>
+                    ) : delivery.scheduled_at ? (
+                      <p className="text-xs text-slate-500">
+                        Hẹn giao: {formatDate(delivery.scheduled_at)}
+                      </p>
+                    ) : null}
+                  </div>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+                    {deliveryStatusLabels[delivery.status] ?? delivery.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : null}
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <h2 className="font-semibold">Giao hàng</h2>

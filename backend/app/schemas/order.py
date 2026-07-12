@@ -2,12 +2,13 @@
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from app.core.input_validation import VietnamesePhoneValidator, VietnameseTaxCodeValidator
+from app.schemas.delivery import DeliveryResponse
 
 OrderStatus = Literal["pending", "confirmed", "shipping", "delivered", "cancelled"]
 PaymentMethod = Literal["cod", "bank_transfer"]
@@ -121,6 +122,7 @@ class OrderResponse(BaseModel):
     total_amount: Decimal
     vat_invoice_requested: bool
     vat_info: VatInfo | None
+    einvoice: dict[str, Any] | None = None
     payment_method: PaymentMethod
     payment_status: PaymentStatus
     status: OrderStatus
@@ -134,6 +136,7 @@ class OrderResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     items: list[OrderItemResponse]
+    deliveries: list[DeliveryResponse] = Field(default_factory=list)
 
 
 class OrderListResponse(BaseModel):
