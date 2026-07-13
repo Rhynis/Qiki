@@ -1,6 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useState } from 'react'
@@ -17,6 +18,7 @@ function getSafeRedirectPath(value: string | null): string {
 }
 
 export function LoginForm() {
+  const t = useTranslations('auth')
   const searchParams = useSearchParams()
   const { login, isLoading } = useAuth()
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -39,7 +41,7 @@ export function LoginForm() {
         getSafeRedirectPath(searchParams.get('redirectTo'))
       )
     } catch (caught) {
-      setSubmitError(caught instanceof Error ? caught.message : 'Đăng nhập thất bại')
+      setSubmitError(caught instanceof Error ? caught.message : t('loginFailed'))
     }
   }
 
@@ -47,14 +49,14 @@ export function LoginForm() {
     <form className="space-y-5" onSubmit={handleSubmit(onSubmit)}>
       <div className="space-y-2">
         <label className="text-sm font-medium" htmlFor="identifier">
-          Số điện thoại hoặc email
+          {t('identifier')}
         </label>
         <input
           id="identifier"
           autoComplete="username"
           autoCapitalize="none"
           spellCheck={false}
-          placeholder="Số điện thoại hoặc email"
+          placeholder={t('identifier')}
           className="h-10 w-full rounded-md border px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
           {...register('identifier')}
         />
@@ -65,7 +67,7 @@ export function LoginForm() {
 
       <div className="space-y-2">
         <label className="text-sm font-medium" htmlFor="password">
-          Mật khẩu
+          {t('password')}
         </label>
         <input
           id="password"
@@ -79,16 +81,16 @@ export function LoginForm() {
 
       <div className="flex items-center justify-between text-sm">
         <Link className="text-primary hover:underline" href="/forgot-password">
-          Quên mật khẩu?
+          {t('forgotPassword')}
         </Link>
         <Link className="text-primary hover:underline" href="/register">
-          Đăng ký
+          {t('register')}
         </Link>
       </div>
 
       {submitError ? <p className="text-center text-sm text-red-600">{submitError}</p> : null}
       <Button className="w-full" disabled={isLoading || isSubmitting} type="submit">
-        {isLoading || isSubmitting ? 'Đang đăng nhập...' : 'Đăng nhập'}
+        {isLoading || isSubmitting ? t('loggingIn') : t('login')}
       </Button>
     </form>
   )

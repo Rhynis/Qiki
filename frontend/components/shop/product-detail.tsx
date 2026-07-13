@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useTranslations } from 'next-intl'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { ArrowLeft, Flame, Info, ShieldCheck } from 'lucide-react'
@@ -18,12 +19,13 @@ type ProductDetailProps = {
 }
 
 export function ProductDetail({ product }: ProductDetailProps) {
+  const t = useTranslations('productDetail')
   const router = useRouter()
   const addItem = useCartStore((state) => state.addItem)
   const inStock = product.stock_quantity > 0
   const addToCart = () => {
     addItem(product, 1)
-    toast.success('Đã thêm vào giỏ hàng')
+    toast.success(t('addedToCart'))
   }
 
   return (
@@ -31,7 +33,7 @@ export function ProductDetail({ product }: ProductDetailProps) {
       <Button asChild variant="outline">
         <Link href="/products">
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Sản phẩm
+          {t('backToProducts')}
         </Link>
       </Button>
 
@@ -67,7 +69,7 @@ export function ProductDetail({ product }: ProductDetailProps) {
               <div className="flex gap-3">
                 <Info className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
                 <div>
-                  <p className="font-semibold text-slate-950">Lưu ý phụ phí</p>
+                  <p className="font-semibold text-slate-950">{t('surchargeNote')}</p>
                   <p className="mt-1 leading-6">{product.pricing_note}</p>
                 </div>
               </div>
@@ -77,7 +79,7 @@ export function ProductDetail({ product }: ProductDetailProps) {
           {product.description ? (
             <Card>
               <CardHeader>
-                <CardTitle>Mô tả</CardTitle>
+                <CardTitle>{t('description')}</CardTitle>
               </CardHeader>
               <CardContent className="text-slate-700">{product.description}</CardContent>
             </Card>
@@ -88,7 +90,7 @@ export function ProductDetail({ product }: ProductDetailProps) {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <ShieldCheck className="h-5 w-5 text-primary" />
-                  An toàn sử dụng
+                  {t('safety')}
                 </CardTitle>
               </CardHeader>
               <CardContent className="text-slate-700">{product.safety_info}</CardContent>
@@ -97,7 +99,7 @@ export function ProductDetail({ product }: ProductDetailProps) {
 
           <div className="flex flex-wrap gap-3">
             <Button disabled={!inStock} onClick={addToCart}>
-              Thêm vào giỏ
+              {t('addToCart')}
             </Button>
             <Button
               disabled={!inStock}
@@ -107,7 +109,7 @@ export function ProductDetail({ product }: ProductDetailProps) {
                 router.push('/checkout')
               }}
             >
-              Mua ngay
+              {t('buyNow')}
             </Button>
             <WishlistButton productId={product.id} withLabel />
           </div>

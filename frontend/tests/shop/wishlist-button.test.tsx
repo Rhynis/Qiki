@@ -1,7 +1,8 @@
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { WishlistButton } from '@/components/shop/wishlist-button'
+import { renderWithIntl as render } from '../i18n-render'
 
 const { routerMocks, toggleMock, wishlistState, toastMocks } = vi.hoisted(() => ({
   routerMocks: { push: vi.fn() },

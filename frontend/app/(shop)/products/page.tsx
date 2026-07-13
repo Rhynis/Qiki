@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server'
 import { PageHeader } from '@/components/shared/page-header'
 import { ProductFilters } from '@/components/shop/product-filters'
 import { ProductGrid } from '@/components/shop/product-grid'
@@ -69,18 +70,19 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
   const params = parseProductParams(resolvedSearchParams)
   const products = await getInitialProducts(params)
   const category = params.category
+  const t = await getTranslations('products')
   const pageCopy: Record<ProductCategory | 'all', { title: string; description: string }> = {
     all: {
-      title: 'Sản phẩm',
-      description: 'Chọn gas LPG hoặc nước uống phù hợp cho gia đình và nhu cầu kinh doanh.',
+      title: t('titleAll'),
+      description: t('descriptionAll'),
     },
     gas: {
-      title: 'Sản phẩm gas LPG',
-      description: 'Chọn bình gas phù hợp cho gia đình hoặc nhu cầu kinh doanh.',
+      title: t('titleGas'),
+      description: t('descriptionGas'),
     },
     nuoc_uong: {
-      title: 'Nước Uống',
-      description: 'Đặt nước uống bình 20 lít, rõ giá tại cửa hàng và phụ phí giao tận nơi.',
+      title: t('titleWater'),
+      description: t('descriptionWater'),
     },
   }
   const copy = pageCopy[category ?? 'all']
@@ -91,10 +93,10 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
       <ProductDropdownProvider>
         <ProductFilters key={`${category ?? 'all'}:${params.brand ?? 'all'}`} category={category} />
         <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600">
-          <span>{products.total.toLocaleString('vi-VN')} sản phẩm</span>
+          <span>{t('count', { count: products.total })}</span>
           <div className="flex items-center gap-2">
-            <span className="hidden sm:inline">Trang {products.page.toLocaleString('vi-VN')}</span>
-            <span className="whitespace-nowrap font-medium text-slate-700">Sắp xếp:</span>
+            <span className="hidden sm:inline">{t('pageLabel', { page: products.page })}</span>
+            <span className="whitespace-nowrap font-medium text-slate-700">{t('sortLabel')}</span>
             <ProductSort />
           </div>
         </div>

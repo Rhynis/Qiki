@@ -1,6 +1,7 @@
 'use client'
 
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 
@@ -11,6 +12,7 @@ type ProductPaginationProps = {
 }
 
 export function ProductPagination({ page, limit, hasMore }: ProductPaginationProps) {
+  const t = useTranslations('products')
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -26,10 +28,10 @@ export function ProductPagination({ page, limit, hasMore }: ProductPaginationPro
     <div className="flex items-center justify-end gap-2">
       <Button variant="outline" disabled={page <= 1} onClick={() => goToPage(page - 1)}>
         <ChevronLeft className="mr-2 h-4 w-4" />
-        Trước
+        {t('previous')}
       </Button>
       <Button variant="outline" disabled={!hasMore} onClick={() => goToPage(page + 1)}>
-        Sau
+        {t('nextPage')}
         <ChevronRight className="ml-2 h-4 w-4" />
       </Button>
     </div>

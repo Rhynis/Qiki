@@ -1,6 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useState } from 'react'
@@ -16,6 +17,7 @@ import {
 } from '@/lib/validations/auth'
 
 export function PasswordResetRequestForm() {
+  const t = useTranslations('auth')
   const [formMessage, setFormMessage] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
   const {
@@ -33,9 +35,9 @@ export function PasswordResetRequestForm() {
     setFormError(null)
     try {
       await authApi.requestPasswordReset(values.email)
-      setFormMessage('Nếu email tồn tại, hướng dẫn đặt lại mật khẩu đã được gửi.')
+      setFormMessage(t('resetSent'))
     } catch (caught) {
-      setFormError(caught instanceof Error ? caught.message : 'Không thể gửi hướng dẫn')
+      setFormError(caught instanceof Error ? caught.message : t('sendFailed'))
     }
   }
 
@@ -43,7 +45,7 @@ export function PasswordResetRequestForm() {
     <form className="space-y-5" onSubmit={handleSubmit(onSubmit)}>
       <div className="space-y-2">
         <label className="text-sm font-medium" htmlFor="email">
-          Email
+          {t('email')}
         </label>
         <input
           id="email"
@@ -56,16 +58,17 @@ export function PasswordResetRequestForm() {
       {formMessage ? <p className="text-sm text-emerald-700">{formMessage}</p> : null}
       {formError ? <p className="text-sm text-red-600">{formError}</p> : null}
       <Button className="w-full" disabled={isSubmitting} type="submit">
-        {isSubmitting ? 'Đang gửi...' : 'Gửi hướng dẫn'}
+        {isSubmitting ? t('sending') : t('sendInstructions')}
       </Button>
       <Link className="block text-center text-sm text-primary hover:underline" href="/login">
-        Quay lại đăng nhập
+        {t('backToLogin')}
       </Link>
     </form>
   )
 }
 
 export function PasswordResetConfirmForm() {
+  const t = useTranslations('auth')
   const searchParams = useSearchParams()
   const [formMessage, setFormMessage] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
@@ -88,9 +91,9 @@ export function PasswordResetConfirmForm() {
     setFormError(null)
     try {
       await authApi.resetPassword(values.token ?? '', values.newPassword)
-      setFormMessage('Mật khẩu đã được cập nhật. Vui lòng đăng nhập.')
+      setFormMessage(t('passwordUpdated'))
     } catch (caught) {
-      setFormError(caught instanceof Error ? caught.message : 'Không thể cập nhật mật khẩu')
+      setFormError(caught instanceof Error ? caught.message : t('updateFailed'))
     }
   }
 
@@ -99,7 +102,7 @@ export function PasswordResetConfirmForm() {
       <input type="hidden" {...register('token')} />
       <div className="space-y-2">
         <label className="text-sm font-medium" htmlFor="newPassword">
-          Mật khẩu mới
+          {t('newPassword')}
         </label>
         <input
           id="newPassword"
@@ -115,7 +118,7 @@ export function PasswordResetConfirmForm() {
       </div>
       <div className="space-y-2">
         <label className="text-sm font-medium" htmlFor="confirmNewPassword">
-          Xác nhận mật khẩu mới
+          {t('confirmNewPassword')}
         </label>
         <input
           id="confirmNewPassword"
@@ -131,7 +134,7 @@ export function PasswordResetConfirmForm() {
       {formMessage ? <p className="text-sm text-emerald-700">{formMessage}</p> : null}
       {formError ? <p className="text-sm text-red-600">{formError}</p> : null}
       <Button className="w-full" disabled={isSubmitting} type="submit">
-        {isSubmitting ? 'Đang cập nhật...' : 'Cập nhật mật khẩu'}
+        {isSubmitting ? t('updating') : t('updatePassword')}
       </Button>
     </form>
   )

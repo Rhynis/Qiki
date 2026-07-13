@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
 import { CartReviewStep } from '@/components/shop/checkout/cart-review-step'
 import { CheckoutStepper } from '@/components/shop/checkout/checkout-stepper'
 import { ConfirmStep } from '@/components/shop/checkout/confirm-step'
@@ -10,12 +11,13 @@ import { PageHeader } from '@/components/shared/page-header'
 import { useCheckoutStore } from '@/lib/stores/checkout-store'
 
 export default function CheckoutPage() {
+  const t = useTranslations('checkout')
   const step = useCheckoutStore((state) => state.step)
   const nextStep = useCheckoutStore((state) => state.nextStep)
 
   return (
     <section className="mx-auto max-w-6xl space-y-6 px-4 py-8">
-      <PageHeader title="Thanh toán" description="Hoàn tất đơn hàng trong 4 bước." />
+      <PageHeader title={t('title')} description={t('description')} />
       <CheckoutStepper step={step} />
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         <div>

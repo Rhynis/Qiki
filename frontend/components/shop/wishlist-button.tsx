@@ -1,6 +1,7 @@
 'use client'
 
 import { Heart } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import { usePathname, useRouter } from 'next/navigation'
 import type { MouseEvent } from 'react'
 import { toast } from 'sonner'
@@ -20,19 +21,20 @@ type WishlistButtonProps = {
  * propagation so it never triggers navigation).
  */
 export function WishlistButton({ productId, className, withLabel = false }: WishlistButtonProps) {
+  const t = useTranslations('wishlistButton')
   const router = useRouter()
   const pathname = usePathname()
   const { savedIds, isAuthenticated } = useWishlist()
   const toggle = useToggleWishlist()
 
   const saved = savedIds.has(productId)
-  const label = saved ? 'Bỏ khỏi yêu thích' : 'Lưu vào yêu thích'
+  const label = saved ? t('remove') : t('save')
 
   function handleClick(event: MouseEvent<HTMLButtonElement>) {
     event.preventDefault()
     event.stopPropagation()
     if (!isAuthenticated) {
-      toast.info('Vui lòng đăng nhập để lưu sản phẩm yêu thích')
+      toast.info(t('loginRequired'))
       router.push(`/login?redirectTo=${encodeURIComponent(pathname)}`)
       return
     }
@@ -52,7 +54,7 @@ export function WishlistButton({ productId, className, withLabel = false }: Wish
       onClick={handleClick}
     >
       <Heart className={cn('h-5 w-5', saved && 'fill-red-500 text-red-500')} />
-      {withLabel ? <span className="ml-2">{saved ? 'Đã lưu' : 'Lưu'}</span> : null}
+      {withLabel ? <span className="ml-2">{saved ? t('saved') : t('saveShort')}</span> : null}
     </Button>
   )
 }

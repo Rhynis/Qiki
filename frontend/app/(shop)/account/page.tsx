@@ -13,6 +13,7 @@ import {
   UserRound,
 } from 'lucide-react'
 import Link from 'next/link'
+import { useTranslations } from 'next-intl'
 import { useRouter } from 'next/navigation'
 import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
@@ -27,21 +28,20 @@ import { useAuth } from '@/lib/hooks/use-auth'
 import { formatPhone } from '@/lib/utils/format'
 import { deliveryWardGroups } from '@/utils/vietnamese-address'
 
-const roleLabels: Record<string, string> = {
-  admin: 'Quản trị viên',
-  staff: 'Nhân viên',
-  customer: 'Khách hàng',
-}
-
 const DEFAULT_CITY = 'TP. Hồ Chí Minh'
 
-function displayValue(value: string | null | undefined) {
-  return value?.trim() ? value : 'Chưa cập nhật'
-}
-
 export default function AccountPage() {
+  const t = useTranslations('account')
+  const tCommon = useTranslations('common')
   const router = useRouter()
   const { user, isLoading, refreshUser, updateProfile } = useAuth()
+  const roleLabels: Record<string, string> = {
+    admin: t('roleAdmin'),
+    staff: t('roleStaff'),
+    customer: t('roleCustomer'),
+  }
+  const displayValue = (value: string | null | undefined) =>
+    value?.trim() ? value : t('notUpdated')
   const [checked, setChecked] = useState(false)
   const [delivery, setDelivery] = useState({
     address: '',
@@ -84,7 +84,9 @@ export default function AccountPage() {
   if (!checked || isLoading) {
     return (
       <section className="mx-auto max-w-4xl px-4 py-8">
-        <div className="rounded-lg border bg-white p-6 text-sm text-slate-600">Đang tải...</div>
+        <div className="rounded-lg border bg-white p-6 text-sm text-slate-600">
+          {tCommon('loading')}
+        </div>
       </section>
     )
   }
@@ -99,23 +101,23 @@ export default function AccountPage() {
     icon: typeof UserRound
     trailing?: ReactNode
   }> = [
-    { label: 'Họ tên', value: displayValue(user.full_name), icon: UserRound },
+    { label: t('fullName'), value: displayValue(user.full_name), icon: UserRound },
     {
-      label: 'Email',
+      label: t('email'),
       value: displayValue(user.email),
       icon: Mail,
       trailing: emailVerified ? (
-        <span className="inline-flex items-center text-emerald-600" title="Email đã xác minh">
-          <BadgeCheck className="h-4 w-4 shrink-0" aria-label="Email đã xác minh" />
+        <span className="inline-flex items-center text-emerald-600" title={t('emailVerified')}>
+          <BadgeCheck className="h-4 w-4 shrink-0" aria-label={t('emailVerified')} />
         </span>
       ) : null,
     },
     {
-      label: 'Số điện thoại',
-      value: user.phone ? formatPhone(user.phone) : 'Chưa cập nhật',
+      label: t('phone'),
+      value: user.phone ? formatPhone(user.phone) : t('notUpdated'),
       icon: Phone,
     },
-    { label: 'Vai trò', value: roleLabels[user.role] ?? user.role, icon: ShieldCheck },
+    { label: t('role'), value: roleLabels[user.role] ?? user.role, icon: ShieldCheck },
   ]
 
   const saveDelivery = async () => {
@@ -128,9 +130,9 @@ export default function AccountPage() {
         delivery_city: delivery.delivery_city.trim() || DEFAULT_CITY,
         delivery_notes: delivery.delivery_notes,
       })
-      toast.success('Đã lưu thông tin giao hàng mặc định')
+      toast.success(t('savedDelivery'))
     } catch (caught) {
-      toast.error(caught instanceof Error ? caught.message : 'Không thể lưu thông tin')
+      toast.error(caught instanceof Error ? caught.message : t('saveError'))
     } finally {
       setSaving(false)
     }
@@ -138,7 +140,7 @@ export default function AccountPage() {
 
   return (
     <section className="mx-auto max-w-4xl space-y-6 px-4 py-8">
-      <PageHeader title="Tài khoản" description="Thông tin đăng nhập và liên hệ của bạn." />
+      <PageHeader title={t('title')} description={t('description')} />
 
       <div className="rounded-lg border bg-white p-6 shadow-sm">
         <div className="grid gap-4 sm:grid-cols-2">
@@ -164,7 +166,7 @@ export default function AccountPage() {
           <div className="mt-6 rounded-lg border bg-amber-50 p-4">
             <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-amber-700">
               <ShieldAlert className="h-4 w-4" />
-              Email chưa xác minh
+              {t('emailUnverified')}
             </div>
             <div className="mt-3">
               <EmailOtpVerification email={user.email} onVerified={() => void refreshUser()} />
@@ -176,19 +178,19 @@ export default function AccountPage() {
           <Button asChild>
             <Link href="/forgot-password">
               <KeyRound className="mr-2 h-4 w-4" />
-              Đổi mật khẩu
+              {t('changePassword')}
             </Link>
           </Button>
           <Button asChild variant="outline">
             <Link href="/orders">
               <ClipboardList className="mr-2 h-4 w-4" />
-              Đơn hàng của tôi
+              {t('myOrders')}
             </Link>
           </Button>
           <Button asChild variant="outline">
             <Link href="/wishlist">
               <Heart className="mr-2 h-4 w-4" />
-              Sản phẩm yêu thích
+              {t('wishlist')}
             </Link>
           </Button>
         </div>
@@ -198,20 +200,20 @@ export default function AccountPage() {
         <div className="mb-4 flex items-center gap-2">
           <MapPin className="h-5 w-5 text-primary" />
           <div>
-            <h2 className="text-base font-semibold text-slate-950">Địa chỉ giao hàng mặc định</h2>
-            <p className="text-sm text-slate-600">
-              Lưu sẵn để tự động điền khi thanh toán và khi đặt hàng qua Qiki.
-            </p>
+            <h2 className="text-base font-semibold text-slate-950">
+              {t('defaultAddressTitle')}
+            </h2>
+            <p className="text-sm text-slate-600">{t('defaultAddressSubtitle')}</p>
           </div>
         </div>
 
         <div className="grid gap-4">
           <div className="space-y-2">
-            <Label htmlFor="account_address">Địa chỉ</Label>
+            <Label htmlFor="account_address">{t('address')}</Label>
             <Input
               id="account_address"
               value={delivery.address}
-              placeholder="Số nhà, tên đường, khu phố"
+              placeholder={t('addressPlaceholder')}
               onChange={(event) =>
                 setDelivery((prev) => ({ ...prev, address: event.target.value }))
               }
@@ -219,18 +221,19 @@ export default function AccountPage() {
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="account_ward">Phường/xã</Label>
+              <Label htmlFor="account_ward">{t('ward')}</Label>
               {/* Same ward list as checkout so a saved ward prefills the checkout
                   <select> cleanly (a free-text ward would not match its options). */}
               <select
                 id="account_ward"
+                aria-label={t('ward')}
                 className="h-10 w-full rounded-md border bg-white px-3 text-sm"
                 value={delivery.delivery_ward}
                 onChange={(event) =>
                   setDelivery((prev) => ({ ...prev, delivery_ward: event.target.value }))
                 }
               >
-                <option value="">Chọn phường/xã</option>
+                <option value="">{t('selectWard')}</option>
                 {deliveryWardGroups.map((group) => (
                   <optgroup key={group.name} label={group.name}>
                     {group.wards.map((ward) => (
@@ -243,7 +246,7 @@ export default function AccountPage() {
               </select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="account_city">Thành phố</Label>
+              <Label htmlFor="account_city">{t('city')}</Label>
               <Input
                 id="account_city"
                 value={delivery.delivery_city}
@@ -254,11 +257,11 @@ export default function AccountPage() {
             </div>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="account_notes">Ghi chú giao hàng</Label>
+            <Label htmlFor="account_notes">{t('deliveryNotes')}</Label>
             <Textarea
               id="account_notes"
               value={delivery.delivery_notes}
-              placeholder="Ví dụ: giao giờ hành chính, gọi trước khi tới…"
+              placeholder={t('deliveryNotesPlaceholder')}
               onChange={(event) =>
                 setDelivery((prev) => ({ ...prev, delivery_notes: event.target.value }))
               }
@@ -266,7 +269,7 @@ export default function AccountPage() {
           </div>
           <div>
             <Button type="button" disabled={saving} onClick={saveDelivery}>
-              {saving ? 'Đang lưu...' : 'Lưu thông tin giao hàng'}
+              {saving ? t('saving') : t('saveDelivery')}
             </Button>
           </div>
         </div>

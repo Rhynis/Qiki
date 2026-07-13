@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
 import { useOpeningStatus } from '@/lib/hooks/use-opening-status'
 import { cn } from '@/lib/utils'
 
@@ -32,12 +33,14 @@ const BADGE_STYLES = {
  * hero card (dark). Stays in sync with the real opening hours via useOpeningStatus.
  */
 export function StoreStatusBadge({ variant = 'light', className }: StoreStatusBadgeProps) {
+  const t = useTranslations('shared')
   const status = useOpeningStatus()
   const styles = BADGE_STYLES[variant]
   const isOpen = status?.isOpen ?? false
   const stateClass = status === null ? styles.pending : isOpen ? styles.open : styles.closed
   const dotClass = status === null ? styles.pendingDot : isOpen ? styles.openDot : styles.closedDot
-  const label = status === null ? 'Đang cập nhật' : isOpen ? 'Đang mở cửa' : 'Ngoài giờ'
+  const label =
+    status === null ? t('storeUpdating') : isOpen ? t('storeOpen') : t('storeClosed')
 
   return (
     <span

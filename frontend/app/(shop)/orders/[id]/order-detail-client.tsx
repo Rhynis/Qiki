@@ -1,15 +1,20 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { OrderStatusTimeline } from '@/components/shop/order/order-status-timeline'
 import { PageHeader } from '@/components/shared/page-header'
 import { useCancelOrder, useOrder } from '@/lib/hooks/use-orders'
-import { deliveryItemLines, deliveryStatusLabels } from '@/lib/utils/delivery'
+import { deliveryItemLines } from '@/lib/utils/delivery'
 import { formatDate, formatPhone, formatPrice } from '@/lib/utils/format'
+import type { DeliveryStatus } from '@/types/order'
 
 export function OrderDetailClient({ orderId }: { orderId: string }) {
+  const t = useTranslations('orderDetail')
+  const tCommon = useTranslations('common')
+  const tDelivery = useTranslations('deliveryStatus')
   const [phone, setPhone] = useState('')
   const [verifiedPhone, setVerifiedPhone] = useState<string | undefined>(undefined)
   const { data: order, isLoading, isError } = useOrder(orderId, verifiedPhone)
@@ -22,7 +27,7 @@ export function OrderDetailClient({ orderId }: { orderId: string }) {
 
   const submitCancel = async () => {
     if (!order) return
-    if (!window.confirm('Hủy đơn hàng này?')) return
+    if (!window.confirm(t('cancelConfirm'))) return
     await cancelOrder.mutateAsync({
       orderId: order.id,
       data: { phone: verifiedPhone, reason: 'Customer cancelled from website' },
@@ -31,14 +36,14 @@ export function OrderDetailClient({ orderId }: { orderId: string }) {
 
   return (
     <section className="mx-auto max-w-4xl space-y-6 px-4 py-8">
-      <PageHeader title="Chi tiết đơn hàng" />
-      {isLoading ? <p className="text-sm text-slate-600">Đang tải...</p> : null}
+      <PageHeader title={t('title')} />
+      {isLoading ? <p className="text-sm text-slate-600">{tCommon('loading')}</p> : null}
       {isError ? (
         <div className="space-y-3 rounded-lg border bg-white p-4">
-          <p className="text-sm text-slate-600">Nhập số điện thoại đặt hàng để xem đơn.</p>
+          <p className="text-sm text-slate-600">{t('phonePrompt')}</p>
           <div className="flex gap-2">
             <Input value={phone} onChange={(event) => setPhone(event.target.value)} />
-            <Button onClick={verifyPhone}>Xem</Button>
+            <Button onClick={verifyPhone}>{t('view')}</Button>
           </div>
         </div>
       ) : null}
@@ -56,14 +61,14 @@ export function OrderDetailClient({ orderId }: { orderId: string }) {
                 variant="destructive"
                 onClick={submitCancel}
               >
-                Hủy đơn
+                {t('cancelOrder')}
               </Button>
             ) : null}
           </div>
           <OrderStatusTimeline status={order.status} />
           {order.deliveries.length > 0 ? (
             <div className="space-y-2">
-              <h2 className="font-semibold">Tiến độ giao hàng</h2>
+              <h2 className="font-semibold">{t('deliveryProgress')}</h2>
               {order.deliveries.map((delivery) => (
                 <div
                   key={delivery.id}
@@ -76,16 +81,16 @@ export function OrderDetailClient({ orderId }: { orderId: string }) {
                     </p>
                     {delivery.delivered_at ? (
                       <p className="text-xs text-slate-500">
-                        Đã giao: {formatDate(delivery.delivered_at)}
+                        {t('delivered', { date: formatDate(delivery.delivered_at) })}
                       </p>
                     ) : delivery.scheduled_at ? (
                       <p className="text-xs text-slate-500">
-                        Hẹn giao: {formatDate(delivery.scheduled_at)}
+                        {t('scheduled', { date: formatDate(delivery.scheduled_at) })}
                       </p>
                     ) : null}
                   </div>
                   <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
-                    {deliveryStatusLabels[delivery.status] ?? delivery.status}
+                    {tDelivery(delivery.status as DeliveryStatus)}
                   </span>
                 </div>
               ))}
@@ -93,7 +98,7 @@ export function OrderDetailClient({ orderId }: { orderId: string }) {
           ) : null}
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <h2 className="font-semibold">Giao hàng</h2>
+              <h2 className="font-semibold">{t('delivery')}</h2>
               <p>{order.customer_name}</p>
               <p>{formatPhone(order.customer_phone)}</p>
               <p className="text-slate-600">
@@ -109,7 +114,7 @@ export function OrderDetailClient({ orderId }: { orderId: string }) {
             </div>
             {order.vat_invoice_requested && order.vat_info ? (
               <div>
-                <h2 className="font-semibold">Hóa đơn VAT</h2>
+                <h2 className="font-semibold">{t('vatInvoice')}</h2>
                 <p>{order.vat_info.company_name}</p>
                 <p>{order.vat_info.tax_code}</p>
                 <p className="text-slate-600">{order.vat_info.address}</p>
@@ -130,11 +135,15 @@ export function OrderDetailClient({ orderId }: { orderId: string }) {
             ))}
           </div>
           <div className="space-y-1 text-right">
-            <p className="text-sm text-slate-600">Tạm tính {formatPrice(order.subtotal)}</p>
             <p className="text-sm text-slate-600">
-              Phí giao hàng {formatPrice(order.shipping_fee)}
+              {t('subtotal', { amount: formatPrice(order.subtotal) })}
             </p>
-            <p className="text-xl font-semibold">Tổng {formatPrice(order.total_amount)}</p>
+            <p className="text-sm text-slate-600">
+              {t('shippingFee', { amount: formatPrice(order.shipping_fee) })}
+            </p>
+            <p className="text-xl font-semibold">
+              {t('total', { amount: formatPrice(order.total_amount) })}
+            </p>
           </div>
         </div>
       ) : null}

@@ -1,9 +1,10 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Header } from '@/components/shared/header'
 import { UserMenu } from '@/components/shared/user-menu'
 import type { User } from '@/lib/api/auth'
+import { renderWithIntl as render } from '../i18n-render'
 
 const routerMocks = vi.hoisted(() => ({
   push: vi.fn(),

@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -19,6 +20,7 @@ function issueMap(error: unknown): Record<string, string> {
 }
 
 export function PaymentStep({ onNext }: { onNext: () => void }) {
+  const t = useTranslations('checkout')
   const form = useCheckoutStore((state) => state.form)
   const updateForm = useCheckoutStore((state) => state.updateForm)
   const previousStep = useCheckoutStore((state) => state.previousStep)
@@ -37,7 +39,7 @@ export function PaymentStep({ onNext }: { onNext: () => void }) {
   return (
     <div className="space-y-5 rounded-lg border bg-white p-5">
       <div className="space-y-3">
-        <Label>Phương thức thanh toán</Label>
+        <Label>{t('paymentMethod')}</Label>
         <RadioGroup
           className="grid gap-3 md:grid-cols-2"
           value={form.payment_method}
@@ -46,15 +48,15 @@ export function PaymentStep({ onNext }: { onNext: () => void }) {
           <label className="flex cursor-pointer items-center gap-3 rounded-lg border p-4">
             <RadioGroupItem value="cod" />
             <span>
-              <span className="block font-medium">Thanh toán khi nhận hàng</span>
-              <span className="text-sm text-slate-600">Phù hợp cho giao gas tận nơi.</span>
+              <span className="block font-medium">{t('codTitle')}</span>
+              <span className="text-sm text-slate-600">{t('codDescription')}</span>
             </span>
           </label>
           <label className="flex cursor-pointer items-center gap-3 rounded-lg border p-4">
             <RadioGroupItem value="bank_transfer" />
             <span>
-              <span className="block font-medium">Chuyển khoản ngân hàng</span>
-              <span className="text-sm text-slate-600">Nhân viên sẽ xác nhận sau khi đặt.</span>
+              <span className="block font-medium">{t('bankTransferTitle')}</span>
+              <span className="text-sm text-slate-600">{t('bankTransferDescription')}</span>
             </span>
           </label>
         </RadioGroup>
@@ -68,13 +70,13 @@ export function PaymentStep({ onNext }: { onNext: () => void }) {
           checked={form.vat_invoice_requested}
           onCheckedChange={(checked) => updateForm({ vat_invoice_requested: checked === true })}
         />
-        Yêu cầu hóa đơn VAT
+        {t('vatInvoice')}
       </label>
 
       {form.vat_invoice_requested ? (
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="company_name">Tên công ty</Label>
+            <Label htmlFor="company_name">{t('companyName')}</Label>
             <Input
               id="company_name"
               value={form.vat_info.company_name}
@@ -87,7 +89,7 @@ export function PaymentStep({ onNext }: { onNext: () => void }) {
             ) : null}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="tax_code">Mã số thuế</Label>
+            <Label htmlFor="tax_code">{t('taxCode')}</Label>
             <Input
               id="tax_code"
               value={form.vat_info.tax_code}
@@ -100,7 +102,7 @@ export function PaymentStep({ onNext }: { onNext: () => void }) {
             ) : null}
           </div>
           <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="vat_address">Địa chỉ xuất hóa đơn</Label>
+            <Label htmlFor="vat_address">{t('vatAddress')}</Label>
             <Input
               id="vat_address"
               value={form.vat_info.address}
@@ -116,7 +118,7 @@ export function PaymentStep({ onNext }: { onNext: () => void }) {
       ) : null}
 
       <div className="space-y-2">
-        <Label htmlFor="customer_notes">Ghi chú đơn hàng</Label>
+        <Label htmlFor="customer_notes">{t('orderNotes')}</Label>
         <Textarea
           id="customer_notes"
           value={form.customer_notes}
@@ -126,10 +128,10 @@ export function PaymentStep({ onNext }: { onNext: () => void }) {
 
       <div className="flex justify-between">
         <Button type="button" variant="outline" onClick={previousStep}>
-          Quay lại
+          {t('back')}
         </Button>
         <Button type="button" onClick={submit}>
-          Tiếp tục
+          {t('next')}
         </Button>
       </div>
     </div>

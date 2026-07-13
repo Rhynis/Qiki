@@ -1,17 +1,25 @@
 'use client'
 
 import { Check } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import { cn } from '@/lib/utils'
 import type { CheckoutStep } from '@/lib/stores/checkout-store'
 
-const steps: Array<{ id: CheckoutStep; label: string }> = [
-  { id: 1, label: 'Giỏ hàng' },
-  { id: 2, label: 'Thông tin' },
-  { id: 3, label: 'Thanh toán' },
-  { id: 4, label: 'Xác nhận' },
-]
+const stepLabelKeys = {
+  1: 'stepCart',
+  2: 'stepInfo',
+  3: 'stepPayment',
+  4: 'stepConfirm',
+} as const
 
 export function CheckoutStepper({ step }: { step: CheckoutStep }) {
+  const t = useTranslations('checkout')
+  const steps: Array<{ id: CheckoutStep; label: string }> = [
+    { id: 1, label: t(stepLabelKeys[1]) },
+    { id: 2, label: t(stepLabelKeys[2]) },
+    { id: 3, label: t(stepLabelKeys[3]) },
+    { id: 4, label: t(stepLabelKeys[4]) },
+  ]
   return (
     <div className="grid grid-cols-4 gap-2">
       {steps.map((item) => {

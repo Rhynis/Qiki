@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   Select,
@@ -10,15 +11,16 @@ import {
 } from '@/components/ui/select'
 import { useDropdownOpen } from './product-dropdown-context'
 
-const sortOptions = {
-  'created_at:desc': 'Mới nhất',
-  'price:asc': 'Giá tăng dần',
-  'price:desc': 'Giá giảm dần',
-  'name:asc': 'Tên A-Z',
-  'name:desc': 'Tên Z-A',
-}
+const sortOptionKeys = {
+  'created_at:desc': 'sortNewest',
+  'price:asc': 'sortPriceAsc',
+  'price:desc': 'sortPriceDesc',
+  'name:asc': 'sortNameAsc',
+  'name:desc': 'sortNameDesc',
+} as const
 
 export function ProductSort() {
+  const t = useTranslations('products')
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -37,17 +39,17 @@ export function ProductSort() {
   return (
     <Select
       modal={false}
-      value={value in sortOptions ? value : 'created_at:desc'}
+      value={value in sortOptionKeys ? value : 'created_at:desc'}
       onValueChange={updateSort}
       {...sortDropdown}
     >
-      <SelectTrigger aria-label="Sắp xếp" className="w-[180px]">
+      <SelectTrigger aria-label={t('sort')} className="w-[180px]">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {Object.entries(sortOptions).map(([optionValue, label]) => (
+        {Object.entries(sortOptionKeys).map(([optionValue, labelKey]) => (
           <SelectItem key={optionValue} value={optionValue}>
-            {label}
+            {t(labelKey)}
           </SelectItem>
         ))}
       </SelectContent>

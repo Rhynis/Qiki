@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl'
 import { EmptyState } from '@/components/shared/empty-state'
 import { ProductCard } from '@/components/shop/product-card'
 import type { Product } from '@/types/product'
@@ -7,13 +8,10 @@ type ProductGridProps = {
 }
 
 export function ProductGrid({ products }: ProductGridProps) {
+  const t = useTranslations('products')
+
   if (products.length === 0) {
-    return (
-      <EmptyState
-        title="Chưa có sản phẩm phù hợp"
-        description="Thử đổi bộ lọc hoặc quay lại sau khi cửa hàng cập nhật tồn kho."
-      />
-    )
+    return <EmptyState title={t('emptyTitle')} description={t('emptyDescription')} />
   }
 
   return (
