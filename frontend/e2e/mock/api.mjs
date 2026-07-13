@@ -8,13 +8,28 @@
 const now = '2026-06-15T00:00:00.000Z'
 
 export const PRODUCTS = [
-  product('elf-12', 'ELF-12KG', 'Bình gas Elf 12kg (đỏ)', 'Elf Gas', '12', 'gas', 'kg', '710000'),
+  product('elf-12', 'ELF-12KG', 'Bình gas Elf 12kg (đỏ)', 'Elf Gas', '12', 'gas', 'kg', '710000', { parent_id: 'parent-elf', colour: 'đỏ', variant_label: '12 kg (đỏ)' }),
   product('sp-12', 'SP-12KG', 'Bình gas Saigon Petro 12kg', 'Saigon Petro', '12', 'gas', 'kg', '605000'),
-  product('elf-6', 'ELF-6KG', 'Bình gas Elf 6kg', 'Elf Gas', '6', 'gas', 'kg', '350000'),
+  product('elf-6', 'ELF-6KG', 'Bình gas Elf 6kg', 'Elf Gas', '6', 'gas', 'kg', '350000', { parent_id: 'parent-elf', colour: null, variant_label: '6 kg' }),
   product('water-20', 'WATER-20L', 'Nước Hoàn Hảo 20 lít', 'Hoàn Hảo', '20', 'nuoc_uong', 'lít', '55000'),
 ]
 
-function product(id, sku, name, brand, size, category, unit, price) {
+// Parent groupings for the grouped catalog + variant-selector journeys.
+const PARENTS = [
+  {
+    id: 'parent-elf',
+    name: 'Bình gas Elf',
+    brand: 'Elf Gas',
+    category: 'gas',
+    description: 'Sản phẩm mẫu cho kiểm thử.',
+    image_url: null,
+    is_active: true,
+    created_at: now,
+    updated_at: now,
+  },
+]
+
+function product(id, sku, name, brand, size, category, unit, price, extra = {}) {
   return {
     id,
     sku,
@@ -32,7 +47,19 @@ function product(id, sku, name, brand, size, category, unit, price) {
     is_active: true,
     created_at: now,
     updated_at: now,
+    parent_id: extra.parent_id ?? null,
+    colour: extra.colour ?? null,
+    variant_label: extra.variant_label ?? null,
   }
+}
+
+function parentDetail(parentId) {
+  const parent = PARENTS.find((p) => p.id === parentId)
+  if (!parent) return null
+  const variants = PRODUCTS.filter((p) => p.parent_id === parentId).sort(
+    (a, b) => Number(a.price) - Number(b.price)
+  )
+  return { ...parent, variants }
 }
 
 function buildOrder(overrides = {}) {
@@ -135,6 +162,31 @@ export function resolveApi({ method, path, query, body = {}, cookie }) {
   }
   if (method === 'GET' && path === '/api/v1/products/brands') {
     return json(200, [...new Set(PRODUCTS.map((p) => p.brand))])
+  }
+  if (method === 'GET' && path === '/api/v1/products/parents') {
+    const category = query.get('category')
+    const items = PARENTS.filter((p) => !category || p.category === category).map((parent) => {
+      const variants = PRODUCTS.filter((p) => p.parent_id === parent.id)
+      const prices = variants.map((v) => Number(v.price))
+      return {
+        id: parent.id,
+        name: parent.name,
+        brand: parent.brand,
+        category: parent.category,
+        description: parent.description,
+        image_url: parent.image_url,
+        min_price: (prices.length ? Math.min(...prices) : 0).toFixed(2),
+        max_price: (prices.length ? Math.max(...prices) : 0).toFixed(2),
+        variant_count: variants.length,
+        in_stock: variants.some((v) => v.stock_quantity > 0),
+      }
+    })
+    return json(200, { items, total: items.length, page: 1, limit: 20, has_more: false })
+  }
+  const parentMatch = /^\/api\/v1\/products\/parents\/([^/]+)$/.exec(path)
+  if (method === 'GET' && parentMatch) {
+    const detail = parentDetail(parentMatch[1])
+    return detail ? json(200, detail) : json(404, { detail: 'Not found' })
   }
   if (method === 'GET' && path === '/api/v1/admin/products/low-stock') return json(200, [])
   const productMatch = /^\/api\/v1\/products\/([^/]+)$/.exec(path)

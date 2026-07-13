@@ -2,22 +2,41 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { ProductDetail } from '@/components/shop/product-detail'
 import { formatProductSize } from '@/lib/utils/format'
-import type { Product } from '@/types/product'
+import type { Product, ProductParent } from '@/types/product'
 
 type ProductDetailPageProps = {
   params: Promise<{ id: string }>
 }
 
-async function getProduct(productId: string): Promise<Product | null> {
+function apiUrl(path: string): URL {
   const apiBaseUrl = process.env.BACKEND_URL ?? 'http://localhost:8000'
-  const url = new URL(`/api/v1/products/${productId}`, apiBaseUrl)
+  return new URL(path, apiBaseUrl)
+}
 
+async function getProduct(productId: string): Promise<Product | null> {
   try {
-    const response = await fetch(url, { cache: 'no-store' })
+    const response = await fetch(apiUrl(`/api/v1/products/${productId}`), { cache: 'no-store' })
     if (!response.ok) return null
     return (await response.json()) as Product
   } catch {
     return null
+  }
+}
+
+/** Fetch the sibling variants so the detail page can offer a variant selector. */
+async function getVariants(product: Product): Promise<Product[]> {
+  if (!product.parent_id) return [product]
+  try {
+    const response = await fetch(apiUrl(`/api/v1/products/parents/${product.parent_id}`), {
+      cache: 'no-store',
+    })
+    if (!response.ok) return [product]
+    const parent = (await response.json()) as ProductParent
+    const variants = parent.variants ?? []
+    if (!variants.some((variant) => variant.id === product.id)) return [product, ...variants]
+    return variants
+  } catch {
+    return [product]
   }
 }
 
@@ -43,6 +62,8 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
   if (!product) {
     notFound()
   }
+
+  const variants = await getVariants(product)
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -70,7 +91,7 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <ProductDetail product={product} />
+      <ProductDetail product={product} variants={variants} />
     </>
   )
 }

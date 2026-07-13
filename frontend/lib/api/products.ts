@@ -4,6 +4,10 @@ import type {
   ProductCategory,
   ProductCreateInput,
   ProductListResponse,
+  ProductParent,
+  ProductParentCreateInput,
+  ProductParentListResponse,
+  ProductParentUpdateInput,
   ProductSearchParams,
   ProductUpdateInput,
 } from '@/types/product'
@@ -49,4 +53,40 @@ export async function getLowStockProducts(threshold = 10): Promise<Product[]> {
     params: { threshold },
   })
   return response.data
+}
+
+export async function getProductParents(params: {
+  category?: ProductCategory
+  skip?: number
+  limit?: number
+} = {}): Promise<ProductParentListResponse> {
+  const response = await apiClient.get<ProductParentListResponse>('/api/v1/products/parents', {
+    params,
+  })
+  return response.data
+}
+
+export async function getProductParent(parentId: string): Promise<ProductParent> {
+  const response = await apiClient.get<ProductParent>(`/api/v1/products/parents/${parentId}`)
+  return response.data
+}
+
+export async function createProductParent(data: ProductParentCreateInput): Promise<ProductParent> {
+  const response = await apiClient.post<ProductParent>('/api/v1/products/parents', data)
+  return response.data
+}
+
+export async function updateProductParent(
+  parentId: string,
+  data: ProductParentUpdateInput
+): Promise<ProductParent> {
+  const response = await apiClient.patch<ProductParent>(
+    `/api/v1/products/parents/${parentId}`,
+    data
+  )
+  return response.data
+}
+
+export async function deleteProductParent(parentId: string): Promise<void> {
+  await apiClient.delete(`/api/v1/products/parents/${parentId}`)
 }

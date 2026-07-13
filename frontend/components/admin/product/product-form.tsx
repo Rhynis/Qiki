@@ -37,6 +37,8 @@ type ProductFormState = {
   image_url: string
   safety_info: string
   pricing_note: string
+  colour: string
+  variant_label: string
   is_active: boolean
 }
 
@@ -59,6 +61,8 @@ const emptyState: ProductFormState = {
   image_url: '',
   safety_info: '',
   pricing_note: '',
+  colour: '',
+  variant_label: '',
   is_active: true,
 }
 
@@ -77,6 +81,8 @@ function initialState(product?: Product): ProductFormState {
     image_url: product.image_url ?? '',
     safety_info: product.safety_info ?? '',
     pricing_note: product.pricing_note ?? '',
+    colour: product.colour ?? '',
+    variant_label: product.variant_label ?? '',
     is_active: product.is_active,
   }
 }
@@ -136,6 +142,8 @@ export function ProductForm({ product, isSubmitting = false, onSubmit }: Product
       image_url: normalizeText(form.image_url),
       safety_info: normalizeText(form.safety_info),
       pricing_note: form.category === 'nuoc_uong' ? normalizeText(form.pricing_note) : null,
+      colour: normalizeText(form.colour),
+      variant_label: normalizeText(form.variant_label),
       ...(product ? { is_active: form.is_active } : {}),
     })
   }
@@ -219,6 +227,23 @@ export function ProductForm({ product, isSubmitting = false, onSubmit }: Product
             inputMode="numeric"
             value={form.stock_quantity}
             onChange={(event) => updateField('stock_quantity', event.target.value)}
+          />
+        </FieldError>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <FieldError label="Màu / loại (biến thể)" error={errors.colour}>
+          <Input
+            placeholder="ví dụ: xám, đỏ, biển"
+            value={form.colour}
+            onChange={(event) => updateField('colour', event.target.value)}
+          />
+        </FieldError>
+        <FieldError label="Nhãn biến thể" error={errors.variant_label}>
+          <Input
+            placeholder="ví dụ: 12 kg (xám)"
+            value={form.variant_label}
+            onChange={(event) => updateField('variant_label', event.target.value)}
           />
         </FieldError>
       </div>

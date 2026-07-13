@@ -151,6 +151,37 @@ async def test_create_order_authenticated_user(order_session: AsyncSession) -> N
     assert order.items[0].product_name == "Binh gas 12kg"
 
 
+async def test_order_references_specific_variant_row(order_session: AsyncSession) -> None:
+    """An order line must reference one exact variant row at its exact price."""
+    from app.models.product import ProductParent
+
+    parent = ProductParent(name="Bình gas Saigon Petro", brand="Saigon Petro", category="gas")
+    order_session.add(parent)
+    await order_session.flush()
+    xam = await create_product(
+        order_session, sku="SP-12KG-XAM", price=Decimal("605000"), stock_quantity=10
+    )
+    xanh = await create_product(
+        order_session, sku="SP-12KG-XANH", price=Decimal("665000"), stock_quantity=10
+    )
+    xam.parent_id = parent.id
+    xanh.parent_id = parent.id
+    await order_session.commit()
+
+    order = await service(order_session).create_order(
+        checkout_payload(xanh, items=[OrderItemCreate(product_id=xanh.id, quantity=1)]),
+        None,
+        uuid4(),
+        order_session,
+    )
+
+    assert len(order.items) == 1
+    line = order.items[0]
+    # The line references the selected variant, not the parent or the sibling.
+    assert line.product_id == xanh.id
+    assert line.unit_price == Decimal("665000")
+
+
 async def test_shipping_fee_gas_only_is_zero(order_session: AsyncSession) -> None:
     product = await create_product(order_session)
 

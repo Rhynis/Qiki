@@ -15,6 +15,55 @@ export interface Product {
   is_active: boolean
   created_at: string
   updated_at: string
+  parent_id: string | null
+  colour: string | null
+  variant_label: string | null
+}
+
+export interface ProductParent {
+  id: string
+  name: string
+  brand: string
+  category: ProductCategory
+  description: string | null
+  image_url: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+  variants: Product[]
+}
+
+export interface ProductParentSummary {
+  id: string
+  name: string
+  brand: string
+  category: ProductCategory
+  description: string | null
+  image_url: string | null
+  min_price: string
+  max_price: string
+  variant_count: number
+  in_stock: boolean
+}
+
+export interface ProductParentListResponse {
+  items: ProductParentSummary[]
+  total: number
+  page: number
+  limit: number
+  has_more: boolean
+}
+
+export interface ProductParentCreateInput {
+  name: string
+  brand: string
+  category?: ProductCategory
+  description?: string | null
+  image_url?: string | null
+}
+
+export type ProductParentUpdateInput = Partial<ProductParentCreateInput> & {
+  is_active?: boolean
 }
 
 export type ProductCategory = 'gas' | 'nuoc_uong'
@@ -55,6 +104,9 @@ export interface ProductCreateInput {
   image_url?: string | null
   safety_info?: string | null
   pricing_note?: string | null
+  parent_id?: string | null
+  colour?: string | null
+  variant_label?: string | null
 }
 
 export type ProductUpdateInput = Partial<ProductCreateInput> & {

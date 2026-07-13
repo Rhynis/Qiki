@@ -47,4 +47,24 @@ test.describe('products', () => {
     await expect(page.getByRole('heading', { name: 'Bình gas Elf 12kg (đỏ)' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Thêm vào giỏ' })).toBeVisible()
   })
+
+  test('a grouped product card shows the "Nhiều lựa chọn" hint', async ({ page }) => {
+    await page.goto('/products')
+    // Elf 12kg belongs to a parent with siblings, so its card advertises options.
+    await expect(page.getByText('Nhiều lựa chọn màu/loại').first()).toBeVisible()
+  })
+
+  test('the variant selector switches the detail price and stock', async ({ page }) => {
+    await page.goto('/products/elf-12')
+
+    // The headline price paragraph reflects the currently selected variant.
+    const headlinePrice = page.locator('p.text-3xl.text-primary')
+    await expect(headlinePrice).toHaveText(/710\.000/)
+
+    // The parent has two variants; selecting the 6kg option updates the price.
+    const sixKg = page.getByRole('radio', { name: /6 kg/ })
+    await sixKg.click()
+    await expect(sixKg).toHaveAttribute('aria-checked', 'true')
+    await expect(headlinePrice).toHaveText(/350\.000/)
+  })
 })
