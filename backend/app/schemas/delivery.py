@@ -6,7 +6,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-DeliveryStatus = Literal["pending", "shipping", "delivered", "cancelled"]
+DeliveryStatus = Literal["pending", "shipping", "delivered", "failed", "cancelled"]
+DriverOutcome = Literal["delivered", "failed"]
 
 
 class DeliveryItemCreate(BaseModel):
@@ -31,6 +32,24 @@ class DeliveryStatusUpdate(BaseModel):
     notes: str | None = Field(default=None, max_length=1000)
 
 
+class DriverAssignRequest(BaseModel):
+    """Assign (or clear) the driver carrying a delivery."""
+
+    driver_id: UUID | None = None
+
+
+class DriverStatusUpdate(BaseModel):
+    """A driver's delivered/failed update, with an optional last location.
+
+    Location is never required; a driver can complete a delivery without sharing it.
+    """
+
+    status: DriverOutcome
+    notes: str | None = Field(default=None, max_length=1000)
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lng: float | None = Field(default=None, ge=-180, le=180)
+
+
 class DeliveryItemResponse(BaseModel):
     """A delivery line: quantity of one order item."""
 
@@ -43,6 +62,31 @@ class DeliveryItemResponse(BaseModel):
     created_at: datetime
 
 
+class DriverDeliveryLine(BaseModel):
+    """A product line a driver is carrying."""
+
+    product_name: str
+    quantity: int
+
+
+class DriverDeliveryResponse(BaseModel):
+    """A delivery enriched with the order's contact + address for the driver view."""
+
+    id: UUID
+    code: str
+    status: DeliveryStatus
+    customer_name: str
+    customer_phone: str
+    delivery_address: str
+    notes: str | None
+    scheduled_at: datetime | None
+    delivered_at: datetime | None
+    last_lat: float | None
+    last_lng: float | None
+    items: list[DriverDeliveryLine]
+    created_at: datetime
+
+
 class DeliveryResponse(BaseModel):
     """A delivery with its items."""
 
@@ -52,8 +96,11 @@ class DeliveryResponse(BaseModel):
     order_id: UUID
     code: str
     status: DeliveryStatus
+    driver_id: UUID | None
     scheduled_at: datetime | None
     delivered_at: datetime | None
     notes: str | None
+    last_lat: float | None
+    last_lng: float | None
     items: list[DeliveryItemResponse]
     created_at: datetime

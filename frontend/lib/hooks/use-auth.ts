@@ -106,6 +106,7 @@ export function useAuth() {
     isAuthenticated: Boolean(user && session),
     isAdmin: user?.role === 'admin',
     isStaff: user?.role === 'staff' || user?.role === 'admin',
+    isDriver: user?.role === 'driver' || user?.role === 'admin',
     login,
     logout,
     register,

@@ -17,7 +17,7 @@ from app.models.user import User
 
 router = APIRouter()
 
-UserRole = Literal["customer", "staff", "admin"]
+UserRole = Literal["customer", "staff", "admin", "driver"]
 
 
 class AdminUserResponse(BaseModel):

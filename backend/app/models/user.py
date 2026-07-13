@@ -63,3 +63,6 @@ class User(Base, UUIDMixin, TimestampMixin):
 
     def is_customer(self) -> bool:
         return self.role == "customer"
+
+    def is_driver(self) -> bool:
+        return self.role in ("driver", "admin")
