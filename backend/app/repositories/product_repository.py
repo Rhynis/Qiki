@@ -6,11 +6,12 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.exceptions import ConflictException, InsufficientStockException, NotFoundException
-from app.models.product import Product
-from app.schemas.product import ProductCreate, ProductSearchParams
+from app.models.product import Product, ProductParent
+from app.schemas.product import ProductCreate, ProductParentCreate, ProductSearchParams
 
 
 class ProductRepository:
@@ -170,6 +171,83 @@ class ProductRepository:
         product.stock_quantity += quantity
         await self.session.flush()
         return product
+
+    async def list_parents(
+        self,
+        *,
+        category: str | None = None,
+        skip: int = 0,
+        limit: int = 20,
+    ) -> tuple[list[ProductParent], int]:
+        """List active parents (each with its active variants) with pagination."""
+        conditions: list[ColumnElement[bool]] = [ProductParent.is_active.is_(True)]
+        if category:
+            conditions.append(ProductParent.category == category)
+
+        count_query = select(func.count()).select_from(ProductParent)
+        query = (
+            select(ProductParent)
+            .options(selectinload(ProductParent.variants))
+            .order_by(ProductParent.name.asc())
+        )
+        for condition in conditions:
+            query = query.where(condition)
+            count_query = count_query.where(condition)
+        query = query.offset(skip).limit(limit)
+
+        total = (await self.session.execute(count_query)).scalar_one()
+        parents = list((await self.session.execute(query)).scalars().unique().all())
+        return parents, total
+
+    async def get_parent_by_id(
+        self,
+        parent_id: UUID,
+        *,
+        active_only: bool = False,
+    ) -> ProductParent | None:
+        """Fetch one parent with its variants eagerly loaded."""
+        query = (
+            select(ProductParent)
+            .options(selectinload(ProductParent.variants))
+            .where(ProductParent.id == parent_id)
+        )
+        if active_only:
+            query = query.where(ProductParent.is_active.is_(True))
+        result = await self.session.execute(query)
+        return result.scalars().unique().one_or_none()
+
+    async def create_parent(self, data: ProductParentCreate) -> ProductParent:
+        """Create a parent product."""
+        parent = ProductParent(**data.model_dump(mode="json"))
+        self.session.add(parent)
+        await self.session.flush()
+        await self.session.refresh(parent)
+        return parent
+
+    async def update_parent(self, parent_id: UUID, data: dict[str, object]) -> ProductParent:
+        """Update a parent product."""
+        parent = await self.get_parent_by_id(parent_id)
+        if not parent:
+            raise NotFoundException(
+                "Parent product not found", error_code="product_parent_not_found"
+            )
+        for key, value in data.items():
+            if hasattr(parent, key):
+                setattr(parent, key, value)
+        await self.session.flush()
+        await self.session.refresh(parent)
+        return parent
+
+    async def soft_delete_parent(self, parent_id: UUID) -> bool:
+        """Mark a parent and all its variants inactive."""
+        parent = await self.get_parent_by_id(parent_id)
+        if not parent:
+            return False
+        parent.is_active = False
+        for variant in parent.variants:
+            variant.is_active = False
+        await self.session.flush()
+        return True
 
     async def get_low_stock_products(self, threshold: int = 10) -> list[Product]:
         """Return active products at or below low-stock threshold."""

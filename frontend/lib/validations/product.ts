@@ -35,6 +35,8 @@ const productBaseSchema = z.object({
   image_url: optionalUrl,
   safety_info: z.string().trim().optional(),
   pricing_note: z.string().trim().optional(),
+  colour: z.string().trim().max(50, 'Màu quá dài').optional(),
+  variant_label: z.string().trim().max(100, 'Nhãn quá dài').optional(),
 })
 
 function validateGasSize(value: { category?: string; size_kg?: string }, context: z.RefinementCtx) {
