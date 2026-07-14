@@ -71,6 +71,11 @@ def upgrade() -> None:
         "WHERE user_id IS NOT NULL"
     )
     op.execute("COMMENT ON TABLE coupon_redemptions IS 'One recorded use of a coupon per order'")
+    # Match the repo-wide RLS baseline (migration 001; #290). The backend role
+    # bypasses RLS, so enabling it with no policy only denies anon/PostgREST
+    # direct access to these backend-only tables.
+    op.execute("ALTER TABLE coupons ENABLE ROW LEVEL SECURITY")
+    op.execute("ALTER TABLE coupon_redemptions ENABLE ROW LEVEL SECURITY")
 
     op.execute(
         "ALTER TABLE orders ADD COLUMN discount_amount NUMERIC(10,2) NOT NULL DEFAULT 0 "

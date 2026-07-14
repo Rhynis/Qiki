@@ -6,12 +6,7 @@ import { toast } from 'sonner'
 import { EmptyState } from '@/components/shared/empty-state'
 import { PageHeader } from '@/components/shared/page-header'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import type { Coupon, CouponInput } from '@/lib/api/coupons'
 import { useCoupons, useCreateCoupon, useUpdateCoupon } from '@/lib/hooks/use-coupons'
 import { formatPrice } from '@/lib/utils/format'
@@ -76,7 +71,10 @@ export default function AdminCouponsPage() {
       </div>
 
       {coupons.length === 0 ? (
-        <EmptyState title="Chưa có mã giảm giá" description="Tạo mã đầu tiên để bắt đầu khuyến mãi." />
+        <EmptyState
+          title="Chưa có mã giảm giá"
+          description="Tạo mã đầu tiên để bắt đầu khuyến mãi."
+        />
       ) : (
         <div className="overflow-x-auto rounded-lg border bg-white">
           <table className="w-full text-sm">
@@ -110,9 +108,7 @@ export default function AdminCouponsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <span
-                      className={
-                        coupon.active ? 'font-medium text-emerald-700' : 'text-slate-400'
-                      }
+                      className={coupon.active ? 'font-medium text-emerald-700' : 'text-slate-400'}
                     >
                       {coupon.active ? 'Đang bật' : 'Đã tắt'}
                     </span>
