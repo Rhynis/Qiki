@@ -8,6 +8,7 @@ import {
   LifeBuoy,
   MessageSquareText,
   Package,
+  Ticket,
   Users,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -24,6 +25,7 @@ const navItems = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/admin/products', label: 'Sản phẩm', icon: Package },
   { href: '/admin/orders', label: 'Đơn hàng', icon: ClipboardList },
+  { href: '/admin/coupons', label: 'Mã giảm giá', icon: Ticket },
   { href: '/admin/chat', label: 'Chat', icon: MessageSquareText },
   { href: '/admin/insights', label: 'Thống kê', icon: BarChart3 },
   { href: '/admin/knowledge-base', label: 'Knowledge Base', icon: BookOpenText },

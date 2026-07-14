@@ -175,6 +175,56 @@ export function resolveApi({ method, path, query, body = {}, cookie }) {
     return json(204, undefined)
   }
 
+  // --- Coupons -------------------------------------------------------------
+  if (method === 'POST' && path === '/api/v1/coupons/validate') {
+    return json(200, {
+      code: String(body.code ?? 'SALE10').toUpperCase(),
+      discount_type: 'percent',
+      value: '10',
+      discount_amount: '10000',
+      min_order: '0',
+    })
+  }
+  if (method === 'GET' && path === '/api/v1/admin/coupons') {
+    return json(200, { items: [], total: 0, page: 1, limit: 20, has_more: false })
+  }
+  if (method === 'POST' && path === '/api/v1/admin/coupons') {
+    return json(201, {
+      id: 'coupon-1',
+      code: String(body.code ?? 'SALE10').toUpperCase(),
+      discount_type: body.discount_type ?? 'percent',
+      value: String(body.value ?? '10'),
+      min_order: String(body.min_order ?? '0'),
+      max_discount: body.max_discount ?? null,
+      usage_limit: body.usage_limit ?? null,
+      used_count: 0,
+      per_user_limit: body.per_user_limit ?? null,
+      active: true,
+      starts_at: null,
+      ends_at: null,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    })
+  }
+  if (/^\/api\/v1\/admin\/coupons\/[^/]+$/.test(path) && method === 'PATCH') {
+    return json(200, {
+      id: 'coupon-1',
+      code: 'SALE10',
+      discount_type: 'percent',
+      value: '10',
+      min_order: '0',
+      max_discount: null,
+      usage_limit: null,
+      used_count: 0,
+      per_user_limit: null,
+      active: body.active ?? true,
+      starts_at: null,
+      ends_at: null,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    })
+  }
+
   // --- Orders --------------------------------------------------------------
   if (method === 'POST' && path === '/api/v1/orders/checkout') {
     return json(201, buildOrder({
