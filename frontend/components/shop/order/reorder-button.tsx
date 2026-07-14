@@ -60,12 +60,7 @@ export function ReorderButton({ orderId }: { orderId: string }) {
   }
 
   return (
-    <Button
-      size="sm"
-      variant="outline"
-      disabled={isLoading}
-      onClick={() => void handleReorder()}
-    >
+    <Button size="sm" variant="outline" disabled={isLoading} onClick={() => void handleReorder()}>
       <RotateCcw className="mr-2 h-4 w-4" />
       {isLoading ? 'Đang xử lý...' : 'Đặt lại'}
     </Button>
