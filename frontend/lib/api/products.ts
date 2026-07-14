@@ -55,11 +55,13 @@ export async function getLowStockProducts(threshold = 10): Promise<Product[]> {
   return response.data
 }
 
-export async function getProductParents(params: {
-  category?: ProductCategory
-  skip?: number
-  limit?: number
-} = {}): Promise<ProductParentListResponse> {
+export async function getProductParents(
+  params: {
+    category?: ProductCategory
+    skip?: number
+    limit?: number
+  } = {}
+): Promise<ProductParentListResponse> {
   const response = await apiClient.get<ProductParentListResponse>('/api/v1/products/parents', {
     params,
   })

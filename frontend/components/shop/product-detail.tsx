@@ -32,10 +32,7 @@ export function ProductDetail({ product, variants }: ProductDetailProps) {
   const addItem = useCartStore((state) => state.addItem)
 
   // Offer a selector only when there is more than one variant to choose from.
-  const options = useMemo(
-    () => (variants && variants.length > 1 ? variants : []),
-    [variants]
-  )
+  const options = useMemo(() => (variants && variants.length > 1 ? variants : []), [variants])
   const [selectedId, setSelectedId] = useState(product.id)
   const selected = useMemo(
     () => options.find((variant) => variant.id === selectedId) ?? product,
@@ -75,9 +72,7 @@ export function ProductDetail({ product, variants }: ProductDetailProps) {
             <div className="flex flex-wrap gap-2">
               <StockBadge stockQuantity={selected.stock_quantity} />
               <Badge variant="outline">{product.brand}</Badge>
-              <Badge variant="outline">
-                {formatProductSize(selected.size_kg, selected.unit)}
-              </Badge>
+              <Badge variant="outline">{formatProductSize(selected.size_kg, selected.unit)}</Badge>
             </div>
             <h1 className="text-3xl font-semibold tracking-normal text-slate-950 md:text-4xl">
               {product.name}
