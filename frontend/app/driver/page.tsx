@@ -70,7 +70,10 @@ function DeliveryCard({ delivery }: { delivery: DriverDelivery }) {
           <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
           {delivery.delivery_address}
         </p>
-        <a className="flex items-center gap-2 hover:text-primary" href={`tel:${delivery.customer_phone}`}>
+        <a
+          className="flex items-center gap-2 hover:text-primary"
+          href={`tel:${delivery.customer_phone}`}
+        >
           <Phone className="h-4 w-4 shrink-0 text-primary" />
           {delivery.customer_phone}
         </a>
@@ -149,7 +152,9 @@ export default function DriverPage() {
         </p>
       ) : null}
       <div className="space-y-3">
-        {data?.map((delivery) => <DeliveryCard key={delivery.id} delivery={delivery} />)}
+        {data?.map((delivery) => (
+          <DeliveryCard key={delivery.id} delivery={delivery} />
+        ))}
       </div>
     </div>
   )

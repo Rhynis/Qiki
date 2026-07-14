@@ -1,11 +1,6 @@
 import { apiClient } from '@/lib/api/client'
 
-export type DriverDeliveryStatus =
-  | 'pending'
-  | 'shipping'
-  | 'delivered'
-  | 'failed'
-  | 'cancelled'
+export type DriverDeliveryStatus = 'pending' | 'shipping' | 'delivered' | 'failed' | 'cancelled'
 
 export interface DriverDeliveryLine {
   product_name: string
