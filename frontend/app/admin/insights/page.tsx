@@ -101,9 +101,7 @@ export default function AdminInsightsPage() {
                   <p className="text-xs text-slate-500">
                     {gap.reason}
                     {gap.intent ? ` · ${gap.intent}` : ''}
-                    {gap.intent_confidence != null
-                      ? ` · ${percent(gap.intent_confidence)}`
-                      : ''}
+                    {gap.intent_confidence != null ? ` · ${percent(gap.intent_confidence)}` : ''}
                   </p>
                 </div>
                 <Link
