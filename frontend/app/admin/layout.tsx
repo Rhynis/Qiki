@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  BarChart3,
   BookOpenText,
   ClipboardList,
   LayoutDashboard,
@@ -26,6 +27,7 @@ const navItems = [
   { href: '/admin/orders', label: 'Đơn hàng', icon: ClipboardList },
   { href: '/admin/coupons', label: 'Mã giảm giá', icon: Ticket },
   { href: '/admin/chat', label: 'Chat', icon: MessageSquareText },
+  { href: '/admin/insights', label: 'Thống kê', icon: BarChart3 },
   { href: '/admin/knowledge-base', label: 'Knowledge Base', icon: BookOpenText },
   { href: '/admin/users', label: 'Người dùng', icon: Users },
   { href: '/admin/guide', label: 'Cẩm nang', icon: LifeBuoy },
