@@ -75,6 +75,15 @@ class CheckoutRequest(BaseModel):
     customer_notes: str | None = Field(default=None, max_length=1000)
     source: OrderSource = "website"
     referral_conversation_id: UUID | None = None
+    coupon_code: str | None = Field(default=None, max_length=50)
+
+    @field_validator("coupon_code")
+    @classmethod
+    def normalize_coupon_code(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.upper().strip()
+        return normalized or None
 
     @field_validator("customer_phone", "different_recipient_phone")
     @classmethod
@@ -119,6 +128,8 @@ class OrderResponse(BaseModel):
     different_recipient_phone: str | None
     subtotal: Decimal
     shipping_fee: Decimal
+    discount_amount: Decimal
+    coupon_code: str | None
     total_amount: Decimal
     vat_invoice_requested: bool
     vat_info: VatInfo | None

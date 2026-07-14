@@ -1,16 +1,22 @@
 """Product business logic."""
 
+from decimal import Decimal
 from typing import cast
 from uuid import UUID
 
 from app.core.exceptions import ForbiddenException, NotFoundException
-from app.models.product import Product
+from app.models.product import Product, ProductParent
 from app.models.user import User
 from app.repositories.product_repository import ProductRepository
 from app.schemas.product import (
     ALLOWED_SIZES,
     ProductCreate,
     ProductListResponse,
+    ProductParentCreate,
+    ProductParentListResponse,
+    ProductParentResponse,
+    ProductParentSummary,
+    ProductParentUpdate,
     ProductResponse,
     ProductSearchParams,
     ProductUpdate,
@@ -104,6 +110,93 @@ class ProductService:
     async def list_brands(self, category: str | None = None) -> list[str]:
         """Return active product brands for filter controls."""
         return await self.repository.list_brands(category=category, active_only=True)
+
+    @staticmethod
+    def _summarize_parent(parent: ProductParent) -> ProductParentSummary:
+        """Aggregate a parent's active variants into a catalog card."""
+        active_variants = [variant for variant in parent.variants if variant.is_active]
+        prices = [variant.price for variant in active_variants]
+        return ProductParentSummary.model_validate(
+            {
+                "id": parent.id,
+                "name": parent.name,
+                "brand": parent.brand,
+                "category": parent.category,
+                "description": parent.description,
+                "image_url": parent.image_url,
+                "min_price": min(prices) if prices else Decimal("0"),
+                "max_price": max(prices) if prices else Decimal("0"),
+                "variant_count": len(active_variants),
+                "in_stock": any(variant.stock_quantity > 0 for variant in active_variants),
+            }
+        )
+
+    async def list_grouped_catalog(
+        self,
+        *,
+        category: str | None = None,
+        skip: int = 0,
+        limit: int = 20,
+    ) -> ProductParentListResponse:
+        """List active parents as catalog cards with an aggregated price range."""
+        parents, total = await self.repository.list_parents(
+            category=category, skip=skip, limit=limit
+        )
+        page = (skip // limit) + 1 if limit else 1
+        return ProductParentListResponse(
+            items=[self._summarize_parent(parent) for parent in parents],
+            total=total,
+            page=page,
+            limit=limit,
+            has_more=skip + len(parents) < total,
+        )
+
+    async def get_parent(self, parent_id: UUID) -> ProductParentResponse:
+        """Return one active parent with its active variants (price ascending)."""
+        parent = await self.repository.get_parent_by_id(parent_id, active_only=True)
+        if not parent:
+            raise NotFoundException(
+                "Parent product not found", error_code="product_parent_not_found"
+            )
+        response = ProductParentResponse.model_validate(parent)
+        response.variants = sorted(
+            (
+                ProductResponse.model_validate(variant)
+                for variant in parent.variants
+                if variant.is_active
+            ),
+            key=lambda variant: variant.price,
+        )
+        return response
+
+    async def create_parent(
+        self, payload: ProductParentCreate, admin: User
+    ) -> ProductParentResponse:
+        """Create a parent product as an administrator."""
+        self._ensure_admin(admin)
+        parent = await self.repository.create_parent(payload)
+        return ProductParentResponse.model_validate(parent)
+
+    async def update_parent(
+        self,
+        parent_id: UUID,
+        payload: ProductParentUpdate,
+        admin: User,
+    ) -> ProductParentResponse:
+        """Update a parent product as an administrator."""
+        self._ensure_admin(admin)
+        update_data = payload.model_dump(mode="json", exclude_unset=True)
+        parent = await self.repository.update_parent(parent_id, update_data)
+        return ProductParentResponse.model_validate(parent)
+
+    async def delete_parent(self, parent_id: UUID, admin: User) -> None:
+        """Soft-delete a parent and its variants as an administrator."""
+        self._ensure_admin(admin)
+        deleted = await self.repository.soft_delete_parent(parent_id)
+        if not deleted:
+            raise NotFoundException(
+                "Parent product not found", error_code="product_parent_not_found"
+            )
 
     async def update_product(
         self,

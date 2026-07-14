@@ -131,7 +131,9 @@ async def product_session() -> AsyncGenerator[AsyncSession, None]:
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
         tables = [table for table in Base.metadata.sorted_tables if table.name != "knowledge_base"]
         await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn, tables=tables))
-        await conn.execute(text("TRUNCATE TABLE products RESTART IDENTITY CASCADE"))
+        await conn.execute(
+            text("TRUNCATE TABLE products, product_parents RESTART IDENTITY CASCADE")
+        )
 
     async with AsyncSessionLocal() as session:
         try:
@@ -158,7 +160,10 @@ async def order_session() -> AsyncGenerator[AsyncSession, None]:
         tables = [table for table in Base.metadata.sorted_tables if table.name != "knowledge_base"]
         await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn, tables=tables))
         await conn.execute(
-            text("TRUNCATE TABLE order_items, orders, products, users RESTART IDENTITY CASCADE")
+            text(
+                "TRUNCATE TABLE coupon_redemptions, coupons, order_items, orders, "
+                "products, product_parents, users RESTART IDENTITY CASCADE"
+            )
         )
 
     async with AsyncSessionLocal() as session:
@@ -169,7 +174,10 @@ async def order_session() -> AsyncGenerator[AsyncSession, None]:
 
     async with engine.begin() as conn:
         await conn.execute(
-            text("TRUNCATE TABLE order_items, orders, products, users RESTART IDENTITY CASCADE")
+            text(
+                "TRUNCATE TABLE coupon_redemptions, coupons, order_items, orders, "
+                "products, product_parents, users RESTART IDENTITY CASCADE"
+            )
         )
 
     await engine.dispose()
@@ -189,8 +197,8 @@ async def price_alert_session() -> AsyncGenerator[AsyncSession, None]:
         await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn, tables=tables))
         await conn.execute(
             text(
-                "TRUNCATE TABLE price_subscriptions, order_items, orders, products, users "
-                "RESTART IDENTITY CASCADE"
+                "TRUNCATE TABLE price_subscriptions, order_items, orders, products, "
+                "product_parents, users RESTART IDENTITY CASCADE"
             )
         )
 
@@ -203,8 +211,8 @@ async def price_alert_session() -> AsyncGenerator[AsyncSession, None]:
     async with engine.begin() as conn:
         await conn.execute(
             text(
-                "TRUNCATE TABLE price_subscriptions, order_items, orders, products, users "
-                "RESTART IDENTITY CASCADE"
+                "TRUNCATE TABLE price_subscriptions, order_items, orders, products, "
+                "product_parents, users RESTART IDENTITY CASCADE"
             )
         )
 

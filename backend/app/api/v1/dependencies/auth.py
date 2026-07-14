@@ -72,6 +72,13 @@ async def get_current_staff(user: Annotated[User, Depends(get_current_active_use
     return user
 
 
+async def get_current_driver(user: Annotated[User, Depends(get_current_active_user)]) -> User:
+    """Require driver or admin role (admins can view the driver section)."""
+    if not user.is_driver():
+        raise ForbiddenException("Driver role required", error_code="driver_required")
+    return user
+
+
 async def get_current_user_optional(
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
     token: Annotated[str | None, Depends(oauth2_scheme)] = None,

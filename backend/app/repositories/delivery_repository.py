@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.delivery import Delivery, DeliveryItem
+from app.models.order import Order
 
 
 class DeliveryRepository:
@@ -33,6 +34,31 @@ class DeliveryRepository:
             .options(selectinload(Delivery.items))
         )
         return list(result.scalars().all())
+
+    async def list_by_driver(self, driver_id: UUID) -> list[Delivery]:
+        """List the deliveries assigned to a driver (with order), newest first."""
+        result = await self.session.execute(
+            select(Delivery)
+            .where(Delivery.driver_id == driver_id)
+            .order_by(Delivery.created_at.desc())
+            .options(
+                selectinload(Delivery.items),
+                selectinload(Delivery.order).selectinload(Order.items),
+            )
+        )
+        return list(result.scalars().all())
+
+    async def get_with_order(self, delivery_id: UUID) -> Delivery | None:
+        """Fetch one delivery with its items and its order's items."""
+        result = await self.session.execute(
+            select(Delivery)
+            .where(Delivery.id == delivery_id)
+            .options(
+                selectinload(Delivery.items),
+                selectinload(Delivery.order).selectinload(Order.items),
+            )
+        )
+        return result.scalar_one_or_none()
 
     async def create(
         self,

@@ -34,6 +34,9 @@ class ProductBase(BaseModel):
     image_url: HttpUrl | None = None
     safety_info: str | None = None
     pricing_note: str | None = None
+    parent_id: UUID | None = None
+    colour: str | None = Field(default=None, max_length=50)
+    variant_label: str | None = Field(default=None, max_length=100)
 
     @model_validator(mode="after")
     def validate_product_category(self) -> "ProductBase":
@@ -75,6 +78,9 @@ class ProductUpdate(BaseModel):
     pricing_note: str | None = None
     stock_quantity: int | None = Field(default=None, ge=0)
     is_active: bool | None = None
+    parent_id: UUID | None = None
+    colour: str | None = Field(default=None, max_length=50)
+    variant_label: str | None = Field(default=None, max_length=100)
 
     @model_validator(mode="after")
     def validate_product_category(self) -> "ProductUpdate":
@@ -121,6 +127,68 @@ class BestSellerProduct(ProductResponse):
     """An active product annotated with its total ordered quantity."""
 
     total_sold: int
+
+
+class ProductParentBase(BaseModel):
+    """Shared parent product fields."""
+
+    name: str = Field(min_length=1, max_length=255)
+    brand: str = Field(min_length=1, max_length=100)
+    category: ProductCategory = "gas"
+    description: str | None = None
+    image_url: HttpUrl | None = None
+
+
+class ProductParentCreate(ProductParentBase):
+    """Parent product creation payload."""
+
+
+class ProductParentUpdate(BaseModel):
+    """Parent product update payload."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    brand: str | None = Field(default=None, min_length=1, max_length=100)
+    category: ProductCategory | None = None
+    description: str | None = None
+    image_url: HttpUrl | None = None
+    is_active: bool | None = None
+
+
+class ProductParentResponse(ProductParentBase):
+    """Parent product response with its variants."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    variants: list[ProductResponse] = Field(default_factory=list)
+
+
+class ProductParentSummary(BaseModel):
+    """Grouped catalog card: one parent with an aggregated price range."""
+
+    id: UUID
+    name: str
+    brand: str
+    category: ProductCategory
+    description: str | None
+    image_url: str | None
+    min_price: Decimal
+    max_price: Decimal
+    variant_count: int
+    in_stock: bool
+
+
+class ProductParentListResponse(BaseModel):
+    """Paginated grouped catalog response."""
+
+    items: list[ProductParentSummary]
+    total: int
+    page: int
+    limit: int
+    has_more: bool
 
 
 class ProductSearchParams(BaseModel):

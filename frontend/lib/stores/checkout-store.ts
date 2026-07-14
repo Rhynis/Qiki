@@ -28,10 +28,14 @@ interface CheckoutState {
   step: CheckoutStep
   form: CheckoutFormState
   lastOrder: Order | null
+  couponCode: string | null
+  discountAmount: number
   setStep: (step: CheckoutStep) => void
   nextStep: () => void
   previousStep: () => void
   updateForm: (data: Partial<CheckoutFormState>) => void
+  setCoupon: (code: string, discount: number) => void
+  clearCoupon: () => void
   setLastOrder: (order: Order | null) => void
   resetCheckout: () => void
 }
@@ -62,6 +66,8 @@ export const useCheckoutStore = create<CheckoutState>()((set) => ({
   step: 1,
   form: initialForm,
   lastOrder: null,
+  couponCode: null,
+  discountAmount: 0,
   setStep: (step) => set({ step }),
   nextStep: () => set((state) => ({ step: Math.min(state.step + 1, 4) as CheckoutStep })),
   previousStep: () => set((state) => ({ step: Math.max(state.step - 1, 1) as CheckoutStep })),
@@ -75,6 +81,15 @@ export const useCheckoutStore = create<CheckoutState>()((set) => ({
           : state.form.vat_info,
       },
     })),
+  setCoupon: (code, discount) => set({ couponCode: code, discountAmount: discount }),
+  clearCoupon: () => set({ couponCode: null, discountAmount: 0 }),
   setLastOrder: (order) => set({ lastOrder: order }),
-  resetCheckout: () => set((state) => ({ step: 1, form: initialForm, lastOrder: state.lastOrder })),
+  resetCheckout: () =>
+    set((state) => ({
+      step: 1,
+      form: initialForm,
+      couponCode: null,
+      discountAmount: 0,
+      lastOrder: state.lastOrder,
+    })),
 }))

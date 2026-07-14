@@ -8,13 +8,28 @@
 const now = '2026-06-15T00:00:00.000Z'
 
 export const PRODUCTS = [
-  product('elf-12', 'ELF-12KG', 'Bình gas Elf 12kg (đỏ)', 'Elf Gas', '12', 'gas', 'kg', '710000'),
+  product('elf-12', 'ELF-12KG', 'Bình gas Elf 12kg (đỏ)', 'Elf Gas', '12', 'gas', 'kg', '710000', { parent_id: 'parent-elf', colour: 'đỏ', variant_label: '12 kg (đỏ)' }),
   product('sp-12', 'SP-12KG', 'Bình gas Saigon Petro 12kg', 'Saigon Petro', '12', 'gas', 'kg', '605000'),
-  product('elf-6', 'ELF-6KG', 'Bình gas Elf 6kg', 'Elf Gas', '6', 'gas', 'kg', '350000'),
+  product('elf-6', 'ELF-6KG', 'Bình gas Elf 6kg', 'Elf Gas', '6', 'gas', 'kg', '350000', { parent_id: 'parent-elf', colour: null, variant_label: '6 kg' }),
   product('water-20', 'WATER-20L', 'Nước Hoàn Hảo 20 lít', 'Hoàn Hảo', '20', 'nuoc_uong', 'lít', '55000'),
 ]
 
-function product(id, sku, name, brand, size, category, unit, price) {
+// Parent groupings for the grouped catalog + variant-selector journeys.
+const PARENTS = [
+  {
+    id: 'parent-elf',
+    name: 'Bình gas Elf',
+    brand: 'Elf Gas',
+    category: 'gas',
+    description: 'Sản phẩm mẫu cho kiểm thử.',
+    image_url: null,
+    is_active: true,
+    created_at: now,
+    updated_at: now,
+  },
+]
+
+function product(id, sku, name, brand, size, category, unit, price, extra = {}) {
   return {
     id,
     sku,
@@ -32,7 +47,19 @@ function product(id, sku, name, brand, size, category, unit, price) {
     is_active: true,
     created_at: now,
     updated_at: now,
+    parent_id: extra.parent_id ?? null,
+    colour: extra.colour ?? null,
+    variant_label: extra.variant_label ?? null,
   }
+}
+
+function parentDetail(parentId) {
+  const parent = PARENTS.find((p) => p.id === parentId)
+  if (!parent) return null
+  const variants = PRODUCTS.filter((p) => p.parent_id === parentId).sort(
+    (a, b) => Number(a.price) - Number(b.price)
+  )
+  return { ...parent, variants }
 }
 
 function buildOrder(overrides = {}) {
@@ -136,7 +163,55 @@ export function resolveApi({ method, path, query, body = {}, cookie }) {
   if (method === 'GET' && path === '/api/v1/products/brands') {
     return json(200, [...new Set(PRODUCTS.map((p) => p.brand))])
   }
+  if (method === 'GET' && path === '/api/v1/products/parents') {
+    const category = query.get('category')
+    const items = PARENTS.filter((p) => !category || p.category === category).map((parent) => {
+      const variants = PRODUCTS.filter((p) => p.parent_id === parent.id)
+      const prices = variants.map((v) => Number(v.price))
+      return {
+        id: parent.id,
+        name: parent.name,
+        brand: parent.brand,
+        category: parent.category,
+        description: parent.description,
+        image_url: parent.image_url,
+        min_price: (prices.length ? Math.min(...prices) : 0).toFixed(2),
+        max_price: (prices.length ? Math.max(...prices) : 0).toFixed(2),
+        variant_count: variants.length,
+        in_stock: variants.some((v) => v.stock_quantity > 0),
+      }
+    })
+    return json(200, { items, total: items.length, page: 1, limit: 20, has_more: false })
+  }
+  const parentMatch = /^\/api\/v1\/products\/parents\/([^/]+)$/.exec(path)
+  if (method === 'GET' && parentMatch) {
+    const detail = parentDetail(parentMatch[1])
+    return detail ? json(200, detail) : json(404, { detail: 'Not found' })
+  }
   if (method === 'GET' && path === '/api/v1/admin/products/low-stock') return json(200, [])
+  if (method === 'GET' && path === '/api/v1/admin/insights') {
+    return json(200, {
+      period_start: '2026-05-16T00:00:00Z',
+      period_end: '2026-06-15T00:00:00Z',
+      summary: {
+        total_conversations: 12,
+        total_messages: 84,
+        user_messages: 40,
+        assistant_messages: 44,
+        escalated_conversations: 2,
+        flagged_messages: 3,
+        low_confidence_messages: 5,
+        negative_feedback_messages: 1,
+        unanswered_messages: 4,
+        escalation_rate: 0.17,
+        flag_rate: 0.04,
+      },
+      top_intents: [{ intent: 'price_inquiry', count: 20 }],
+      top_questions: [{ question: 'Giá bình gas 12kg bao nhiêu?', count: 8 }],
+      trend: [{ date: '2026-06-15', conversations: 3, flagged: 1, escalated: 0 }],
+      knowledge_gaps: [],
+    })
+  }
   const productMatch = /^\/api\/v1\/products\/([^/]+)$/.exec(path)
   if (method === 'GET' && productMatch) {
     const found = PRODUCTS.find((p) => p.id === productMatch[1])
@@ -150,6 +225,56 @@ export function resolveApi({ method, path, query, body = {}, cookie }) {
   if (method === 'GET' && path === '/api/v1/wishlist') return json(200, [])
   if (/^\/api\/v1\/wishlist\/[^/]+$/.test(path) && (method === 'POST' || method === 'DELETE')) {
     return json(204, undefined)
+  }
+
+  // --- Coupons -------------------------------------------------------------
+  if (method === 'POST' && path === '/api/v1/coupons/validate') {
+    return json(200, {
+      code: String(body.code ?? 'SALE10').toUpperCase(),
+      discount_type: 'percent',
+      value: '10',
+      discount_amount: '10000',
+      min_order: '0',
+    })
+  }
+  if (method === 'GET' && path === '/api/v1/admin/coupons') {
+    return json(200, { items: [], total: 0, page: 1, limit: 20, has_more: false })
+  }
+  if (method === 'POST' && path === '/api/v1/admin/coupons') {
+    return json(201, {
+      id: 'coupon-1',
+      code: String(body.code ?? 'SALE10').toUpperCase(),
+      discount_type: body.discount_type ?? 'percent',
+      value: String(body.value ?? '10'),
+      min_order: String(body.min_order ?? '0'),
+      max_discount: body.max_discount ?? null,
+      usage_limit: body.usage_limit ?? null,
+      used_count: 0,
+      per_user_limit: body.per_user_limit ?? null,
+      active: true,
+      starts_at: null,
+      ends_at: null,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    })
+  }
+  if (/^\/api\/v1\/admin\/coupons\/[^/]+$/.test(path) && method === 'PATCH') {
+    return json(200, {
+      id: 'coupon-1',
+      code: 'SALE10',
+      discount_type: 'percent',
+      value: '10',
+      min_order: '0',
+      max_discount: null,
+      usage_limit: null,
+      used_count: 0,
+      per_user_limit: null,
+      active: body.active ?? true,
+      starts_at: null,
+      ends_at: null,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    })
   }
 
   // --- Orders --------------------------------------------------------------
@@ -180,6 +305,26 @@ export function resolveApi({ method, path, query, body = {}, cookie }) {
   const orderMatch = /^\/api\/v1\/orders\/([^/]+)$/.exec(path)
   if (method === 'GET' && orderMatch && orderMatch[1] !== 'me') {
     return json(200, buildOrder({ id: orderMatch[1] }))
+  }
+
+  // --- Driver --------------------------------------------------------------
+  if (method === 'GET' && path === '/api/v1/driver/deliveries') return json(200, [])
+  if (/^\/api\/v1\/driver\/deliveries\/[^/]+\/status$/.test(path) && method === 'PATCH') {
+    return json(200, {
+      id: 'del-1',
+      code: 'QC-000123-D1',
+      status: body.status ?? 'delivered',
+      customer_name: 'Nguyen Van Test',
+      customer_phone: '0903026306',
+      delivery_address: '15 đường số 5, khu phố 32',
+      notes: null,
+      scheduled_at: null,
+      delivered_at: now,
+      last_lat: body.lat ?? null,
+      last_lng: body.lng ?? null,
+      items: [{ product_name: 'Bình gas Elf 12kg (đỏ)', quantity: 1 }],
+      created_at: now,
+    })
   }
 
   // --- Auth ----------------------------------------------------------------

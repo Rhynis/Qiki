@@ -33,6 +33,7 @@ export interface CheckoutRequest {
   customer_notes?: string | null
   source: OrderSource
   referral_conversation_id?: string | null
+  coupon_code?: string | null
 }
 
 export interface OrderItem {
@@ -128,6 +129,8 @@ export interface Order {
   different_recipient_phone: string | null
   subtotal: string
   shipping_fee: string
+  discount_amount: string
+  coupon_code: string | null
   total_amount: string
   vat_invoice_requested: boolean
   vat_info: VatInfo | null

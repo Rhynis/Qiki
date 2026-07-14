@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.dependencies.auth import get_current_admin
 from app.core.exceptions import ForbiddenException
 from app.main import app
-from app.models.product import Product
+from app.models.product import Product, ProductParent
 from app.models.user import User
 from app.repositories.product_repository import ProductRepository
 from app.schemas.product import ProductCreate
@@ -292,3 +292,92 @@ async def test_low_stock_endpoint(
 
     assert response.status_code == 200
     assert [item["sku"] for item in response.json()] == ["LOW-12"]
+
+
+async def _seed_parent_with_variants(session: AsyncSession) -> ProductParent:
+    parent = ProductParent(name="Bình gas Saigon Petro", brand="Saigon Petro", category="gas")
+    session.add(parent)
+    await session.flush()
+    for sku, size, price, stock in (
+        ("SP-12KG-XAM", Decimal("12"), Decimal("605000"), 50),
+        ("SP-45KG-BO", Decimal("45"), Decimal("2250000"), 20),
+    ):
+        product = await create_db_product(
+            session,
+            sku=sku,
+            brand="Saigon Petro",
+            name=f"Bình gas Saigon Petro {sku}",
+            size_kg=size,
+            price=price,
+            stock_quantity=stock,
+        )
+        product.parent_id = parent.id
+    await session.commit()
+    return parent
+
+
+async def test_list_product_parents_returns_price_range(
+    test_client: AsyncClient,
+    product_session: AsyncSession,
+) -> None:
+    await _seed_parent_with_variants(product_session)
+
+    response = await test_client.get("/api/v1/products/parents")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 1
+    card = data["items"][0]
+    assert card["name"] == "Bình gas Saigon Petro"
+    assert card["variant_count"] == 2
+    assert card["min_price"] == "605000.00"
+    assert card["max_price"] == "2250000.00"
+
+
+async def test_get_product_parent_returns_variants(
+    test_client: AsyncClient,
+    product_session: AsyncSession,
+) -> None:
+    parent = await _seed_parent_with_variants(product_session)
+
+    response = await test_client.get(f"/api/v1/products/parents/{parent.id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == str(parent.id)
+    skus = [variant["sku"] for variant in data["variants"]]
+    assert skus == ["SP-12KG-XAM", "SP-45KG-BO"]
+    prices = {variant["sku"]: variant["price"] for variant in data["variants"]}
+    assert prices["SP-12KG-XAM"] == "605000.00"
+
+
+async def test_create_product_parent_requires_admin(
+    test_client: AsyncClient,
+    override_forbidden_admin: object,
+) -> None:
+    response = await test_client.post(
+        "/api/v1/products/parents",
+        json={"name": "Bình gas Elf", "brand": "Elf Gas", "category": "gas"},
+    )
+
+    assert response.status_code == 403
+
+
+async def test_create_and_delete_product_parent(
+    test_client: AsyncClient,
+    product_session: AsyncSession,
+    override_admin: object,
+) -> None:
+    create_response = await test_client.post(
+        "/api/v1/products/parents",
+        json={"name": "Bình gas Elf", "brand": "Elf Gas", "category": "gas"},
+    )
+
+    assert create_response.status_code == 201
+    parent_id = create_response.json()["id"]
+
+    delete_response = await test_client.delete(f"/api/v1/products/parents/{parent_id}")
+
+    assert delete_response.status_code == 204
+    missing = await test_client.get(f"/api/v1/products/parents/{parent_id}")
+    assert missing.status_code == 404
