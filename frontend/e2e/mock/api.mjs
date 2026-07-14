@@ -245,6 +245,26 @@ export function resolveApi({ method, path, query, body = {}, cookie }) {
     return json(200, buildOrder({ id: orderMatch[1] }))
   }
 
+  // --- Driver --------------------------------------------------------------
+  if (method === 'GET' && path === '/api/v1/driver/deliveries') return json(200, [])
+  if (/^\/api\/v1\/driver\/deliveries\/[^/]+\/status$/.test(path) && method === 'PATCH') {
+    return json(200, {
+      id: 'del-1',
+      code: 'QC-000123-D1',
+      status: body.status ?? 'delivered',
+      customer_name: 'Nguyen Van Test',
+      customer_phone: '0903026306',
+      delivery_address: '15 đường số 5, khu phố 32',
+      notes: null,
+      scheduled_at: null,
+      delivered_at: now,
+      last_lat: body.lat ?? null,
+      last_lng: body.lng ?? null,
+      items: [{ product_name: 'Bình gas Elf 12kg (đỏ)', quantity: 1 }],
+      created_at: now,
+    })
+  }
+
   // --- Auth ----------------------------------------------------------------
   if (method === 'GET' && path === '/api/v1/auth/me') {
     const user = userFromCookie(cookie)

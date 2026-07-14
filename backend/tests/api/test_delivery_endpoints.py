@@ -9,7 +9,11 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.dependencies.auth import get_current_staff, get_current_user_optional
+from app.api.v1.dependencies.auth import (
+    get_current_active_user,
+    get_current_staff,
+    get_current_user_optional,
+)
 from app.main import app
 from app.models.order import Order
 from app.models.user import User
@@ -191,3 +195,138 @@ async def test_status_rollup_to_delivered(
     order_after_delivered = (await test_client.get(f"/api/v1/orders/{order.id}")).json()
     assert order_after_delivered["status"] == "delivered"
     assert order_after_delivered["delivered_at"] is not None
+
+
+def _user(role: str) -> User:
+    now = datetime.now(UTC)
+    return User(
+        id=uuid4(),
+        email=f"{role}@example.com",
+        hashed_password="hashed",
+        full_name=f"{role.title()} User",
+        phone=f"+8490{uuid4().int % 10000000:07d}",
+        role=role,
+        is_active=True,
+        created_at=now,
+        updated_at=now,
+    )
+
+
+async def test_driver_section_role_gating(
+    test_client: AsyncClient,
+    order_session: AsyncSession,
+) -> None:
+    app.dependency_overrides[get_current_active_user] = lambda: _user("customer")
+    blocked = await test_client.get("/api/v1/driver/deliveries")
+    assert blocked.status_code == 403
+
+    app.dependency_overrides[get_current_active_user] = lambda: _user("driver")
+    driver_ok = await test_client.get("/api/v1/driver/deliveries")
+    assert driver_ok.status_code == 200
+
+    app.dependency_overrides[get_current_active_user] = lambda: _user("admin")
+    admin_ok = await test_client.get("/api/v1/driver/deliveries")
+    assert admin_ok.status_code == 200
+    app.dependency_overrides.clear()
+
+
+async def test_assign_driver_then_driver_updates_status_without_location(
+    test_client: AsyncClient,
+    order_session: AsyncSession,
+) -> None:
+    driver = _user("driver")
+    order_session.add(driver)
+    await order_session.commit()
+
+    staff = staff_user()
+    app.dependency_overrides[get_current_staff] = lambda: staff
+    app.dependency_overrides[get_current_user_optional] = lambda: staff
+    order = await create_db_order(order_session)
+    item_id = order_item_id(order)
+    delivery = (
+        await test_client.post(
+            f"/api/v1/admin/orders/{order.id}/deliveries",
+            json={"items": [{"order_item_id": item_id, "quantity": 3}]},
+        )
+    ).json()
+
+    assigned = await test_client.patch(
+        f"/api/v1/admin/deliveries/{delivery['id']}/assign",
+        json={"driver_id": str(driver.id)},
+    )
+    assert assigned.status_code == 200
+    assert assigned.json()["driver_id"] == str(driver.id)
+
+    # Switch identity to the assigned driver.
+    app.dependency_overrides[get_current_active_user] = lambda: driver
+    listed = await test_client.get("/api/v1/driver/deliveries")
+    assert listed.status_code == 200
+    assert any(item["id"] == delivery["id"] for item in listed.json())
+
+    # Mark delivered WITHOUT a location; it must still succeed.
+    done = await test_client.patch(
+        f"/api/v1/driver/deliveries/{delivery['id']}/status",
+        json={"status": "delivered"},
+    )
+    assert done.status_code == 200
+    body = done.json()
+    assert body["status"] == "delivered"
+    assert body["last_lat"] is None
+    assert body["last_lng"] is None
+    app.dependency_overrides.clear()
+
+
+async def test_driver_cannot_update_unassigned_delivery(
+    test_client: AsyncClient,
+    order_session: AsyncSession,
+) -> None:
+    staff = staff_user()
+    app.dependency_overrides[get_current_staff] = lambda: staff
+    app.dependency_overrides[get_current_user_optional] = lambda: staff
+    order = await create_db_order(order_session)
+    item_id = order_item_id(order)
+    delivery = (
+        await test_client.post(
+            f"/api/v1/admin/orders/{order.id}/deliveries",
+            json={"items": [{"order_item_id": item_id, "quantity": 3}]},
+        )
+    ).json()
+
+    # A different driver (never assigned) must not be able to touch it.
+    other_driver = _user("driver")
+    app.dependency_overrides[get_current_active_user] = lambda: other_driver
+    failed = await test_client.patch(
+        f"/api/v1/driver/deliveries/{delivery['id']}/status",
+        json={"status": "failed", "lat": 10.8, "lng": 106.7},
+    )
+    assert failed.status_code == 404
+    app.dependency_overrides.clear()
+
+
+async def test_assign_rejects_non_driver_user(
+    test_client: AsyncClient,
+    order_session: AsyncSession,
+) -> None:
+    customer = _user("customer")
+    order_session.add(customer)
+    await order_session.commit()
+
+    staff = staff_user()
+    app.dependency_overrides[get_current_staff] = lambda: staff
+    app.dependency_overrides[get_current_user_optional] = lambda: staff
+    order = await create_db_order(order_session)
+    item_id = order_item_id(order)
+    delivery = (
+        await test_client.post(
+            f"/api/v1/admin/orders/{order.id}/deliveries",
+            json={"items": [{"order_item_id": item_id, "quantity": 3}]},
+        )
+    ).json()
+
+    rejected = await test_client.patch(
+        f"/api/v1/admin/deliveries/{delivery['id']}/assign",
+        json={"driver_id": str(customer.id)},
+    )
+    assert rejected.status_code == 400
+    assert rejected.json()["error_code"] == "invalid_driver"
+    app.dependency_overrides.clear()
