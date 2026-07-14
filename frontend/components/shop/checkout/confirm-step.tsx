@@ -26,6 +26,7 @@ export function ConfirmStep() {
   const items = useCartStore((state) => state.items)
   const clearCart = useCartStore((state) => state.clearCart)
   const form = useCheckoutStore((state) => state.form)
+  const couponCode = useCheckoutStore((state) => state.couponCode)
   const previousStep = useCheckoutStore((state) => state.previousStep)
   const setLastOrder = useCheckoutStore((state) => state.setLastOrder)
   const resetCheckout = useCheckoutStore((state) => state.resetCheckout)
@@ -59,6 +60,7 @@ export function ConfirmStep() {
     customer_notes: optionalText(form.customer_notes),
     source: 'website',
     referral_conversation_id: null,
+    coupon_code: couponCode,
   }
 
   const submit = async () => {

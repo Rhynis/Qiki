@@ -21,7 +21,17 @@ from app.models.product import Product
 from app.models.user import User
 from app.repositories.order_repository import ALLOWED_STATUS_TRANSITIONS, OrderRepository
 from app.repositories.product_repository import ProductRepository
-from app.schemas.order import CheckoutRequest, OrderListResponse, OrderResponse, OrderSearchParams
+from app.schemas.order import (
+    CheckoutRequest,
+    OrderListResponse,
+    OrderResponse,
+    OrderSearchParams,
+    ReorderItem,
+    ReorderResponse,
+    SkippedReorderItem,
+)
+from app.schemas.product import BestSellerProduct, ProductResponse
+from app.services.coupon_service import CouponService
 
 logger = get_logger(__name__)
 WATER_DELIVERY_FEE_PER_UNIT = Decimal("5000")
@@ -30,9 +40,15 @@ WATER_DELIVERY_FEE_PER_UNIT = Decimal("5000")
 class OrderService:
     """Business logic for order management."""
 
-    def __init__(self, order_repo: OrderRepository, product_repo: ProductRepository) -> None:
+    def __init__(
+        self,
+        order_repo: OrderRepository,
+        product_repo: ProductRepository,
+        coupon_service: CouponService | None = None,
+    ) -> None:
         self.order_repo = order_repo
         self.product_repo = product_repo
+        self.coupon_service = coupon_service
 
     async def create_order(
         self,
@@ -99,7 +115,21 @@ class OrderService:
             )
 
         shipping_fee = self._calculate_shipping(products, requested_by_product)
-        total_amount = subtotal + shipping_fee
+
+        coupon = None
+        discount_amount = Decimal("0")
+        if checkout_data.coupon_code:
+            if self.coupon_service is None:
+                raise ValidationException(
+                    "Coupons are not available", error_code="coupon_unavailable"
+                )
+            coupon, discount_amount = await self.coupon_service.apply_coupon(
+                checkout_data.coupon_code, subtotal, current_user
+            )
+
+        total_amount = subtotal + shipping_fee - discount_amount
+        if total_amount < Decimal("0"):
+            total_amount = Decimal("0")
 
         for product_id, quantity in requested_by_product.items():
             await self.product_repo.decrement_stock(product_id, quantity)
@@ -120,6 +150,9 @@ class OrderService:
             "different_recipient_phone": checkout_data.different_recipient_phone,
             "subtotal": subtotal,
             "shipping_fee": shipping_fee,
+            "discount_amount": discount_amount,
+            "coupon_id": coupon.id if coupon else None,
+            "coupon_code": coupon.code if coupon else None,
             "total_amount": total_amount,
             "vat_invoice_requested": checkout_data.vat_invoice_requested,
             "vat_info": checkout_data.vat_info.model_dump() if checkout_data.vat_info else None,
@@ -133,10 +166,14 @@ class OrderService:
         }
 
         order = await self.order_repo.create_with_items(order_data, items_data, session)
+        if coupon is not None and self.coupon_service is not None:
+            await self.coupon_service.record_redemption(coupon, current_user, order.id)
         logger.info(
             "order_created",
             order_number=order.order_number,
             total=float(total_amount),
+            discount=float(discount_amount),
+            coupon=coupon.code if coupon else None,
             item_count=len(items_data),
             source=checkout_data.source,
             is_guest=current_user is None,
@@ -168,6 +205,84 @@ class OrderService:
         normalized_phone = VietnamesePhoneValidator.validate(phone) if phone else None
         self._ensure_can_view(order, current_user, normalized_phone)
         return self._to_response(order)
+
+    async def reorder(self, order_id: UUID, current_user: User) -> ReorderResponse:
+        """Rebuild a cart from a past order using current prices, stock, and status.
+
+        The customer must own the order. Each line is re-priced from the live
+        product row; a product that is now missing, inactive, or out of stock is
+        dropped into ``skipped`` with a reason instead of being re-added, so the
+        cart the caller receives is always safe to check out.
+        """
+        order = await self.order_repo.get_by_id(order_id)
+        if not order:
+            raise NotFoundException("Order not found", error_code="order_not_found")
+        if order.user_id != current_user.id:
+            raise ForbiddenException("Order access denied", error_code="order_forbidden")
+
+        items: list[ReorderItem] = []
+        skipped: list[SkippedReorderItem] = []
+        for line in order.items:
+            product = (
+                await self.product_repo.get_by_id(line.product_id) if line.product_id else None
+            )
+            if product is None:
+                skipped.append(
+                    SkippedReorderItem(
+                        product_id=line.product_id,
+                        product_name=line.product_name,
+                        reason="not_found",
+                    )
+                )
+                continue
+            if not product.is_active:
+                skipped.append(
+                    SkippedReorderItem(
+                        product_id=product.id,
+                        product_name=product.name,
+                        reason="inactive",
+                    )
+                )
+                continue
+            if product.stock_quantity <= 0:
+                skipped.append(
+                    SkippedReorderItem(
+                        product_id=product.id,
+                        product_name=product.name,
+                        reason="out_of_stock",
+                    )
+                )
+                continue
+            # Cap the reordered quantity at the stock currently on hand so the
+            # rebuilt cart never exceeds availability.
+            quantity = min(line.quantity, product.stock_quantity)
+            items.append(
+                ReorderItem(
+                    product_id=product.id,
+                    sku=product.sku,
+                    name=product.name,
+                    brand=product.brand,
+                    size_kg=product.size_kg,
+                    category=product.category,
+                    unit=product.unit,
+                    price=product.price,
+                    quantity=quantity,
+                    image_url=product.image_url,
+                    stock_quantity=product.stock_quantity,
+                )
+            )
+        return ReorderResponse(items=items, skipped=skipped)
+
+    async def get_best_sellers(self, limit: int = 8) -> list[BestSellerProduct]:
+        """Return the most-ordered active products for storefront display."""
+        rows = await self.order_repo.get_best_sellers(limit)
+        return [
+            BestSellerProduct(
+                **ProductResponse.model_validate(product).model_dump(),
+                total_sold=total_sold,
+            )
+            for product, total_sold in rows
+        ]
 
     async def list_all_orders(self, admin: User, params: OrderSearchParams) -> OrderListResponse:
         """List orders for an administrator."""

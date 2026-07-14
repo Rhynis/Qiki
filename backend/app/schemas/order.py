@@ -75,6 +75,15 @@ class CheckoutRequest(BaseModel):
     customer_notes: str | None = Field(default=None, max_length=1000)
     source: OrderSource = "website"
     referral_conversation_id: UUID | None = None
+    coupon_code: str | None = Field(default=None, max_length=50)
+
+    @field_validator("coupon_code")
+    @classmethod
+    def normalize_coupon_code(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.upper().strip()
+        return normalized or None
 
     @field_validator("customer_phone", "different_recipient_phone")
     @classmethod
@@ -119,6 +128,8 @@ class OrderResponse(BaseModel):
     different_recipient_phone: str | None
     subtotal: Decimal
     shipping_fee: Decimal
+    discount_amount: Decimal
+    coupon_code: str | None
     total_amount: Decimal
     vat_invoice_requested: bool
     vat_info: VatInfo | None
@@ -190,3 +201,39 @@ class OrderSearchParams(BaseModel):
     search: str | None = Field(default=None, max_length=255)
     skip: int = Field(default=0, ge=0)
     limit: int = Field(default=20, ge=1, le=100)
+
+
+class SkippedReorderItem(BaseModel):
+    """A past-order line that could not be re-added to the cart."""
+
+    product_id: UUID | None
+    product_name: str
+    reason: Literal["inactive", "out_of_stock", "not_found"]
+
+
+class ReorderItem(BaseModel):
+    """A cart line rebuilt from a past order at the current price."""
+
+    product_id: UUID
+    sku: str
+    name: str
+    brand: str
+    size_kg: Decimal
+    category: str
+    unit: str
+    price: Decimal
+    quantity: int
+    image_url: str | None
+    stock_quantity: int
+
+
+class ReorderResponse(BaseModel):
+    """Result of rebuilding a cart from a past order.
+
+    ``items`` carries the products still purchasable at their current price and
+    stock; ``skipped`` explains any line that was dropped because the product is
+    now inactive or out of stock, so the UI can warn the customer.
+    """
+
+    items: list[ReorderItem]
+    skipped: list[SkippedReorderItem]

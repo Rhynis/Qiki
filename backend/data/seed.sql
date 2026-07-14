@@ -67,6 +67,46 @@ ON CONFLICT (sku) DO UPDATE SET
   pricing_note = EXCLUDED.pricing_note,
   is_active = true;
 
+-- Group seeded products under a parent per (brand, category) so the storefront
+-- shows one card per brand with selectable colour/size variants. Mirrors the
+-- 017_add_product_variants data migration for idempotent local re-seeds.
+INSERT INTO product_parents (name, brand, category, description, image_url, is_active)
+SELECT DISTINCT ON (p.brand, p.category)
+    btrim(
+        regexp_replace(
+            regexp_replace(p.name, '\s*\([^)]*\)\s*$', ''),
+            '\s*\d+([.,]\d+)?\s*(kg|lít|l)\y',
+            '',
+            'gi'
+        )
+    ) AS name,
+    p.brand,
+    p.category,
+    p.description,
+    p.image_url,
+    TRUE
+FROM products p
+ORDER BY p.brand, p.category, p.created_at
+ON CONFLICT (brand, category) DO NOTHING;
+
+UPDATE products p
+SET parent_id = pp.id
+FROM product_parents pp
+WHERE p.brand = pp.brand AND p.category = pp.category;
+
+UPDATE products
+SET colour = trim(substring(name FROM '\(([^)]*)\)\s*$'))
+WHERE name ~ '\([^)]*\)\s*$';
+
+UPDATE products
+SET variant_label = trim(
+    btrim(
+        (rtrim(to_char(size_kg, 'FM999999990.99'), '.') || ' ' || unit)
+        || CASE WHEN colour IS NOT NULL AND colour <> ''
+                THEN ' (' || colour || ')' ELSE '' END
+    )
+);
+
 INSERT INTO knowledge_base (title, content, category, source, embedding)
 SELECT
   'Hướng dẫn an toàn gas số ' || gs::text,

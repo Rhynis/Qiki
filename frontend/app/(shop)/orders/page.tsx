@@ -2,6 +2,7 @@
 
 import { useTranslations } from 'next-intl'
 import Link from 'next/link'
+import { ReorderButton } from '@/components/shop/order/reorder-button'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/shared/page-header'
 import { useMyOrders } from '@/lib/hooks/use-orders'
@@ -29,18 +30,20 @@ export default function OrdersPage() {
           </div>
         ) : null}
         {data?.items.map((order) => (
-          <Link
+          <div
             key={order.id}
-            className="grid gap-2 border-b p-4 hover:bg-slate-50 md:grid-cols-[1fr_140px_140px] md:items-center"
-            href={`/orders/${order.id}`}
+            className="grid gap-2 border-b p-4 md:grid-cols-[1fr_130px_130px_120px] md:items-center"
           >
-            <div>
+            <Link className="hover:underline" href={`/orders/${order.id}`}>
               <p className="font-medium">{order.order_number}</p>
               <p className="text-sm text-slate-600">{formatDate(order.created_at)}</p>
-            </div>
+            </Link>
             <span className="text-sm">{tStatus(order.status as OrderStatus)}</span>
             <span className="font-semibold md:text-right">{formatPrice(order.total_amount)}</span>
-          </Link>
+            <div className="md:text-right">
+              <ReorderButton orderId={order.id} />
+            </div>
+          </div>
         ))}
       </div>
     </section>

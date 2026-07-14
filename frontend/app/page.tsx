@@ -11,6 +11,7 @@ import {
   Truck,
 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
+import { BestSellers } from '@/components/shop/best-sellers'
 import { ChatOpenButton } from '@/components/shared/chat-open-button'
 import { DeliveryAreaPopover } from '@/components/shared/delivery-area-popover'
 import { StoreStatusBadge } from '@/components/shared/store-status-badge'
@@ -171,6 +172,8 @@ export default function HomePage() {
           ))}
         </div>
       </section>
+
+      <BestSellers />
 
       <section className="border-y bg-white">
         <div className="mx-auto max-w-6xl px-4 py-12">

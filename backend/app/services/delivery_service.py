@@ -4,16 +4,24 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from app.core.exceptions import NotFoundException, ValidationException
+from app.models.delivery import Delivery
 from app.models.order import Order
 from app.repositories.delivery_repository import DeliveryRepository
 from app.repositories.order_repository import OrderRepository
-from app.schemas.delivery import DeliveryCreate, DeliveryResponse
+from app.repositories.user_repository import UserRepository
+from app.schemas.delivery import (
+    DeliveryCreate,
+    DeliveryResponse,
+    DriverDeliveryLine,
+    DriverDeliveryResponse,
+)
 
 # Per-delivery status transitions (independent of the order-level transitions).
 DELIVERY_STATUS_TRANSITIONS: dict[str, list[str]] = {
-    "pending": ["shipping", "delivered", "cancelled"],
-    "shipping": ["delivered", "cancelled"],
+    "pending": ["shipping", "delivered", "failed", "cancelled"],
+    "shipping": ["delivered", "failed", "cancelled"],
     "delivered": [],
+    "failed": [],
     "cancelled": [],
 }
 
@@ -25,9 +33,94 @@ class DeliveryService:
         self,
         delivery_repo: DeliveryRepository,
         order_repo: OrderRepository,
+        user_repo: UserRepository,
     ) -> None:
         self.delivery_repo = delivery_repo
         self.order_repo = order_repo
+        self.user_repo = user_repo
+
+    async def assign_driver(self, delivery_id: UUID, driver_id: UUID | None) -> DeliveryResponse:
+        """Assign (or clear) the driver carrying a delivery. Staff/admin action."""
+        delivery = await self.delivery_repo.get_by_id(delivery_id)
+        if delivery is None:
+            raise NotFoundException("Delivery not found", error_code="delivery_not_found")
+        if driver_id is not None:
+            driver = await self.user_repo.get_by_id(driver_id)
+            if driver is None or not driver.is_driver():
+                raise ValidationException("Assignee must be a driver", error_code="invalid_driver")
+        delivery.driver_id = driver_id
+        await self.delivery_repo.flush()
+        refreshed = await self.delivery_repo.get_by_id(delivery_id)
+        assert refreshed is not None
+        return DeliveryResponse.model_validate(refreshed)
+
+    async def list_driver_deliveries(self, driver_id: UUID) -> list[DriverDeliveryResponse]:
+        """Return the deliveries assigned to a driver (with contact + items)."""
+        deliveries = await self.delivery_repo.list_by_driver(driver_id)
+        return [self._to_driver_response(delivery) for delivery in deliveries]
+
+    @staticmethod
+    def _to_driver_response(delivery: Delivery) -> DriverDeliveryResponse:
+        order = delivery.order
+        items_by_id = {item.id: item for item in order.items}
+        lines = [
+            DriverDeliveryLine(
+                product_name=items_by_id[line.order_item_id].product_name,
+                quantity=line.quantity,
+            )
+            for line in delivery.items
+            if line.order_item_id in items_by_id
+        ]
+        return DriverDeliveryResponse(
+            id=delivery.id,
+            code=delivery.code,
+            status=delivery.status,  # type: ignore[arg-type]
+            customer_name=order.customer_name,
+            customer_phone=order.customer_phone,
+            delivery_address=order.delivery_address,
+            notes=delivery.notes,
+            scheduled_at=delivery.scheduled_at,
+            delivered_at=delivery.delivered_at,
+            last_lat=delivery.last_lat,
+            last_lng=delivery.last_lng,
+            items=lines,
+            created_at=delivery.created_at,
+        )
+
+    async def driver_update_status(
+        self,
+        delivery_id: UUID,
+        *,
+        actor_id: UUID,
+        is_admin: bool,
+        new_status: str,
+        notes: str | None = None,
+        lat: float | None = None,
+        lng: float | None = None,
+    ) -> DriverDeliveryResponse:
+        """Let the assigned driver (or an admin) mark a delivery delivered/failed."""
+        delivery = await self.delivery_repo.get_with_order(delivery_id)
+        # A driver may only touch their own delivery; hide others as "not found".
+        if delivery is None or (not is_admin and delivery.driver_id != actor_id):
+            raise NotFoundException("Delivery not found", error_code="delivery_not_found")
+        if new_status not in DELIVERY_STATUS_TRANSITIONS[delivery.status]:
+            raise ValidationException(
+                f"Cannot transition delivery from {delivery.status} to {new_status}",
+                error_code="invalid_delivery_status_transition",
+            )
+        delivery.status = new_status
+        if notes is not None:
+            delivery.notes = notes
+        if lat is not None and lng is not None:
+            delivery.last_lat = lat
+            delivery.last_lng = lng
+        if new_status == "delivered":
+            delivery.delivered_at = datetime.now(UTC)
+        await self.delivery_repo.flush()
+        await self._roll_up_order_status(delivery.order_id)
+        refreshed = await self.delivery_repo.get_with_order(delivery_id)
+        assert refreshed is not None
+        return self._to_driver_response(refreshed)
 
     async def list_deliveries(self, order_id: UUID) -> list[DeliveryResponse]:
         """Return an order's deliveries."""
@@ -120,7 +213,7 @@ class DeliveryService:
         """Sum quantities already committed to non-cancelled deliveries, per item."""
         allocated: dict[UUID, int] = {}
         for delivery in order.deliveries:
-            if delivery.status == "cancelled":
+            if delivery.status in ("cancelled", "failed"):
                 continue
             for item in delivery.items:
                 allocated[item.order_item_id] = allocated.get(item.order_item_id, 0) + item.quantity

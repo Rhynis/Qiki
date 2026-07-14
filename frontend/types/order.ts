@@ -33,6 +33,7 @@ export interface CheckoutRequest {
   customer_notes?: string | null
   source: OrderSource
   referral_conversation_id?: string | null
+  coupon_code?: string | null
 }
 
 export interface OrderItem {
@@ -87,6 +88,31 @@ export interface DeliveryStatusUpdate {
   notes?: string | null
 }
 
+export interface ReorderItem {
+  product_id: string
+  sku: string
+  name: string
+  brand: string
+  size_kg: string
+  category: string
+  unit: string
+  price: string
+  quantity: number
+  image_url: string | null
+  stock_quantity: number
+}
+
+export interface SkippedReorderItem {
+  product_id: string | null
+  product_name: string
+  reason: 'inactive' | 'out_of_stock' | 'not_found'
+}
+
+export interface ReorderResponse {
+  items: ReorderItem[]
+  skipped: SkippedReorderItem[]
+}
+
 export interface Order {
   id: string
   order_number: string
@@ -103,6 +129,8 @@ export interface Order {
   different_recipient_phone: string | null
   subtotal: string
   shipping_fee: string
+  discount_amount: string
+  coupon_code: string | null
   total_amount: string
   vat_invoice_requested: boolean
   vat_info: VatInfo | null

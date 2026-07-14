@@ -15,6 +15,10 @@ from app.schemas.product import (
     ProductCategory,
     ProductCreate,
     ProductListResponse,
+    ProductParentCreate,
+    ProductParentListResponse,
+    ProductParentResponse,
+    ProductParentUpdate,
     ProductResponse,
     ProductSearchParams,
     ProductUpdate,
@@ -57,6 +61,89 @@ async def list_product_brands(
 ) -> list[str]:
     """Return distinct active product brands, optionally filtered by category."""
     return await service.list_brands(category)
+
+
+@router.get(
+    "/products/parents",
+    response_model=ProductParentListResponse,
+    summary="List grouped product parents",
+)
+@limiter.limit("60/minute")
+async def list_product_parents(
+    request: Request,
+    service: Annotated[ProductService, Depends(get_product_service)],
+    category: Annotated[ProductCategory | None, Query()] = None,
+    skip: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> ProductParentListResponse:
+    """Return active parent products as catalog cards with a price range."""
+    return await service.list_grouped_catalog(category=category, skip=skip, limit=limit)
+
+
+@router.get(
+    "/products/parents/{parent_id}",
+    response_model=ProductParentResponse,
+    summary="Get product parent with variants",
+)
+@limiter.limit("60/minute")
+async def get_product_parent(
+    request: Request,
+    parent_id: UUID,
+    service: Annotated[ProductService, Depends(get_product_service)],
+) -> ProductParentResponse:
+    """Return one active parent product with its selectable variants."""
+    return await service.get_parent(parent_id)
+
+
+@router.post(
+    "/products/parents",
+    status_code=status.HTTP_201_CREATED,
+    response_model=ProductParentResponse,
+    summary="Create product parent",
+)
+@limiter.limit("30/minute")
+async def create_product_parent(
+    request: Request,
+    payload: ProductParentCreate,
+    service: Annotated[ProductService, Depends(get_product_service)],
+    admin: Annotated[User, Depends(get_current_admin)],
+) -> ProductParentResponse:
+    """Create a parent product as an administrator."""
+    return await service.create_parent(payload, admin)
+
+
+@router.patch(
+    "/products/parents/{parent_id}",
+    response_model=ProductParentResponse,
+    summary="Update product parent",
+)
+@limiter.limit("30/minute")
+async def update_product_parent(
+    request: Request,
+    parent_id: UUID,
+    payload: ProductParentUpdate,
+    service: Annotated[ProductService, Depends(get_product_service)],
+    admin: Annotated[User, Depends(get_current_admin)],
+) -> ProductParentResponse:
+    """Update a parent product as an administrator."""
+    return await service.update_parent(parent_id, payload, admin)
+
+
+@router.delete(
+    "/products/parents/{parent_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Soft-delete product parent",
+)
+@limiter.limit("30/minute")
+async def delete_product_parent(
+    request: Request,
+    parent_id: UUID,
+    service: Annotated[ProductService, Depends(get_product_service)],
+    admin: Annotated[User, Depends(get_current_admin)],
+) -> Response:
+    """Soft-delete a parent product and its variants as an administrator."""
+    await service.delete_parent(parent_id, admin)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get(

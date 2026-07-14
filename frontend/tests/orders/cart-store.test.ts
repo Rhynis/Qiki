@@ -19,6 +19,9 @@ const product: Product = {
   is_active: true,
   created_at: '2026-05-29T00:00:00Z',
   updated_at: '2026-05-29T00:00:00Z',
+  parent_id: null,
+  colour: null,
+  variant_label: null,
 }
 
 describe('cart store', () => {
