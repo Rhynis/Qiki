@@ -1,7 +1,7 @@
 """Add a driver role and driver assignment + last location to deliveries.
 
-Revision ID: 016_add_driver_role
-Revises: 015_add_price_subscriptions
+Revision ID: 017_add_driver_role
+Revises: 016_add_coupons
 Create Date: 2026-07-13
 
 Adds the 'driver' user role, a nullable ``driver_id`` on deliveries (who is
@@ -14,8 +14,8 @@ from collections.abc import Sequence
 
 from alembic import op
 
-revision: str = "016_add_driver_role"
-down_revision: str | None = "015_add_price_subscriptions"
+revision: str = "017_add_driver_role"
+down_revision: str | None = "016_add_coupons"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
