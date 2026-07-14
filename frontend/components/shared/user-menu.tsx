@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useTranslations } from 'next-intl'
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '@/lib/hooks/use-auth'
 import {
@@ -13,6 +14,7 @@ import {
 import { Button } from '@/components/ui/button'
 
 export function UserMenu() {
+  const t = useTranslations('userMenu')
   const { user, isAuthenticated, isAdmin, logout, refreshUser } = useAuth()
   const [open, setOpen] = useState(false)
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -49,17 +51,17 @@ export function UserMenu() {
     return (
       <div className="flex items-center gap-1 sm:gap-2">
         <Button asChild size="sm" variant="ghost" className="px-2 sm:px-3">
-          <Link href="/login">Đăng nhập</Link>
+          <Link href="/login">{t('login')}</Link>
         </Button>
         <Button asChild size="sm" className="hidden px-2 sm:inline-flex sm:px-3">
-          <Link href="/register">Đăng ký</Link>
+          <Link href="/register">{t('register')}</Link>
         </Button>
       </div>
     )
   }
 
   const initial = (user.full_name ?? user.email ?? user.phone ?? '?').charAt(0).toUpperCase()
-  const displayName = user.full_name ?? user.email ?? 'Tài khoản'
+  const displayName = user.full_name ?? user.email ?? t('fallbackName')
 
   return (
     <div className="relative" onMouseEnter={openMenu} onMouseLeave={scheduleMenuClose}>
@@ -83,17 +85,17 @@ export function UserMenu() {
           onMouseLeave={scheduleMenuClose}
         >
           <DropdownMenuItem asChild>
-            <Link href="/account">Tài khoản</Link>
+            <Link href="/account">{t('account')}</Link>
           </DropdownMenuItem>
           <DropdownMenuItem asChild>
-            <Link href="/orders">Đơn hàng của tôi</Link>
+            <Link href="/orders">{t('myOrders')}</Link>
           </DropdownMenuItem>
           <DropdownMenuItem asChild>
-            <Link href="/wishlist">Sản phẩm yêu thích</Link>
+            <Link href="/wishlist">{t('wishlist')}</Link>
           </DropdownMenuItem>
           {isAdmin ? (
             <DropdownMenuItem asChild>
-              <Link href="/admin">Quản trị</Link>
+              <Link href="/admin">{t('admin')}</Link>
             </DropdownMenuItem>
           ) : null}
           <DropdownMenuSeparator />
@@ -101,7 +103,7 @@ export function UserMenu() {
             className="cursor-pointer text-red-700 focus:bg-red-50 focus:text-red-700"
             onSelect={() => void logout()}
           >
-            Đăng xuất
+            {t('logout')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

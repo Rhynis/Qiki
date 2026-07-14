@@ -1,21 +1,23 @@
 'use client'
 
 import { CheckCircle2, Circle } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import { cn } from '@/lib/utils'
 import type { OrderStatus } from '@/types/order'
 
-const steps: Array<{ status: OrderStatus; label: string }> = [
-  { status: 'pending', label: 'Chờ xác nhận' },
-  { status: 'confirmed', label: 'Đã xác nhận' },
-  { status: 'shipping', label: 'Đang giao' },
-  { status: 'delivered', label: 'Đã giao' },
-]
+const stepStatuses = ['pending', 'confirmed', 'shipping', 'delivered'] as const
 
 export function OrderStatusTimeline({ status }: { status: OrderStatus }) {
+  const t = useTranslations('orderTimeline')
+  const steps = stepStatuses.map((stepStatus) => ({
+    status: stepStatus,
+    label: t(stepStatus),
+  }))
+
   if (status === 'cancelled') {
     return (
       <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-        Đơn hàng đã hủy
+        {t('cancelledNotice')}
       </p>
     )
   }

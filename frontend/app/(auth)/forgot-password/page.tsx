@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { useTranslations } from 'next-intl'
 import { PasswordResetRequestForm } from '@/components/auth/password-reset-form'
 
 export const metadata: Metadata = {
@@ -6,11 +7,12 @@ export const metadata: Metadata = {
 }
 
 export default function ForgotPasswordPage() {
+  const t = useTranslations('auth')
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <h1 className="text-2xl font-semibold">Quên mật khẩu</h1>
-        <p className="text-sm text-slate-600">Nhập email để nhận hướng dẫn đặt lại mật khẩu.</p>
+        <h1 className="text-2xl font-semibold">{t('forgotTitle')}</h1>
+        <p className="text-sm text-slate-600">{t('forgotSubtitle')}</p>
       </div>
       <PasswordResetRequestForm />
     </div>

@@ -1,6 +1,7 @@
 'use client'
 
 import { Search } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -25,6 +26,7 @@ type ProductFiltersProps = {
 }
 
 export function ProductFilters({ category }: ProductFiltersProps) {
+  const t = useTranslations('products')
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -91,7 +93,7 @@ export function ProductFilters({ category }: ProductFiltersProps) {
         }
       >
         <div className="space-y-2">
-          <Label htmlFor="search">Tìm kiếm</Label>
+          <Label htmlFor="search">{t('search')}</Label>
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
             <Input
@@ -106,13 +108,13 @@ export function ProductFilters({ category }: ProductFiltersProps) {
           </div>
         </div>
         <div className="space-y-2">
-          <Label>Thương hiệu</Label>
+          <Label>{t('brand')}</Label>
           <Select modal={false} value={brand} onValueChange={setBrand} {...brandDropdown}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tất cả</SelectItem>
+              <SelectItem value="all">{t('all')}</SelectItem>
               {brandOptions.map((item) => (
                 <SelectItem key={item} value={item}>
                   {item}
@@ -123,31 +125,31 @@ export function ProductFilters({ category }: ProductFiltersProps) {
         </div>
         {showTypeFilter ? (
           <div className="space-y-2">
-            <Label>Loại</Label>
+            <Label>{t('type')}</Label>
             <Select modal={false} value={type} onValueChange={changeType} {...typeDropdown}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tất cả</SelectItem>
-                <SelectItem value="gas">Gas</SelectItem>
-                <SelectItem value="nuoc_uong">Nước Uống</SelectItem>
+                <SelectItem value="all">{t('all')}</SelectItem>
+                <SelectItem value="gas">{t('categoryGas')}</SelectItem>
+                <SelectItem value="nuoc_uong">{t('categoryWater')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
         ) : null}
         {showSizeFilter ? (
           <div className="space-y-2">
-            <Label>Kích thước</Label>
+            <Label>{t('size')}</Label>
             <Select modal={false} value={size} onValueChange={setSize} {...sizeDropdown}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tất cả</SelectItem>
+                <SelectItem value="all">{t('all')}</SelectItem>
                 {sizes.map((item) => (
                   <SelectItem key={item} value={item}>
-                    {item} kg
+                    {t('sizeKg', { size: item })}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -161,14 +163,14 @@ export function ProductFilters({ category }: ProductFiltersProps) {
             checked={inStockOnly}
             onCheckedChange={(value) => setInStockOnly(value === true)}
           />
-          Chỉ hiện sản phẩm còn hàng
+          {t('inStockOnly')}
         </label>
         <div className="flex gap-2">
           <Button type="button" variant="outline" onClick={clearFilters}>
-            Xóa lọc
+            {t('clearFilters')}
           </Button>
           <Button type="button" onClick={applyFilters}>
-            Áp dụng
+            {t('applyFilters')}
           </Button>
         </div>
       </div>

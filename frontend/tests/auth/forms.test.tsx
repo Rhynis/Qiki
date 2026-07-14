@@ -1,9 +1,10 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { LoginForm } from '@/components/auth/login-form'
 import { PasswordResetRequestForm } from '@/components/auth/password-reset-form'
 import { RegisterForm } from '@/components/auth/register-form'
+import { renderWithIntl as render } from '../i18n-render'
 
 const authMocks = vi.hoisted(() => ({
   login: vi.fn(),

@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -23,6 +24,7 @@ function issueMap(error: unknown): Record<string, string> {
 }
 
 export function CustomerDeliveryStep({ onNext }: { onNext: () => void }) {
+  const t = useTranslations('checkout')
   const { user } = useAuth()
   const form = useCheckoutStore((state) => state.form)
   const updateForm = useCheckoutStore((state) => state.updateForm)
@@ -71,7 +73,7 @@ export function CustomerDeliveryStep({ onNext }: { onNext: () => void }) {
     <div className="space-y-5 rounded-lg border bg-white p-5">
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="customer_name">Họ tên</Label>
+          <Label htmlFor="customer_name">{t('fullName')}</Label>
           <Input
             id="customer_name"
             value={form.customer_name}
@@ -82,7 +84,7 @@ export function CustomerDeliveryStep({ onNext }: { onNext: () => void }) {
           ) : null}
         </div>
         <div className="space-y-2">
-          <Label htmlFor="customer_phone">Số điện thoại</Label>
+          <Label htmlFor="customer_phone">{t('phone')}</Label>
           <Input
             id="customer_phone"
             value={form.customer_phone}
@@ -93,7 +95,7 @@ export function CustomerDeliveryStep({ onNext }: { onNext: () => void }) {
           ) : null}
         </div>
         <div className="space-y-2 md:col-span-2">
-          <Label htmlFor="customer_email">Email</Label>
+          <Label htmlFor="customer_email">{t('email')}</Label>
           <Input
             id="customer_email"
             value={form.customer_email}
@@ -107,7 +109,7 @@ export function CustomerDeliveryStep({ onNext }: { onNext: () => void }) {
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="delivery_city">Tỉnh/thành</Label>
+          <Label htmlFor="delivery_city">{t('province')}</Label>
           <select
             id="delivery_city"
             className="h-10 w-full rounded-md border bg-white px-3 text-sm"
@@ -128,7 +130,7 @@ export function CustomerDeliveryStep({ onNext }: { onNext: () => void }) {
           </select>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="delivery_ward">Phường/xã</Label>
+          <Label htmlFor="delivery_ward">{t('ward')}</Label>
           <select
             id="delivery_ward"
             className="h-10 w-full rounded-md border bg-white px-3 text-sm"
@@ -140,7 +142,7 @@ export function CustomerDeliveryStep({ onNext }: { onNext: () => void }) {
               })
             }
           >
-            <option value="">Chọn phường/xã</option>
+            <option value="">{t('selectWard')}</option>
             {deliveryWardGroups.map((group) => (
               <optgroup key={group.name} label={group.name}>
                 {group.wards.map((ward) => (
@@ -156,7 +158,7 @@ export function CustomerDeliveryStep({ onNext }: { onNext: () => void }) {
           ) : null}
         </div>
         <div className="space-y-2 md:col-span-2">
-          <Label htmlFor="delivery_address">Địa chỉ</Label>
+          <Label htmlFor="delivery_address">{t('address')}</Label>
           <Input
             id="delivery_address"
             value={form.delivery_address}
@@ -167,7 +169,7 @@ export function CustomerDeliveryStep({ onNext }: { onNext: () => void }) {
           ) : null}
         </div>
         <div className="space-y-2 md:col-span-2">
-          <Label htmlFor="delivery_notes">Ghi chú giao hàng</Label>
+          <Label htmlFor="delivery_notes">{t('deliveryNotes')}</Label>
           <Textarea
             id="delivery_notes"
             value={form.delivery_notes}
@@ -181,12 +183,12 @@ export function CustomerDeliveryStep({ onNext }: { onNext: () => void }) {
           checked={form.has_different_recipient}
           onCheckedChange={(checked) => updateForm({ has_different_recipient: checked === true })}
         />
-        Người nhận khác
+        {t('differentRecipient')}
       </label>
       {form.has_different_recipient ? (
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="different_recipient_name">Tên người nhận</Label>
+            <Label htmlFor="different_recipient_name">{t('recipientName')}</Label>
             <Input
               id="different_recipient_name"
               value={form.different_recipient_name}
@@ -197,7 +199,7 @@ export function CustomerDeliveryStep({ onNext }: { onNext: () => void }) {
             ) : null}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="different_recipient_phone">SĐT người nhận</Label>
+            <Label htmlFor="different_recipient_phone">{t('recipientPhone')}</Label>
             <Input
               id="different_recipient_phone"
               value={form.different_recipient_phone}
@@ -212,10 +214,10 @@ export function CustomerDeliveryStep({ onNext }: { onNext: () => void }) {
 
       <div className="flex justify-between">
         <Button type="button" variant="outline" onClick={previousStep}>
-          Quay lại
+          {t('back')}
         </Button>
         <Button type="button" onClick={submit}>
-          Tiếp tục
+          {t('next')}
         </Button>
       </div>
     </div>

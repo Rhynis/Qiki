@@ -1,7 +1,8 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { EmailOtpVerification } from '@/components/auth/email-otp-verification'
+import { renderWithIntl } from '@/tests/i18n-render'
 
 const apiMocks = vi.hoisted(() => ({
   requestEmailOtp: vi.fn(),
@@ -28,7 +29,7 @@ describe('EmailOtpVerification', () => {
     apiMocks.requestEmailOtp.mockResolvedValue(undefined)
     apiMocks.verifyEmailOtp.mockResolvedValue(undefined)
     const onVerified = vi.fn()
-    render(<EmailOtpVerification email="user@example.com" onVerified={onVerified} />)
+    renderWithIntl(<EmailOtpVerification email="user@example.com" onVerified={onVerified} />)
 
     await user.click(screen.getByRole('button', { name: 'Gửi mã xác minh' }))
     expect(apiMocks.requestEmailOtp).toHaveBeenCalledWith('user@example.com')
@@ -48,7 +49,7 @@ describe('EmailOtpVerification', () => {
     apiMocks.verifyEmailOtp.mockRejectedValueOnce(
       new Error('Mã xác minh không đúng hoặc đã hết hạn')
     )
-    render(<EmailOtpVerification email="user@example.com" />)
+    renderWithIntl(<EmailOtpVerification email="user@example.com" />)
 
     await user.click(screen.getByRole('button', { name: 'Gửi mã xác minh' }))
     await user.type(screen.getByLabelText('Mã xác minh'), '000000')

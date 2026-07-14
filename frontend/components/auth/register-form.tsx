@@ -1,6 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
@@ -21,6 +22,7 @@ function getPasswordScore(password: string): number {
 }
 
 export function RegisterForm() {
+  const t = useTranslations('auth')
   const { register: registerUser, isLoading } = useAuth()
   const [submitError, setSubmitError] = useState<string | null>(null)
   const {
@@ -47,7 +49,7 @@ export function RegisterForm() {
     try {
       await registerUser({ ...values, phone: normalizePhoneDigits(values.phone) })
     } catch (caught) {
-      setSubmitError(caught instanceof Error ? caught.message : 'Đăng ký thất bại')
+      setSubmitError(caught instanceof Error ? caught.message : t('registerFailed'))
     }
   }
 
@@ -55,7 +57,7 @@ export function RegisterForm() {
     <form className="space-y-5" onSubmit={handleSubmit(onSubmit)}>
       <div className="space-y-2">
         <label className="text-sm font-medium" htmlFor="full_name">
-          Họ và tên
+          {t('fullName')}
         </label>
         <input
           id="full_name"
@@ -70,7 +72,7 @@ export function RegisterForm() {
 
       <div className="space-y-2">
         <label className="text-sm font-medium" htmlFor="email">
-          Email (không bắt buộc)
+          {t('emailOptional')}
         </label>
         <input
           id="email"
@@ -83,7 +85,7 @@ export function RegisterForm() {
 
       <div className="space-y-2">
         <label className="text-sm font-medium" htmlFor="phone">
-          Số điện thoại
+          {t('phone')}
         </label>
         <input
           id="phone"
@@ -101,7 +103,7 @@ export function RegisterForm() {
 
       <div className="space-y-2">
         <label className="text-sm font-medium" htmlFor="password">
-          Mật khẩu
+          {t('password')}
         </label>
         <input
           id="password"
@@ -128,7 +130,7 @@ export function RegisterForm() {
 
       <div className="space-y-2">
         <label className="text-sm font-medium" htmlFor="confirmPassword">
-          Xác nhận mật khẩu
+          {t('confirmPassword')}
         </label>
         <input
           id="confirmPassword"
@@ -144,13 +146,13 @@ export function RegisterForm() {
 
       {submitError ? <p className="text-center text-sm text-red-600">{submitError}</p> : null}
       <Button className="w-full" disabled={isLoading || isSubmitting} type="submit">
-        {isLoading || isSubmitting ? 'Đang tạo tài khoản...' : 'Đăng ký'}
+        {isLoading || isSubmitting ? t('creatingAccount') : t('register')}
       </Button>
 
       <p className="text-center text-sm text-slate-600">
-        Đã có tài khoản?{' '}
+        {t('haveAccount')}{' '}
         <Link className="text-primary hover:underline" href="/login">
-          Đăng nhập
+          {t('login')}
         </Link>
       </p>
     </form>

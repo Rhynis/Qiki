@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { Flame } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -13,16 +14,17 @@ type ProductCardProps = {
 }
 
 export function ProductCard({ product }: ProductCardProps) {
+  const t = useTranslations('products')
   const productHref = `/products/${product.id}`
 
   return (
     <Card className="group relative flex h-full cursor-pointer flex-col overflow-hidden transition-shadow hover:shadow-md">
       <Link
-        aria-label={`Xem chi tiết ${product.name}`}
+        aria-label={t('viewDetailsAria', { name: product.name })}
         className="absolute inset-0 z-10 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         href={productHref}
       >
-        <span className="sr-only">Xem chi tiết {product.name}</span>
+        <span className="sr-only">{t('viewDetailsAria', { name: product.name })}</span>
       </Link>
       <div className="relative flex aspect-[4/3] items-center justify-center bg-slate-100">
         {product.image_url ? (
@@ -70,7 +72,7 @@ export function ProductCard({ product }: ProductCardProps) {
       </CardContent>
       <div className="relative z-20 p-6 pt-0">
         <Button asChild className="w-full">
-          <Link href={productHref}>Xem chi tiết</Link>
+          <Link href={productHref}>{t('viewDetails')}</Link>
         </Button>
       </div>
     </Card>

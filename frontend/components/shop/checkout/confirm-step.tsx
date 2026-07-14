@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
 import { useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { v4 as uuidv4 } from 'uuid'
@@ -19,6 +20,7 @@ function optionalText(value: string) {
 }
 
 export function ConfirmStep() {
+  const t = useTranslations('checkout')
   const router = useRouter()
   const idempotencyKey = useRef<string | null>(null)
   const items = useCartStore((state) => state.items)
@@ -72,10 +74,10 @@ export function ConfirmStep() {
       setLastOrder(order)
       clearCart()
       resetCheckout()
-      toast.success('Đặt hàng thành công')
+      toast.success(t('orderSuccess'))
       router.push(`/checkout/success/${order.id}`)
     } catch (caught) {
-      const message = caught instanceof Error ? caught.message : 'Không thể tạo đơn hàng'
+      const message = caught instanceof Error ? caught.message : t('orderError')
       toast.error(message)
     }
   }
@@ -83,15 +85,15 @@ export function ConfirmStep() {
   return (
     <div className="space-y-5 rounded-lg border bg-white p-5">
       <div className="space-y-3">
-        <h2 className="text-lg font-semibold">Kiểm tra thông tin</h2>
+        <h2 className="text-lg font-semibold">{t('reviewTitle')}</h2>
         <div className="grid gap-3 text-sm md:grid-cols-2">
           <div>
-            <p className="text-slate-600">Khách hàng</p>
+            <p className="text-slate-600">{t('customer')}</p>
             <p className="font-medium">{form.customer_name}</p>
             <p>{formatPhone(form.customer_phone)}</p>
           </div>
           <div>
-            <p className="text-slate-600">Giao đến</p>
+            <p className="text-slate-600">{t('deliverTo')}</p>
             <p className="font-medium">{form.delivery_address}</p>
             <p>{[form.delivery_ward, form.delivery_city].filter(Boolean).join(', ')}</p>
           </div>
@@ -114,20 +116,20 @@ export function ConfirmStep() {
 
       <Alert>
         <AlertDescription>
-          Tổng tạm tính {formatPrice(subtotal)}. Phí giao hàng được tính theo địa chỉ giao hàng.
+          {t('subtotalNotice', { amount: formatPrice(subtotal) })}
         </AlertDescription>
       </Alert>
 
       <div className="flex justify-between">
         <Button type="button" variant="outline" onClick={previousStep}>
-          Quay lại
+          {t('back')}
         </Button>
         <Button
           disabled={createOrder.isPending || items.length === 0}
           type="button"
           onClick={submit}
         >
-          {createOrder.isPending ? 'Đang đặt hàng...' : 'Xác nhận đặt hàng'}
+          {createOrder.isPending ? t('placingOrder') : t('confirmOrder')}
         </Button>
       </div>
     </div>

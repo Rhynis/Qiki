@@ -2,11 +2,13 @@
 
 import Link from 'next/link'
 import { Minus, Plus, Trash2 } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import { Button } from '@/components/ui/button'
 import { useCartStore } from '@/lib/stores/cart-store'
 import { formatPrice, formatProductSize } from '@/lib/utils/format'
 
 export function CartReviewStep({ onNext }: { onNext: () => void }) {
+  const t = useTranslations('cart')
   const items = useCartStore((state) => state.items)
   const updateQuantity = useCartStore((state) => state.updateQuantity)
   const removeItem = useCartStore((state) => state.removeItem)
@@ -14,9 +16,9 @@ export function CartReviewStep({ onNext }: { onNext: () => void }) {
   if (items.length === 0) {
     return (
       <div className="space-y-4 rounded-lg border bg-white p-6 text-center">
-        <h2 className="text-xl font-semibold">Giỏ hàng đang trống</h2>
+        <h2 className="text-xl font-semibold">{t('empty')}</h2>
         <Button asChild>
-          <Link href="/products">Xem sản phẩm</Link>
+          <Link href="/products">{t('viewProducts')}</Link>
         </Button>
       </div>
     )
@@ -49,7 +51,7 @@ export function CartReviewStep({ onNext }: { onNext: () => void }) {
               <div className="flex items-center justify-between">
                 <div className="flex items-center rounded-md border">
                   <Button
-                    aria-label="Giảm số lượng"
+                    aria-label={t('decreaseQuantity')}
                     size="icon"
                     type="button"
                     variant="ghost"
@@ -59,7 +61,7 @@ export function CartReviewStep({ onNext }: { onNext: () => void }) {
                   </Button>
                   <span className="w-10 text-center text-sm">{item.quantity}</span>
                   <Button
-                    aria-label="Tăng số lượng"
+                    aria-label={t('increaseQuantity')}
                     size="icon"
                     type="button"
                     variant="ghost"
@@ -69,7 +71,7 @@ export function CartReviewStep({ onNext }: { onNext: () => void }) {
                   </Button>
                 </div>
                 <Button
-                  aria-label="Xóa sản phẩm"
+                  aria-label={t('removeItem')}
                   size="icon"
                   type="button"
                   variant="ghost"
@@ -83,7 +85,7 @@ export function CartReviewStep({ onNext }: { onNext: () => void }) {
         ))}
       </div>
       <div className="flex justify-end">
-        <Button onClick={onNext}>Tiến hành thanh toán</Button>
+        <Button onClick={onNext}>{t('proceedToCheckout')}</Button>
       </div>
     </div>
   )

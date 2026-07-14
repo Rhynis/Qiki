@@ -1,6 +1,7 @@
 'use client'
 
 import { Flame, Heart, ShoppingBag, Trash2 } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
@@ -16,6 +17,9 @@ import { useCartStore } from '@/lib/stores/cart-store'
 import { formatPrice, formatProductSize } from '@/lib/utils/format'
 
 export default function WishlistPage() {
+  const t = useTranslations('wishlist')
+  const tProduct = useTranslations('products')
+  const tButton = useTranslations('wishlistButton')
   const router = useRouter()
   const { user, isLoading, refreshUser } = useAuth()
   const [checked, setChecked] = useState(false)
@@ -50,7 +54,7 @@ export default function WishlistPage() {
 
   return (
     <section className="mx-auto max-w-6xl space-y-6 px-4 py-8">
-      <PageHeader title="Sản phẩm yêu thích" description="Các sản phẩm bạn đã lưu." />
+      <PageHeader title={t('title')} description={t('description')} />
 
       {wishlistLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -60,11 +64,11 @@ export default function WishlistPage() {
       ) : products.length === 0 ? (
         <div className="rounded-lg border bg-white p-10 text-center">
           <Heart className="mx-auto h-8 w-8 text-slate-300" />
-          <p className="mt-3 text-sm text-slate-600">Bạn chưa lưu sản phẩm nào.</p>
+          <p className="mt-3 text-sm text-slate-600">{t('empty')}</p>
           <Button asChild className="mt-4" variant="outline">
             <Link href="/products">
               <ShoppingBag className="mr-2 h-4 w-4" />
-              Khám phá sản phẩm
+              {t('explore')}
             </Link>
           </Button>
         </div>
@@ -77,7 +81,7 @@ export default function WishlistPage() {
                 <Link
                   href={`/products/${product.id}`}
                   className="flex aspect-[4/3] items-center justify-center bg-slate-100"
-                  aria-label={`Xem chi tiết ${product.name}`}
+                  aria-label={tProduct('viewDetailsAria', { name: product.name })}
                 >
                   {product.image_url ? (
                     <div
@@ -112,17 +116,17 @@ export default function WishlistPage() {
                       disabled={!inStock}
                       onClick={() => {
                         addItem(product, 1)
-                        toast.success('Đã thêm vào giỏ hàng')
+                        toast.success(t('addedToCart'))
                       }}
                     >
                       <ShoppingBag className="mr-2 h-4 w-4" />
-                      Thêm vào giỏ
+                      {t('addToCart')}
                     </Button>
                     <Button
                       variant="outline"
                       size="icon"
-                      title="Bỏ khỏi yêu thích"
-                      aria-label="Bỏ khỏi yêu thích"
+                      title={tButton('remove')}
+                      aria-label={tButton('remove')}
                       disabled={toggle.isPending}
                       onClick={() => toggle.mutate({ productId: product.id, saved: true })}
                     >

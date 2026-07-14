@@ -1,4 +1,6 @@
 import type { Metadata } from 'next'
+import { NextIntlClientProvider } from 'next-intl'
+import { getLocale } from 'next-intl/server'
 import { Toaster } from 'sonner'
 import { ChatWidget } from '@/components/chat/chat-widget'
 import { Providers } from '@/components/providers'
@@ -19,21 +21,24 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const locale = await getLocale()
   return (
-    <html lang="vi">
+    <html lang={locale}>
       <body>
-        <Providers>
-          <div className="min-h-screen bg-slate-50">
-            <DemoModeBanner />
-            <Header />
-            <main>{children}</main>
-            <Footer />
-            <FloatingContact />
-            <ChatWidget />
-          </div>
-          <Toaster richColors position="top-right" offset="80px" />
-        </Providers>
+        <NextIntlClientProvider>
+          <Providers>
+            <div className="min-h-screen bg-slate-50">
+              <DemoModeBanner />
+              <Header />
+              <main>{children}</main>
+              <Footer />
+              <FloatingContact />
+              <ChatWidget />
+            </div>
+            <Toaster richColors position="top-right" offset="80px" />
+          </Providers>
+        </NextIntlClientProvider>
       </body>
     </html>
   )

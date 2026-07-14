@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -14,6 +15,7 @@ interface EmailOtpVerificationProps {
 
 /** Sends an email-verification OTP on demand and verifies the submitted code. */
 export function EmailOtpVerification({ email, onVerified }: EmailOtpVerificationProps) {
+  const t = useTranslations('auth')
   const [sent, setSent] = useState(false)
   const [code, setCode] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -32,9 +34,9 @@ export function EmailOtpVerification({ email, onVerified }: EmailOtpVerification
       await requestEmailOtp(email)
       setSent(true)
       setCooldown(RESEND_COOLDOWN_SECONDS)
-      toast.success('Nếu email hợp lệ, mã xác minh đã được gửi. Vui lòng kiểm tra hộp thư.')
+      toast.success(t('otpSent'))
     } catch {
-      toast.error('Không gửi được mã. Vui lòng thử lại sau.')
+      toast.error(t('otpSendFailed'))
     }
   }
 
@@ -43,10 +45,10 @@ export function EmailOtpVerification({ email, onVerified }: EmailOtpVerification
     setSubmitting(true)
     try {
       await verifyEmailOtp(email, code)
-      toast.success('Email đã được xác minh.')
+      toast.success(t('otpVerified'))
       onVerified?.()
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Mã xác minh không đúng hoặc đã hết hạn.')
+      setError(caught instanceof Error ? caught.message : t('otpInvalid'))
     } finally {
       setSubmitting(false)
     }
@@ -55,17 +57,17 @@ export function EmailOtpVerification({ email, onVerified }: EmailOtpVerification
   if (!sent) {
     return (
       <Button onClick={() => void sendOtp()} size="sm" type="button" variant="outline">
-        Gửi mã xác minh
+        {t('otpSendCode')}
       </Button>
     )
   }
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-slate-600">Nhập mã 6 số đã gửi tới email của bạn để xác minh.</p>
+      <p className="text-sm text-slate-600">{t('otpEnterCode')}</p>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <input
-          aria-label="Mã xác minh"
+          aria-label={t('otpCodeLabel')}
           id="otp_code"
           inputMode="numeric"
           autoComplete="one-time-code"
@@ -79,7 +81,7 @@ export function EmailOtpVerification({ email, onVerified }: EmailOtpVerification
           onClick={() => void verify()}
           type="button"
         >
-          {submitting ? 'Đang xác minh...' : 'Xác minh'}
+          {submitting ? t('verifying') : t('verify')}
         </Button>
         <Button
           disabled={cooldown > 0}
@@ -87,7 +89,7 @@ export function EmailOtpVerification({ email, onVerified }: EmailOtpVerification
           type="button"
           variant="outline"
         >
-          {cooldown > 0 ? `Gửi lại mã (${cooldown}s)` : 'Gửi lại mã'}
+          {cooldown > 0 ? t('resendCodeCooldown', { seconds: cooldown }) : t('resendCode')}
         </Button>
       </div>
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
