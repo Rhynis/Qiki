@@ -1,4 +1,5 @@
 import { apiClient } from '@/lib/api/client'
+import type { BestSellerProduct } from '@/types/product'
 import type {
   CheckoutRequest,
   Delivery,
@@ -11,10 +12,23 @@ import type {
   OrderListResponse,
   OrderSearchParams,
   OrderStatusUpdate,
+  ReorderResponse,
 } from '@/types/order'
 
 export async function issueInvoice(orderId: string): Promise<InvoiceResult> {
   const response = await apiClient.post<InvoiceResult>(`/api/v1/admin/orders/${orderId}/invoice`)
+  return response.data
+}
+
+export async function reorder(orderId: string): Promise<ReorderResponse> {
+  const response = await apiClient.post<ReorderResponse>(`/api/v1/orders/${orderId}/reorder`)
+  return response.data
+}
+
+export async function getBestSellers(limit = 8): Promise<BestSellerProduct[]> {
+  const response = await apiClient.get<BestSellerProduct[]>('/api/v1/orders/best-sellers', {
+    params: { limit },
+  })
   return response.data
 }
 

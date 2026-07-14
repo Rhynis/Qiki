@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import NotFoundException, ValidationException
 from app.models.order import Order, OrderItem
+from app.models.product import Product
 from app.models.user import User
 from app.schemas.order import OrderSearchParams
 
@@ -129,6 +130,25 @@ class OrderRepository:
     async def list_all_orders(self, params: OrderSearchParams) -> tuple[list[Order], int]:
         """List orders for admin."""
         return await self._list(select(Order), params)
+
+    async def get_best_sellers(self, limit: int = 8) -> list[tuple[Product, int]]:
+        """Return active products ranked by total ordered quantity.
+
+        Sums line quantities across all non-cancelled orders (a simple SQL
+        aggregation, not ML) and keeps only products that are still active, so
+        the storefront never surfaces a discontinued item as a best-seller.
+        """
+        total_sold = func.coalesce(func.sum(OrderItem.quantity), 0).label("total_sold")
+        result = await self.session.execute(
+            select(Product, total_sold)
+            .join(OrderItem, OrderItem.product_id == Product.id)
+            .join(Order, Order.id == OrderItem.order_id)
+            .where(Product.is_active.is_(True), Order.status != "cancelled")
+            .group_by(Product.id)
+            .order_by(total_sold.desc(), Product.name.asc())
+            .limit(limit)
+        )
+        return [(product, int(sold)) for product, sold in result.all()]
 
     async def update_status(
         self,

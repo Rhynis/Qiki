@@ -289,6 +289,16 @@ export function resolveApi({ method, path, query, body = {}, cookie }) {
   if (method === 'POST' && path === '/api/v1/orders/lookup') {
     return json(200, buildOrder({ order_number: body.order_number ?? 'QC-000123' }))
   }
+  if (method === 'GET' && path === '/api/v1/orders/best-sellers') {
+    return json(
+      200,
+      PRODUCTS.slice(0, 4).map((p, index) => ({ ...p, total_sold: 40 - index * 5 }))
+    )
+  }
+  const reorderMatch = /^\/api\/v1\/orders\/([^/]+)\/reorder$/.exec(path)
+  if (method === 'POST' && reorderMatch) {
+    return json(200, { items: [], skipped: [] })
+  }
   if (method === 'GET' && path === '/api/v1/orders/me') {
     return json(200, { items: [buildOrder()], total: 1, page: 1, limit: 20, has_more: false })
   }

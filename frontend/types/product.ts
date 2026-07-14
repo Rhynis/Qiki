@@ -69,6 +69,10 @@ export type ProductParentUpdateInput = Partial<ProductParentCreateInput> & {
 export type ProductCategory = 'gas' | 'nuoc_uong'
 export type ProductUnit = 'kg' | 'lít'
 
+export interface BestSellerProduct extends Product {
+  total_sold: number
+}
+
 export interface ProductListResponse {
   items: Product[]
   total: number

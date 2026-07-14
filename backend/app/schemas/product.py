@@ -123,6 +123,12 @@ class ProductListResponse(BaseModel):
     has_more: bool
 
 
+class BestSellerProduct(ProductResponse):
+    """An active product annotated with its total ordered quantity."""
+
+    total_sold: int
+
+
 class ProductParentBase(BaseModel):
     """Shared parent product fields."""
 
