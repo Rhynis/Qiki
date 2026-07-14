@@ -16,6 +16,7 @@ from app.api.v1.dependencies.auth import (
 from app.core.rate_limit import limiter
 from app.db.session import get_db
 from app.models.user import User
+from app.repositories.coupon_repository import CouponRepository
 from app.repositories.order_repository import OrderRepository
 from app.repositories.product_repository import ProductRepository
 from app.schemas.einvoice import InvoiceResult
@@ -28,6 +29,7 @@ from app.schemas.order import (
     OrderSearchParams,
     OrderStatusUpdate,
 )
+from app.services.coupon_service import CouponService
 from app.services.einvoice import EInvoiceService
 from app.services.order_service import OrderService, is_serialization_failure
 
@@ -36,7 +38,11 @@ router = APIRouter()
 
 def build_order_service(session: AsyncSession) -> OrderService:
     """Build an order service around one DB session."""
-    return OrderService(OrderRepository(session), ProductRepository(session))
+    return OrderService(
+        OrderRepository(session),
+        ProductRepository(session),
+        CouponService(CouponRepository(session)),
+    )
 
 
 @retry(

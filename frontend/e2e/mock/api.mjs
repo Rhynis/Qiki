@@ -137,6 +137,29 @@ export function resolveApi({ method, path, query, body = {}, cookie }) {
     return json(200, [...new Set(PRODUCTS.map((p) => p.brand))])
   }
   if (method === 'GET' && path === '/api/v1/admin/products/low-stock') return json(200, [])
+  if (method === 'GET' && path === '/api/v1/admin/insights') {
+    return json(200, {
+      period_start: '2026-05-16T00:00:00Z',
+      period_end: '2026-06-15T00:00:00Z',
+      summary: {
+        total_conversations: 12,
+        total_messages: 84,
+        user_messages: 40,
+        assistant_messages: 44,
+        escalated_conversations: 2,
+        flagged_messages: 3,
+        low_confidence_messages: 5,
+        negative_feedback_messages: 1,
+        unanswered_messages: 4,
+        escalation_rate: 0.17,
+        flag_rate: 0.04,
+      },
+      top_intents: [{ intent: 'price_inquiry', count: 20 }],
+      top_questions: [{ question: 'Giá bình gas 12kg bao nhiêu?', count: 8 }],
+      trend: [{ date: '2026-06-15', conversations: 3, flagged: 1, escalated: 0 }],
+      knowledge_gaps: [],
+    })
+  }
   const productMatch = /^\/api\/v1\/products\/([^/]+)$/.exec(path)
   if (method === 'GET' && productMatch) {
     const found = PRODUCTS.find((p) => p.id === productMatch[1])
@@ -150,6 +173,56 @@ export function resolveApi({ method, path, query, body = {}, cookie }) {
   if (method === 'GET' && path === '/api/v1/wishlist') return json(200, [])
   if (/^\/api\/v1\/wishlist\/[^/]+$/.test(path) && (method === 'POST' || method === 'DELETE')) {
     return json(204, undefined)
+  }
+
+  // --- Coupons -------------------------------------------------------------
+  if (method === 'POST' && path === '/api/v1/coupons/validate') {
+    return json(200, {
+      code: String(body.code ?? 'SALE10').toUpperCase(),
+      discount_type: 'percent',
+      value: '10',
+      discount_amount: '10000',
+      min_order: '0',
+    })
+  }
+  if (method === 'GET' && path === '/api/v1/admin/coupons') {
+    return json(200, { items: [], total: 0, page: 1, limit: 20, has_more: false })
+  }
+  if (method === 'POST' && path === '/api/v1/admin/coupons') {
+    return json(201, {
+      id: 'coupon-1',
+      code: String(body.code ?? 'SALE10').toUpperCase(),
+      discount_type: body.discount_type ?? 'percent',
+      value: String(body.value ?? '10'),
+      min_order: String(body.min_order ?? '0'),
+      max_discount: body.max_discount ?? null,
+      usage_limit: body.usage_limit ?? null,
+      used_count: 0,
+      per_user_limit: body.per_user_limit ?? null,
+      active: true,
+      starts_at: null,
+      ends_at: null,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    })
+  }
+  if (/^\/api\/v1\/admin\/coupons\/[^/]+$/.test(path) && method === 'PATCH') {
+    return json(200, {
+      id: 'coupon-1',
+      code: 'SALE10',
+      discount_type: 'percent',
+      value: '10',
+      min_order: '0',
+      max_discount: null,
+      usage_limit: null,
+      used_count: 0,
+      per_user_limit: null,
+      active: body.active ?? true,
+      starts_at: null,
+      ends_at: null,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    })
   }
 
   // --- Orders --------------------------------------------------------------
