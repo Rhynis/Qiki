@@ -89,9 +89,7 @@ export default function HomePage() {
                 <h1 className="max-w-3xl text-4xl font-semibold text-white md:text-5xl">
                   {protectVi(t('heroTitle'))}
                 </h1>
-                <p className="max-w-2xl text-lg text-slate-300">
-                  {protectVi(t('heroSubtitle'))}
-                </p>
+                <p className="max-w-2xl text-lg text-slate-300">{protectVi(t('heroSubtitle'))}</p>
               </div>
               <div className="flex w-full max-w-md flex-col gap-3 sm:max-w-none sm:flex-row sm:flex-wrap sm:items-start">
                 <div className="flex w-full flex-col gap-3 sm:w-auto">
@@ -218,7 +216,9 @@ export default function HomePage() {
           <div>
             <p className="text-sm font-medium text-primary">{t('ctaLabel')}</p>
             <h2 className="mt-2 text-balance text-2xl font-semibold">{t('ctaTitle')}</h2>
-            <p className="mt-2 max-w-2xl text-sm text-slate-300">{protectVi(t('ctaDescription'))}</p>
+            <p className="mt-2 max-w-2xl text-sm text-slate-300">
+              {protectVi(t('ctaDescription'))}
+            </p>
           </div>
           <div className="mt-5 flex flex-col gap-3 sm:flex-row md:mt-0">
             <Button asChild className="bg-primary text-primary-foreground hover:bg-primary/90">

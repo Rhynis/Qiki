@@ -39,8 +39,7 @@ export function StoreStatusBadge({ variant = 'light', className }: StoreStatusBa
   const isOpen = status?.isOpen ?? false
   const stateClass = status === null ? styles.pending : isOpen ? styles.open : styles.closed
   const dotClass = status === null ? styles.pendingDot : isOpen ? styles.openDot : styles.closedDot
-  const label =
-    status === null ? t('storeUpdating') : isOpen ? t('storeOpen') : t('storeClosed')
+  const label = status === null ? t('storeUpdating') : isOpen ? t('storeOpen') : t('storeClosed')
 
   return (
     <span

@@ -49,7 +49,9 @@ export function LanguageSwitcher() {
           type="button"
         >
           <Globe aria-hidden="true" className="h-4 w-4" />
-          <span className="uppercase">{locale}</span>
+          {/* Icon-only on mobile: the locale code is the last few px that tip the
+              header nav past a 390px viewport. Show it from sm up. */}
+          <span className="hidden uppercase sm:inline">{locale}</span>
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
