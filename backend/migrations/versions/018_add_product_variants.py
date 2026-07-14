@@ -1,7 +1,7 @@
 """Introduce parent products so colour/size rows become selectable variants.
 
-Revision ID: 017_add_product_variants
-Revises: 015_add_price_subscriptions
+Revision ID: 018_add_product_variants
+Revises: 017_add_driver_role
 Create Date: 2026-07-13
 
 Each existing product row is a concrete, priced and stocked entity (e.g.
@@ -21,8 +21,8 @@ from collections.abc import Sequence
 
 from alembic import op
 
-revision: str = "017_add_product_variants"
-down_revision: str | None = "015_add_price_subscriptions"
+revision: str = "018_add_product_variants"
+down_revision: str | None = "017_add_driver_role"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

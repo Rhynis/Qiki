@@ -26,6 +26,7 @@ const roleLabels: Record<UserRole, string> = {
   customer: 'Khách hàng',
   staff: 'Nhân viên',
   admin: 'Quản trị',
+  driver: 'Tài xế',
 }
 
 export function UserTable({
@@ -77,6 +78,7 @@ export function UserTable({
                 >
                   <option value="customer">{roleLabels.customer}</option>
                   <option value="staff">{roleLabels.staff}</option>
+                  <option value="driver">{roleLabels.driver}</option>
                   <option value="admin">{roleLabels.admin}</option>
                 </select>
               </TableCell>

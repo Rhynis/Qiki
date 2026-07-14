@@ -22,6 +22,7 @@ from app.models.user import User
 from app.repositories.order_repository import ALLOWED_STATUS_TRANSITIONS, OrderRepository
 from app.repositories.product_repository import ProductRepository
 from app.schemas.order import CheckoutRequest, OrderListResponse, OrderResponse, OrderSearchParams
+from app.services.coupon_service import CouponService
 
 logger = get_logger(__name__)
 WATER_DELIVERY_FEE_PER_UNIT = Decimal("5000")
@@ -30,9 +31,15 @@ WATER_DELIVERY_FEE_PER_UNIT = Decimal("5000")
 class OrderService:
     """Business logic for order management."""
 
-    def __init__(self, order_repo: OrderRepository, product_repo: ProductRepository) -> None:
+    def __init__(
+        self,
+        order_repo: OrderRepository,
+        product_repo: ProductRepository,
+        coupon_service: CouponService | None = None,
+    ) -> None:
         self.order_repo = order_repo
         self.product_repo = product_repo
+        self.coupon_service = coupon_service
 
     async def create_order(
         self,
@@ -99,7 +106,21 @@ class OrderService:
             )
 
         shipping_fee = self._calculate_shipping(products, requested_by_product)
-        total_amount = subtotal + shipping_fee
+
+        coupon = None
+        discount_amount = Decimal("0")
+        if checkout_data.coupon_code:
+            if self.coupon_service is None:
+                raise ValidationException(
+                    "Coupons are not available", error_code="coupon_unavailable"
+                )
+            coupon, discount_amount = await self.coupon_service.apply_coupon(
+                checkout_data.coupon_code, subtotal, current_user
+            )
+
+        total_amount = subtotal + shipping_fee - discount_amount
+        if total_amount < Decimal("0"):
+            total_amount = Decimal("0")
 
         for product_id, quantity in requested_by_product.items():
             await self.product_repo.decrement_stock(product_id, quantity)
@@ -120,6 +141,9 @@ class OrderService:
             "different_recipient_phone": checkout_data.different_recipient_phone,
             "subtotal": subtotal,
             "shipping_fee": shipping_fee,
+            "discount_amount": discount_amount,
+            "coupon_id": coupon.id if coupon else None,
+            "coupon_code": coupon.code if coupon else None,
             "total_amount": total_amount,
             "vat_invoice_requested": checkout_data.vat_invoice_requested,
             "vat_info": checkout_data.vat_info.model_dump() if checkout_data.vat_info else None,
@@ -133,10 +157,14 @@ class OrderService:
         }
 
         order = await self.order_repo.create_with_items(order_data, items_data, session)
+        if coupon is not None and self.coupon_service is not None:
+            await self.coupon_service.record_redemption(coupon, current_user, order.id)
         logger.info(
             "order_created",
             order_number=order.order_number,
             total=float(total_amount),
+            discount=float(discount_amount),
+            coupon=coupon.code if coupon else None,
             item_count=len(items_data),
             source=checkout_data.source,
             is_guest=current_user is None,

@@ -1,6 +1,6 @@
 import { apiClient } from '@/lib/api/client'
 
-export type UserRole = 'customer' | 'staff' | 'admin'
+export type UserRole = 'customer' | 'staff' | 'admin' | 'driver'
 
 export interface User {
   id: string
