@@ -89,7 +89,7 @@ async def test_subscribe_then_confirm_flow(
 
     confirm = await test_client.post(
         "/api/v1/price-alerts/confirm",
-        json={"token": row.token},
+        json={"token": row.confirm_token},
     )
     assert confirm.status_code == 200
 
