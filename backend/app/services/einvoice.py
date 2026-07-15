@@ -17,7 +17,11 @@ from typing import Protocol
 from uuid import UUID
 
 from app.core.config import Settings, get_settings
-from app.core.exceptions import NotFoundException, ValidationException
+from app.core.exceptions import (
+    NotFoundException,
+    NotImplementedException,
+    ValidationException,
+)
 from app.models.order import Order
 from app.repositories.order_repository import OrderRepository
 from app.schemas.einvoice import InvoiceResult
@@ -58,8 +62,12 @@ def get_einvoice_provider(settings: Settings | None = None) -> EInvoiceProvider:
     if name == "none":
         return NoopEInvoiceProvider()
     # Drop a real adapter in here (implementing EInvoiceProvider) to connect a
-    # provider; keep the Noop as the safe default.
-    raise NotImplementedError(f"E-invoice provider '{name}' is not integrated yet")
+    # provider; keep the Noop as the safe default. Until then, a configured-but-
+    # unintegrated provider is a handled 501 (not an opaque 500).
+    raise NotImplementedException(
+        f"E-invoice provider '{name}' is configured but not integrated yet",
+        error_code="einvoice_provider_not_configured",
+    )
 
 
 class EInvoiceService:
