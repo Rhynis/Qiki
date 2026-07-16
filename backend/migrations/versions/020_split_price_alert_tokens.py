@@ -1,7 +1,7 @@
 """Split the price-subscription token into confirm + unsubscribe tokens.
 
 Revision ID: 020_split_price_alert_tokens
-Revises: 018_add_product_variants
+Revises: 019_harden_delivery_allocation
 Create Date: 2026-07-15
 
 Replaces the single dual-purpose ``token`` with a single-purpose ``confirm_token``
@@ -15,7 +15,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "020_split_price_alert_tokens"
-down_revision: str | None = "018_add_product_variants"
+down_revision: str | None = "019_harden_delivery_allocation"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
