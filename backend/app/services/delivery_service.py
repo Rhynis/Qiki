@@ -131,9 +131,11 @@ class DeliveryService:
         """Create a delivery carrying some of the order's items.
 
         Rejects allocating more of any item than was ordered (counting what other
-        non-cancelled deliveries already carry).
+        non-cancelled deliveries already carry). The order row is locked for the
+        whole read-then-insert so two concurrent creates cannot over-allocate or
+        collide on the generated code.
         """
-        order = await self._require_order(order_id)
+        order = await self._require_order_for_update(order_id)
         if order.status == "cancelled":
             raise ValidationException(
                 "Cannot add a delivery to a cancelled order",
@@ -248,6 +250,13 @@ class DeliveryService:
 
     async def _require_order(self, order_id: UUID) -> Order:
         order = await self.order_repo.get_by_id(order_id)
+        if order is None:
+            raise NotFoundException("Order not found", error_code="order_not_found")
+        return order
+
+    async def _require_order_for_update(self, order_id: UUID) -> Order:
+        """Load the order with a row lock so allocation is check-then-act safe."""
+        order = await self.order_repo.get_by_id_for_update(order_id)
         if order is None:
             raise NotFoundException("Order not found", error_code="order_not_found")
         return order

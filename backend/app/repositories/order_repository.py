@@ -80,6 +80,21 @@ class OrderRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_by_id_for_update(self, order_id: UUID) -> Order | None:
+        """Find order by ID with items, locking the order row (SELECT ... FOR UPDATE).
+
+        Mirrors the order-creation locking so delivery allocation is a serialized
+        read-then-write: concurrent create_delivery calls for the same order block
+        each other, preventing over-allocation and duplicate delivery codes.
+        """
+        result = await self.session.execute(
+            select(Order)
+            .where(Order.id == order_id)
+            .with_for_update(of=Order)
+            .options(selectinload(Order.items))
+        )
+        return result.scalar_one_or_none()
+
     async def get_by_order_number(self, order_number: str) -> Order | None:
         """Find order by order number."""
         result = await self.session.execute(
