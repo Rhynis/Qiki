@@ -1,5 +1,6 @@
 """Tests for the staff delivery endpoints (multi-delivery per order)."""
 
+import asyncio
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -7,6 +8,7 @@ from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.dependencies.auth import (
@@ -14,14 +16,28 @@ from app.api.v1.dependencies.auth import (
     get_current_staff,
     get_current_user_optional,
 )
+from app.core.exceptions import ValidationException
+from app.db.session import AsyncSessionLocal
 from app.main import app
 from app.models.order import Order
 from app.models.user import User
+from app.repositories.delivery_repository import DeliveryRepository
 from app.repositories.order_repository import OrderRepository
 from app.repositories.product_repository import ProductRepository
+from app.repositories.user_repository import UserRepository
+from app.schemas.delivery import DeliveryCreate, DeliveryItemCreate
 from app.schemas.product import ProductCreate
+from app.services.delivery_service import DeliveryService
 
 pytestmark = pytest.mark.asyncio
+
+
+def build_service(session: AsyncSession) -> DeliveryService:
+    return DeliveryService(
+        DeliveryRepository(session),
+        OrderRepository(session),
+        UserRepository(session),
+    )
 
 
 def staff_user() -> User:
@@ -330,3 +346,45 @@ async def test_assign_rejects_non_driver_user(
     assert rejected.status_code == 400
     assert rejected.json()["error_code"] == "invalid_driver"
     app.dependency_overrides.clear()
+
+
+async def test_concurrent_create_delivery_does_not_over_allocate(
+    order_session: AsyncSession,
+) -> None:
+    # One item with quantity 2; two parallel creates each ask for the full 2.
+    order = await create_db_order(order_session, quantity=2)
+    item_id = order.items[0].id
+
+    async def attempt() -> bool:
+        async with AsyncSessionLocal() as session:
+            try:
+                await build_service(session).create_delivery(
+                    order.id,
+                    DeliveryCreate(items=[DeliveryItemCreate(order_item_id=item_id, quantity=2)]),
+                )
+                await session.commit()
+                return True
+            except (ValidationException, IntegrityError, DBAPIError):
+                await session.rollback()
+                return False
+
+    results = await asyncio.gather(*(attempt() for _ in range(2)))
+
+    # The order-row lock serializes the two creates: exactly one wins.
+    assert sum(results) == 1
+    deliveries = await DeliveryRepository(order_session).list_by_order(order.id)
+    total_allocated = sum(item.quantity for delivery in deliveries for item in delivery.items)
+    assert total_allocated == 2
+
+
+async def test_duplicate_delivery_code_rejected(order_session: AsyncSession) -> None:
+    order = await create_db_order(order_session, quantity=3)
+    repo = DeliveryRepository(order_session)
+    item_rows = [{"order_item_id": order.items[0].id, "quantity": 1}]
+
+    await repo.create(order.id, "DUP-CODE", "pending", None, None, item_rows)
+    await order_session.commit()
+
+    with pytest.raises((IntegrityError, DBAPIError)):
+        await repo.create(order.id, "DUP-CODE", "pending", None, None, item_rows)
+    await order_session.rollback()
