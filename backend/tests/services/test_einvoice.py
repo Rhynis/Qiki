@@ -7,7 +7,11 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from app.core.exceptions import NotFoundException, ValidationException
+from app.core.exceptions import (
+    NotFoundException,
+    NotImplementedException,
+    ValidationException,
+)
 from app.models.order import Order
 from app.services.einvoice import (
     EInvoiceService,
@@ -62,9 +66,12 @@ def test_factory_returns_noop_by_default() -> None:
     assert provider.name == "none"
 
 
-def test_factory_raises_for_unintegrated_provider() -> None:
-    with pytest.raises(NotImplementedError):
+def test_factory_raises_handled_error_for_unintegrated_provider() -> None:
+    with pytest.raises(NotImplementedException) as excinfo:
         get_einvoice_provider(SimpleNamespace(EINVOICE_PROVIDER="vnpt"))
+    # A handled application error (maps to 501), not a bare NotImplementedError.
+    assert excinfo.value.status_code == 501
+    assert excinfo.value.error_code == "einvoice_provider_not_configured"
 
 
 async def test_noop_records_a_stub_invoice() -> None:
@@ -101,3 +108,20 @@ async def test_issue_missing_order_raises_not_found() -> None:
 
     with pytest.raises(NotFoundException):
         await service.issue_for_order(uuid4())
+
+
+async def test_issue_with_unintegrated_provider_raises_handled_error() -> None:
+    # EINVOICE_PROVIDER=vnpt on a delivered order must surface a handled 501
+    # (NotImplementedException), never a bare NotImplementedError / opaque 500.
+    order = make_order(status="delivered")
+    service = EInvoiceService(
+        FakeOrderRepository(order),
+        SimpleNamespace(EINVOICE_PROVIDER="vnpt"),  # type: ignore[arg-type]
+    )
+
+    with pytest.raises(NotImplementedException) as excinfo:
+        await service.issue_for_order(order.id)
+    assert excinfo.value.status_code == 501
+    assert excinfo.value.error_code == "einvoice_provider_not_configured"
+    # The order was not marked with a bogus invoice.
+    assert order.einvoice is None

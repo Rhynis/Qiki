@@ -80,3 +80,10 @@ class IdempotencyException(ConflictException):
     """Idempotency key conflict."""
 
     error_code = "idempotency_conflict"
+
+
+class NotImplementedException(GasBotException):
+    """A feature is configured but not implemented on the server yet."""
+
+    status_code = 501
+    error_code = "not_implemented"
