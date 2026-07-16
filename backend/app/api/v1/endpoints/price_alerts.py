@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.dependencies.auth import get_current_admin, get_current_user_optional
-from app.core.exceptions import NotFoundException
+from app.core.exceptions import NotFoundException, ValidationException
 from app.core.rate_limit import limiter
 from app.db.session import get_db
 from app.models.user import User
@@ -26,6 +26,9 @@ router = APIRouter()
 _CONFIRMED_MESSAGE = "Đăng ký nhận thông báo giá gas đã được xác nhận. Cảm ơn bạn!"
 _UNSUBSCRIBED_MESSAGE = "Bạn đã hủy nhận thông báo giá gas. Rất mong được phục vụ lại!"
 _INVALID_LINK_MESSAGE = "Liên kết không hợp lệ hoặc đã hết hạn."
+_EXPIRED_CONFIRM_MESSAGE = (
+    "Liên kết xác nhận đã hết hạn. Vui lòng đăng ký lại để nhận email xác nhận mới."
+)
 
 
 def get_price_alert_service(
@@ -65,8 +68,11 @@ async def confirm_price_alerts(
     payload: PriceSubscriptionToken,
     service: Annotated[PriceAlertService, Depends(get_price_alert_service)],
 ) -> PriceSubscriptionAck:
-    """Confirm a pending subscription via its opaque token."""
-    if not await service.confirm(payload.token):
+    """Confirm a pending subscription via its single-purpose confirm token."""
+    result = await service.confirm(payload.token)
+    if result == "expired":
+        raise ValidationException(_EXPIRED_CONFIRM_MESSAGE, error_code="confirm_token_expired")
+    if result == "invalid":
         raise NotFoundException(_INVALID_LINK_MESSAGE, error_code="invalid_token")
     return PriceSubscriptionAck(message=_CONFIRMED_MESSAGE)
 

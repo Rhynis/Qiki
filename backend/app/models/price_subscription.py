@@ -13,11 +13,12 @@ from app.db.base import Base, TimestampMixin, UUIDMixin
 class PriceSubscription(Base, UUIDMixin, TimestampMixin):
     """A double-opt-in subscription to gas-price-change email alerts.
 
-    Supports both logged-in users (``user_id`` set) and guest emails. ``token``
-    is an opaque secret used for both the confirm and unsubscribe links.
-    ``confirmed`` gates whether the address may receive notifications, and a
-    non-null ``unsubscribed_at`` permanently opts the row out (a later
-    resubscribe creates a fresh row).
+    Supports both logged-in users (``user_id`` set) and guest emails. The confirm
+    and unsubscribe links use SEPARATE single-purpose tokens: ``confirm_token``
+    (with a ``confirm_expires_at`` expiry) can only confirm, ``unsubscribe_token``
+    can only unsubscribe. ``confirmed`` gates whether the address may receive
+    notifications, and a non-null ``unsubscribed_at`` permanently opts the row
+    out (a later resubscribe creates a fresh row).
     """
 
     __tablename__ = "price_subscriptions"
@@ -29,12 +30,17 @@ class PriceSubscription(Base, UUIDMixin, TimestampMixin):
         nullable=True,
     )
     confirmed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    token: Mapped[str] = mapped_column(String(64), nullable=False)
+    confirm_token: Mapped[str] = mapped_column(String(64), nullable=False)
+    unsubscribe_token: Mapped[str] = mapped_column(String(64), nullable=False)
+    confirm_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     unsubscribed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
-        Index("uq_price_subscriptions_token", "token", unique=True),
+        Index("uq_price_subscriptions_confirm_token", "confirm_token", unique=True),
+        Index("uq_price_subscriptions_unsubscribe_token", "unsubscribe_token", unique=True),
         Index(
             "uq_price_subscriptions_active_email",
             "email",

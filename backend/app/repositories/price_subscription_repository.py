@@ -16,14 +16,30 @@ class PriceSubscriptionRepository:
         self.session = session
 
     async def create(
-        self, *, email: str, token: str, user_id: UUID | None = None
+        self,
+        *,
+        email: str,
+        confirm_token: str,
+        unsubscribe_token: str,
+        confirm_expires_at: datetime,
+        user_id: UUID | None = None,
     ) -> PriceSubscription:
         """Insert a new (unconfirmed, active) subscription."""
-        subscription = PriceSubscription(email=email, token=token, user_id=user_id)
+        subscription = PriceSubscription(
+            email=email,
+            confirm_token=confirm_token,
+            unsubscribe_token=unsubscribe_token,
+            confirm_expires_at=confirm_expires_at,
+            user_id=user_id,
+        )
         self.session.add(subscription)
         await self.session.flush()
         await self.session.refresh(subscription)
         return subscription
+
+    async def rollback(self) -> None:
+        """Roll back the active transaction (after a caught integrity error)."""
+        await self.session.rollback()
 
     async def get_active_by_email(self, email: str) -> PriceSubscription | None:
         """Return the active (not-unsubscribed) subscription for an email, if any."""
@@ -35,10 +51,17 @@ class PriceSubscriptionRepository:
         )
         return result.scalar_one_or_none()
 
-    async def get_by_token(self, token: str) -> PriceSubscription | None:
-        """Return the subscription matching an opaque token, if any."""
+    async def get_by_confirm_token(self, token: str) -> PriceSubscription | None:
+        """Return the subscription whose CONFIRM token matches, if any."""
         result = await self.session.execute(
-            select(PriceSubscription).where(PriceSubscription.token == token)
+            select(PriceSubscription).where(PriceSubscription.confirm_token == token)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_by_unsubscribe_token(self, token: str) -> PriceSubscription | None:
+        """Return the subscription whose UNSUBSCRIBE token matches, if any."""
+        result = await self.session.execute(
+            select(PriceSubscription).where(PriceSubscription.unsubscribe_token == token)
         )
         return result.scalar_one_or_none()
 
