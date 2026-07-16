@@ -32,14 +32,15 @@ describe('WishlistButton', () => {
     wishlistState.isAuthenticated = false
   })
 
-  it('prompts a guest to log in instead of toggling', async () => {
+  it('shows a toast to a guest without redirecting or toggling', async () => {
     const user = userEvent.setup()
     render(<WishlistButton productId="p1" />)
 
     await user.click(screen.getByRole('button', { name: 'Lưu vào yêu thích' }))
 
     expect(toastMocks.info).toHaveBeenCalled()
-    expect(routerMocks.push).toHaveBeenCalledWith(expect.stringContaining('/login'))
+    // The guest stays on the page — no redirect to /login.
+    expect(routerMocks.push).not.toHaveBeenCalled()
     expect(toggleMock.mutate).not.toHaveBeenCalled()
   })
 
