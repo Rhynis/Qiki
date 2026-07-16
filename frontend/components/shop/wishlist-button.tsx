@@ -2,7 +2,6 @@
 
 import { Heart } from 'lucide-react'
 import { useTranslations } from 'next-intl'
-import { usePathname, useRouter } from 'next/navigation'
 import type { MouseEvent } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -16,14 +15,13 @@ type WishlistButtonProps = {
 }
 
 /**
- * Heart toggle to save/unsave a product. Shown to everyone, but a guest is
- * prompted to log in on click. Safe to place over a card-wide link (it stops
- * propagation so it never triggers navigation).
+ * Heart toggle to save/unsave a product. Shown to everyone; a guest just gets a
+ * toast asking them to log in (no redirect — the prompt shouldn't yank them off
+ * the page). Safe to place over a card-wide link (it stops propagation so it
+ * never triggers navigation).
  */
 export function WishlistButton({ productId, className, withLabel = false }: WishlistButtonProps) {
   const t = useTranslations('wishlistButton')
-  const router = useRouter()
-  const pathname = usePathname()
   const { savedIds, isAuthenticated } = useWishlist()
   const toggle = useToggleWishlist()
 
@@ -35,7 +33,6 @@ export function WishlistButton({ productId, className, withLabel = false }: Wish
     event.stopPropagation()
     if (!isAuthenticated) {
       toast.info(t('loginRequired'))
-      router.push(`/login?redirectTo=${encodeURIComponent(pathname)}`)
       return
     }
     toggle.mutate({ productId, saved })
