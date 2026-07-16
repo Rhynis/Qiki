@@ -17,7 +17,13 @@ from app.services.insights_service import InsightsService
 
 pytestmark = pytest.mark.asyncio
 
-NOW = datetime(2026, 6, 15, 12, 0, tzinfo=UTC)
+# Reference time for tests that rely on InsightsService's default lookback
+# window. Anchor to *yesterday* noon UTC, not a fixed calendar date: a hardcoded
+# date became a time-bomb once it aged past DEFAULT_PERIOD_DAYS (30) and fell out
+# of the default window, zeroing every default-window insight. Yesterday (not
+# today) keeps it strictly in the past — today-noon can be in the future when the
+# suite runs in the morning UTC, which would push data past the window's end.
+NOW = (datetime.now(UTC) - timedelta(days=1)).replace(hour=12, minute=0, second=0, microsecond=0)
 
 
 async def _clean(session: AsyncSession) -> None:
