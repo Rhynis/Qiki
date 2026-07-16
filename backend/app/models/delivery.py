@@ -10,6 +10,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -60,6 +61,8 @@ class Delivery(Base, UUIDMixin):
         lazy="selectin",
     )
     order: Mapped[Order] = relationship("Order", back_populates="deliveries")
+
+    __table_args__ = (Index("uq_deliveries_order_id_code", "order_id", "code", unique=True),)
 
 
 class DeliveryItem(Base, UUIDMixin):
