@@ -89,13 +89,13 @@ FOLLOWUP_PERIOD_LABELS = {"sang": "sáng", "trua": "trưa", "chieu": "chiều", 
 GREETING_INTRO_VI = (
     "Em là Qiki, trợ lý ảo của Cửa hàng Gas Quốc Cường ạ. "
     "Em có thể giúp anh/chị tìm sản phẩm, xem giá, đặt gas hoặc nước uống, "
-    "tra cứu thông tin giao hàng và giải đáp các thắc mắc. "
+    "tra cứu thông tin giao hàng và giải đáp thắc mắc về gas. "
     "Anh/chị cần Qiki hỗ trợ gì hôm nay ạ?"
 )
 GREETING_INTRO_EN = (
     "I'm Qiki, the virtual assistant of Gas Quốc Cường Store. "
     "I can help you find products, check prices, order gas or drinking water, "
-    "look up delivery info, and answer your questions. "
+    "look up delivery info, and answer your gas-related questions. "
     "How can Qiki help you today?"
 )
 
