@@ -38,11 +38,51 @@ def test_create_returns_ollama_provider() -> None:
 
 
 def test_create_returns_gemini_provider() -> None:
-    settings = Settings(LLM_PROVIDER="gemini", GEMINI_API_KEY="secret")
+    # _env_file=None isolates from a developer's local .env (which may set GROQ/
+    # GEMINI keys and change which provider the factory builds).
+    settings = Settings(_env_file=None, LLM_PROVIDER="gemini", GEMINI_API_KEY="secret")
 
     provider = LLMProviderFactory.create(settings=settings)
 
     assert isinstance(provider, GeminiProvider)
+
+
+def test_create_returns_groq_provider() -> None:
+    settings = Settings(
+        _env_file=None,
+        LLM_PROVIDER="groq",
+        GROQ_API_KEY="groq-secret",
+        GROQ_MODEL="llama-test",
+        GEMINI_API_KEY=None,
+        GEMINI_USE_VERTEX=False,
+    )
+
+    provider = LLMProviderFactory.create(settings=settings)
+
+    assert isinstance(provider, GroqProvider)
+    assert provider.model == "llama-test"
+
+
+def test_create_groq_primary_falls_back_to_gemini() -> None:
+    settings = Settings(
+        _env_file=None,
+        LLM_PROVIDER="groq",
+        GROQ_API_KEY="groq-secret",
+        GEMINI_API_KEY="gemini-secret",
+    )
+
+    provider = LLMProviderFactory.create(settings=settings)
+
+    assert isinstance(provider, FallbackLLMProvider)
+    assert isinstance(provider.providers[0], GroqProvider)
+    assert isinstance(provider.providers[1], GeminiProvider)
+
+
+def test_groq_without_api_key_raises() -> None:
+    settings = Settings(_env_file=None, LLM_PROVIDER="groq", GROQ_API_KEY=None)
+
+    with pytest.raises(ValueError, match="GROQ_API_KEY"):
+        LLMProviderFactory.create(settings=settings)
 
 
 def test_create_returns_fallback_provider_when_groq_key_configured() -> None:
@@ -88,7 +128,9 @@ def test_reset_clears_cache() -> None:
 
 
 def test_gemini_without_api_key_raises() -> None:
-    settings = Settings(LLM_PROVIDER="gemini", GEMINI_API_KEY=None)
+    settings = Settings(
+        _env_file=None, LLM_PROVIDER="gemini", GEMINI_API_KEY=None, GEMINI_USE_VERTEX=False
+    )
 
     with pytest.raises(ValueError, match="GEMINI_API_KEY"):
         LLMProviderFactory.create(settings=settings)
@@ -96,6 +138,7 @@ def test_gemini_without_api_key_raises() -> None:
 
 def test_gemini_vertex_mode_does_not_require_api_key() -> None:
     settings = Settings(
+        _env_file=None,
         LLM_PROVIDER="gemini",
         GEMINI_USE_VERTEX=True,
         GEMINI_API_KEY=None,

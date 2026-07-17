@@ -56,6 +56,28 @@ class LLMProviderFactory:
                 )
             else:
                 provider = gemini_provider
+        elif name == "groq":
+            if not resolved_settings.GROQ_API_KEY:
+                raise ValueError("GROQ_API_KEY not configured")
+            groq_provider = GroqProvider(
+                api_key=resolved_settings.GROQ_API_KEY,
+                model=resolved_settings.GROQ_MODEL,
+            )
+            # Fall back to Gemini when it's configured so a Groq outage still answers.
+            if resolved_settings.GEMINI_USE_VERTEX or resolved_settings.GEMINI_API_KEY:
+                provider = FallbackLLMProvider(
+                    [
+                        groq_provider,
+                        GeminiProvider(
+                            api_key=resolved_settings.GEMINI_API_KEY,
+                            model=resolved_settings.GEMINI_MODEL,
+                            embed_model=resolved_settings.GEMINI_EMBED_MODEL,
+                            settings=resolved_settings,
+                        ),
+                    ]
+                )
+            else:
+                provider = groq_provider
         else:
             raise ValueError(f"Unknown LLM provider: {name}")
 
