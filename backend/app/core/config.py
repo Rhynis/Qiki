@@ -40,7 +40,7 @@ class Settings(BaseSettings):
 
     REDIS_URL: str = "redis://localhost:6379/0"
 
-    LLM_PROVIDER: Literal["ollama", "gemini"] = "ollama"
+    LLM_PROVIDER: Literal["ollama", "gemini", "groq"] = "ollama"
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "qwen2.5:7b-instruct-q4_K_M"
     OLLAMA_EMBED_MODEL: str = "nomic-embed-text"
