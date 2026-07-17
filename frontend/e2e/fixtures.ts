@@ -23,6 +23,25 @@ export const test = base.extend({
       // WebKit does not always expose it on the intercepted request headers).
       const cookies = await page.context().cookies()
       const cookie = cookies.map((c) => `${c.name}=${c.value}`).join('; ')
+
+      // The streaming chat endpoint returns Server-Sent Events; reuse the blocking
+      // response and replay it as a single delta + a terminal done frame.
+      if (request.method() === 'POST' && url.pathname.endsWith('/messages/stream')) {
+        const { body: resp } = resolveApi({
+          method: 'POST',
+          path: url.pathname.replace(/\/stream$/, ''),
+          query: url.searchParams,
+          body,
+          cookie,
+        })
+        const text = resp?.assistant_message?.content ?? ''
+        const sse =
+          `event: delta\ndata: ${JSON.stringify({ text })}\n\n` +
+          `event: done\ndata: ${JSON.stringify(resp)}\n\n`
+        await route.fulfill({ status: 200, contentType: 'text/event-stream', body: sse })
+        return
+      }
+
       const { status, body: payload } = resolveApi({
         method: request.method(),
         path: url.pathname,

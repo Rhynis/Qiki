@@ -1,6 +1,7 @@
 'use client'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import * as conversationsApi from '@/lib/api/conversations'
 import { useChatStore } from '@/lib/stores/chat-store'
@@ -204,6 +205,110 @@ export function useSendMessage() {
       })
     },
   })
+}
+
+/**
+ * Streaming counterpart of useSendMessage: shows the user message optimistically,
+ * then appends assistant tokens to a growing bubble as they arrive. Rejects on a
+ * transport/parse error (after rolling back) so the caller can fall back to the
+ * blocking endpoint.
+ */
+export function useStreamMessage() {
+  const queryClient = useQueryClient()
+  const [isStreaming, setIsStreaming] = useState(false)
+
+  const streamSend = useCallback(
+    async ({ conversationId, data }: { conversationId: string; data: SendMessageRequest }) => {
+      const key = conversationKeys.messages(conversationId)
+      await queryClient.cancelQueries({ queryKey: key })
+      const previous = queryClient.getQueryData<MessageListResponse>(key)
+      const now = new Date().toISOString()
+      const userId = `optimistic-${Date.now()}`
+      const assistantId = `streaming-${Date.now()}`
+      queryClient.setQueryData<MessageListResponse>(key, (old) => {
+        const base = old ?? DEFAULT_MESSAGE_LIST
+        const userMessage: Message = {
+          id: userId,
+          conversation_id: conversationId,
+          role: 'user',
+          content: data.content,
+          flagged_for_review: false,
+          is_emergency: false,
+          created_at: now,
+        }
+        return { ...base, items: [...base.items, userMessage], total: base.total + 1 }
+      })
+      setIsStreaming(true)
+      let started = false
+      const appendDelta = (text: string) => {
+        queryClient.setQueryData<MessageListResponse>(key, (old) => {
+          const base = old ?? DEFAULT_MESSAGE_LIST
+          if (!started) {
+            started = true
+            const assistantMessage: Message = {
+              id: assistantId,
+              conversation_id: conversationId,
+              role: 'assistant',
+              content: text,
+              flagged_for_review: false,
+              is_emergency: false,
+              created_at: new Date().toISOString(),
+            }
+            return { ...base, items: [...base.items, assistantMessage], total: base.total + 1 }
+          }
+          return {
+            ...base,
+            items: base.items.map((message) =>
+              message.id === assistantId ? { ...message, content: message.content + text } : message
+            ),
+          }
+        })
+      }
+      try {
+        await conversationsApi.streamMessage(conversationId, data, {
+          onDelta: appendDelta,
+          onDone: (response) => {
+            queryClient.setQueryData(
+              conversationKeys.detail(response.conversation.id),
+              response.conversation
+            )
+            const finalAssistant = response.assistant_message
+              ? { ...response.assistant_message, products: response.products }
+              : null
+            queryClient.setQueryData<MessageListResponse>(key, (old) => {
+              const base = old ?? DEFAULT_MESSAGE_LIST
+              const items = base.items.filter(
+                (message) =>
+                  message.id !== userId &&
+                  message.id !== assistantId &&
+                  !message.id.startsWith('optimistic-')
+              )
+              const incoming = [response.user_message, ...(finalAssistant ? [finalAssistant] : [])]
+              return reconcileMessageList(
+                { ...base, items: incoming, total: incoming.length },
+                { ...base, items }
+              )
+            })
+            if (response.assistant_message?.is_emergency) {
+              toast.error('Khẩn cấp an toàn gas: gọi 114 hoặc 115 ngay', {
+                className: 'w-auto max-w-[calc(100vw-2rem)] whitespace-nowrap',
+              })
+            }
+          },
+        })
+      } catch (error) {
+        // Roll back so the caller can retry through the blocking endpoint.
+        queryClient.setQueryData(key, previous)
+        throw error
+      } finally {
+        setIsStreaming(false)
+        await queryClient.invalidateQueries({ queryKey: key })
+      }
+    },
+    [queryClient]
+  )
+
+  return { streamSend, isStreaming }
 }
 
 export function useSubmitFeedback() {

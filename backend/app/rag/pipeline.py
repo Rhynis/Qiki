@@ -150,14 +150,22 @@ class RAGPipeline:
         top_k: int = 5,
         product_context: str | None = None,
         language: str = "vi",
+        sources_sink: list[RetrievedDocument] | None = None,
     ) -> AsyncIterator[str]:
-        """Stream an answer while keeping the same safety-first behavior."""
+        """Stream an answer while keeping the same safety-first behavior.
+
+        When ``sources_sink`` is provided, the retrieved documents are appended to
+        it so a caller can persist them after the stream completes (mirroring the
+        non-streaming ``query``).
+        """
         safety = await self.safety_checker.check_query(query)
         if safety.is_emergency:
             yield self.safety_checker.get_emergency_response(language)
             return
 
         documents = await self._retrieve(query, top_k, category_filter)
+        if sources_sink is not None:
+            sources_sink.extend(documents)
         context = self.context_builder.build_context(
             documents,
             product_context=product_context,
