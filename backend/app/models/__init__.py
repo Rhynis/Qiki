@@ -1,5 +1,6 @@
 """Database models."""
 
+from app.models.admin_audit import AdminAuditLog
 from app.models.conversation import Conversation
 from app.models.coupon import Coupon, CouponRedemption
 from app.models.delivery import Delivery, DeliveryItem
@@ -12,6 +13,7 @@ from app.models.user import User
 from app.models.wishlist import Wishlist
 
 __all__ = [
+    "AdminAuditLog",
     "Conversation",
     "Coupon",
     "CouponRedemption",
