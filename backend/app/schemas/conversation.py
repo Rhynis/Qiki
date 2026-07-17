@@ -16,12 +16,17 @@ ConversationStatus = Literal["active", "escalated", "flagged", "resolved", "clos
 # Statuses staff can set directly from the admin detail view.
 SettableConversationStatus = Literal["active", "escalated", "flagged", "resolved", "closed"]
 
+# UI language the storefront is currently showing; drives the greeting and biases
+# ambiguous message-language detection so Qiki follows the customer's chosen locale.
+UILocale = Literal["vi", "en"]
+
 
 class ConversationCreateRequest(BaseModel):
     """Request to start a conversation."""
 
     session_id: str | None = Field(default=None, max_length=100)
     initial_message: str | None = Field(default=None, min_length=1, max_length=2000)
+    locale: UILocale | None = None
 
 
 class SendMessageRequest(BaseModel):
@@ -29,6 +34,7 @@ class SendMessageRequest(BaseModel):
 
     content: str = Field(min_length=1, max_length=2000)
     session_id: str | None = Field(default=None, max_length=100)
+    locale: UILocale | None = None
 
 
 class StaffMessageRequest(BaseModel):

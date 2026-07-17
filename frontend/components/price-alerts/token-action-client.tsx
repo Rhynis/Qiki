@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useTranslations } from 'next-intl'
 import { useSearchParams } from 'next/navigation'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -8,26 +9,9 @@ import { confirmPriceAlerts, unsubscribePriceAlerts } from '@/lib/api/price-aler
 
 type Variant = 'confirm' | 'unsubscribe'
 
-interface VariantConfig {
-  action: (token: string) => Promise<{ message: string }>
-  actionLabel: string
-  pendingLabel: string
-  invalidMessage: string
-}
-
-const VARIANTS: Record<Variant, VariantConfig> = {
-  confirm: {
-    action: confirmPriceAlerts,
-    actionLabel: 'Xác nhận đăng ký',
-    pendingLabel: 'Đang xác nhận...',
-    invalidMessage: 'Liên kết xác nhận không hợp lệ hoặc đã hết hạn.',
-  },
-  unsubscribe: {
-    action: unsubscribePriceAlerts,
-    actionLabel: 'Hủy đăng ký',
-    pendingLabel: 'Đang hủy...',
-    invalidMessage: 'Liên kết hủy đăng ký không hợp lệ hoặc đã hết hạn.',
-  },
+const ACTIONS: Record<Variant, (token: string) => Promise<{ message: string }>> = {
+  confirm: confirmPriceAlerts,
+  unsubscribe: unsubscribePriceAlerts,
 }
 
 type Status = 'idle' | 'pending' | 'done' | 'error'
@@ -38,7 +22,11 @@ type Status = 'idle' | 'pending' | 'done' | 'error'
  * link scanners cannot silently confirm or unsubscribe an address.
  */
 export function TokenActionClient({ variant }: { variant: Variant }) {
-  const { action, actionLabel, pendingLabel, invalidMessage } = VARIANTS[variant]
+  const t = useTranslations('priceAlerts')
+  const action = ACTIONS[variant]
+  const actionLabel = variant === 'confirm' ? t('confirmAction') : t('unsubscribeAction')
+  const pendingLabel = variant === 'confirm' ? t('confirmPending') : t('unsubscribePending')
+  const invalidMessage = variant === 'confirm' ? t('confirmInvalid') : t('unsubscribeInvalid')
   const token = useSearchParams().get('token') ?? ''
   const [status, setStatus] = useState<Status>('idle')
   const [message, setMessage] = useState<string | null>(null)
@@ -65,7 +53,7 @@ export function TokenActionClient({ variant }: { variant: Variant }) {
       <div className="space-y-4">
         <p className="text-sm text-emerald-700">{message}</p>
         <Link className="inline-block text-sm text-primary hover:underline" href="/products">
-          Xem sản phẩm
+          {t('viewProducts')}
         </Link>
       </div>
     )

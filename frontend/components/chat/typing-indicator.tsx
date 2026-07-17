@@ -1,15 +1,17 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
 import { useEffect, useState } from 'react'
 
-const TYPING_STATUSES = ['Đang đọc câu hỏi…', 'Đang tìm thông tin…', 'Đang soạn câu trả lời…']
+const TYPING_STATUS_KEYS = ['typingReading', 'typingSearching', 'typingComposing'] as const
 
 export function TypingIndicator() {
+  const t = useTranslations('chat')
   const [statusIndex, setStatusIndex] = useState(0)
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
-      setStatusIndex((current) => (current + 1) % TYPING_STATUSES.length)
+      setStatusIndex((current) => (current + 1) % TYPING_STATUS_KEYS.length)
     }, 1500)
 
     return () => window.clearInterval(intervalId)
@@ -23,7 +25,7 @@ export function TypingIndicator() {
         <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:300ms]" />
       </div>
       <span aria-live="polite" className="text-xs text-slate-500">
-        {TYPING_STATUSES[statusIndex]}
+        {t(TYPING_STATUS_KEYS[statusIndex] ?? TYPING_STATUS_KEYS[0])}
       </span>
     </div>
   )

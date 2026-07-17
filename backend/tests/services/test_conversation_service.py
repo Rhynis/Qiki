@@ -455,6 +455,18 @@ async def test_start_conversation_greets_authenticated_user_by_name() -> None:
 
 
 @pytest.mark.asyncio
+async def test_start_conversation_greets_in_english_when_locale_is_en() -> None:
+    service, _conversations, _messages, rag, _orders = make_service()
+
+    response = await service.start_conversation(user=None, session_id="abc", locale="en")
+
+    greeting = response.messages[0]
+    assert greeting.content.startswith("Hello there!")
+    assert "Qiki" in greeting.content
+    assert rag.calls == 0  # greeting stays deterministic, no LLM call
+
+
+@pytest.mark.asyncio
 async def test_set_conversation_status_stamps_resolved() -> None:
     service, _conversations, _messages, _rag, _orders = make_service()
     conversation = await service.start_conversation(user=None, session_id="abc")

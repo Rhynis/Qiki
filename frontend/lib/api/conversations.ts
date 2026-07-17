@@ -1,4 +1,5 @@
 import { apiClient } from '@/lib/api/client'
+import { LOCALE_COOKIE, resolveLocale, type Locale } from '@/i18n/config'
 import type {
   Conversation,
   ConversationListResponse,
@@ -14,8 +15,18 @@ import type {
   TransferRequest,
 } from '@/types/conversation'
 
+/** Read the storefront UI locale from its cookie so Qiki follows it (SSR-safe). */
+function currentUiLocale(): Locale {
+  if (typeof document === 'undefined') return resolveLocale(undefined)
+  const match = document.cookie.match(new RegExp(`(?:^|; )${LOCALE_COOKIE}=([^;]+)`))
+  return resolveLocale(match?.[1])
+}
+
 export async function startConversation(data: StartConversationRequest): Promise<Conversation> {
-  const response = await apiClient.post<Conversation>('/api/v1/conversations/start', data)
+  const response = await apiClient.post<Conversation>('/api/v1/conversations/start', {
+    locale: currentUiLocale(),
+    ...data,
+  })
   return response.data
 }
 
@@ -44,7 +55,7 @@ export async function sendMessage(
 ): Promise<SendMessageResponse> {
   const response = await apiClient.post<SendMessageResponse>(
     `/api/v1/conversations/${conversationId}/messages`,
-    data
+    { locale: currentUiLocale(), ...data }
   )
   return response.data
 }

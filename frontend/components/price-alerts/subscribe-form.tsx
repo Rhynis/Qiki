@@ -1,6 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
@@ -11,6 +12,7 @@ import {
 } from '@/lib/validations/price-alerts'
 
 export function PriceAlertSubscribeForm() {
+  const t = useTranslations('priceAlerts')
   const [formMessage, setFormMessage] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
   const {
@@ -32,7 +34,7 @@ export function PriceAlertSubscribeForm() {
       setFormMessage(result.message)
       reset({ email: '', consent: true })
     } catch (caught) {
-      setFormError(caught instanceof Error ? caught.message : 'Không thể đăng ký, vui lòng thử lại')
+      setFormError(caught instanceof Error ? caught.message : t('subscribeError'))
     }
   }
 
@@ -40,7 +42,7 @@ export function PriceAlertSubscribeForm() {
     <form className="space-y-5" onSubmit={handleSubmit(onSubmit)}>
       <div className="space-y-2">
         <label className="text-sm font-medium" htmlFor="email">
-          Email nhận thông báo giá
+          {t('emailLabel')}
         </label>
         <input
           id="email"
@@ -59,15 +61,14 @@ export function PriceAlertSubscribeForm() {
           {...register('consent')}
         />
         <label className="text-sm text-slate-600" htmlFor="consent">
-          Tôi đồng ý nhận email thông báo khi Gas Quốc Cường thay đổi giá gas. Bạn có thể hủy đăng
-          ký bất cứ lúc nào.
+          {t('consent')}
         </label>
       </div>
       {errors.consent ? <p className="text-sm text-red-600">{errors.consent.message}</p> : null}
       {formMessage ? <p className="text-sm text-emerald-700">{formMessage}</p> : null}
       {formError ? <p className="text-sm text-red-600">{formError}</p> : null}
       <Button className="w-full" disabled={isSubmitting} type="submit">
-        {isSubmitting ? 'Đang gửi...' : 'Đăng ký nhận giá'}
+        {isSubmitting ? t('submitting') : t('submit')}
       </Button>
     </form>
   )

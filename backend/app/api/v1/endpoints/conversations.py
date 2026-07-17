@@ -97,6 +97,7 @@ async def start_conversation(
         user=current_user,
         session_id=payload.session_id,
         initial_message=payload.initial_message,
+        locale=payload.locale,
     )
 
 

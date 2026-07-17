@@ -1,6 +1,7 @@
 'use client'
 
 import { Copy, ThumbsDown, ThumbsUp } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import { Button } from '@/components/ui/button'
 import { useSubmitFeedback } from '@/lib/hooks/use-conversation'
 import { cn } from '@/lib/utils'
@@ -13,6 +14,7 @@ type FeedbackButtonsProps = {
 }
 
 export function FeedbackButtons({ conversationId, message }: FeedbackButtonsProps) {
+  const t = useTranslations('chat')
   const mutation = useSubmitFeedback()
   const pendingScore =
     mutation.isPending && mutation.variables?.messageId === message.id
@@ -29,9 +31,9 @@ export function FeedbackButtons({ conversationId, message }: FeedbackButtonsProp
   async function handleCopy() {
     try {
       await navigator.clipboard.writeText(message.content)
-      toast.success('Đã sao chép')
+      toast.success(t('copied'))
     } catch {
-      toast.error('Không sao chép được')
+      toast.error(t('copyFailed'))
     }
   }
 
@@ -41,7 +43,7 @@ export function FeedbackButtons({ conversationId, message }: FeedbackButtonsProp
       variant="ghost"
       size="icon"
       className="h-7 w-7 text-slate-500 hover:text-slate-900"
-      aria-label="Sao chép tin nhắn"
+      aria-label={t('copyAria')}
       onClick={handleCopy}
     >
       <Copy className="h-3.5 w-3.5" />
@@ -64,7 +66,7 @@ export function FeedbackButtons({ conversationId, message }: FeedbackButtonsProp
             'bg-green-50 text-green-600 ring-1 ring-green-600/20 hover:bg-green-50 hover:text-green-600 disabled:opacity-100',
           hasFeedback && feedbackScore !== 1 && 'disabled:opacity-40'
         )}
-        aria-label="Hài lòng"
+        aria-label={t('helpful')}
         disabled={feedbackDisabled}
         onClick={() =>
           mutation.mutate({ conversationId, messageId: message.id, data: { score: 1 } })
@@ -82,7 +84,7 @@ export function FeedbackButtons({ conversationId, message }: FeedbackButtonsProp
             'bg-red-50 text-red-600 ring-1 ring-red-600/20 hover:bg-red-50 hover:text-red-600 disabled:opacity-100',
           hasFeedback && feedbackScore !== -1 && 'disabled:opacity-40'
         )}
-        aria-label="Chưa hài lòng"
+        aria-label={t('notHelpful')}
         disabled={feedbackDisabled}
         onClick={() =>
           mutation.mutate({ conversationId, messageId: message.id, data: { score: -1 } })

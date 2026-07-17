@@ -81,11 +81,13 @@ export type SendMessageResponse = {
 export type StartConversationRequest = {
   session_id?: string
   initial_message?: string
+  locale?: 'vi' | 'en'
 }
 
 export type SendMessageRequest = {
   content: string
   session_id?: string
+  locale?: 'vi' | 'en'
 }
 
 export type FeedbackRequest = {
