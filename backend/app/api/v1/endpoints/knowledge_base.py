@@ -4,10 +4,12 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Query, Request, Response, UploadFile, status
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.dependencies.auth import get_current_admin, get_current_staff
 from app.core.rate_limit import limiter
+from app.db.redis import get_redis
 from app.db.session import get_db
 from app.models.user import User
 from app.rag.embeddings import EmbeddingService
@@ -32,6 +34,7 @@ router = APIRouter()
 
 def get_knowledge_base_service(
     session: Annotated[AsyncSession, Depends(get_db)],
+    redis: Annotated[Redis, Depends(get_redis)],
 ) -> KnowledgeBaseService:
     """Build a request-scoped knowledge base service."""
     return KnowledgeBaseService(
@@ -39,6 +42,7 @@ def get_knowledge_base_service(
         EmbeddingService(),
         JinaEmbeddingService(),
         VietnameseTextProcessor(),
+        redis_client=redis,
     )
 
 

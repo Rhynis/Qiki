@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import pytest
+from redis.exceptions import RedisError
 
 from app.core.exceptions import ForbiddenException, NotFoundException
 from app.llm.exceptions import LLMQuotaExceededError
@@ -578,3 +579,111 @@ async def test_ollama_threshold_applied() -> None:
     await svc.search_documents("rò rỉ gas", top_k=5)
 
     assert repo.last_threshold == svc.settings.RAG_THRESHOLD_OLLAMA
+
+
+class DictRedis:
+    """Dict-backed async Redis stub (get/setex) for query-cache tests."""
+
+    def __init__(self) -> None:
+        self.store: dict[str, str] = {}
+        self.get_calls = 0
+        self.setex_calls = 0
+
+    async def get(self, key: str) -> str | None:
+        self.get_calls += 1
+        return self.store.get(key)
+
+    async def setex(self, key: str, ttl: int, value: str) -> None:
+        self.setex_calls += 1
+        self.store[key] = value
+
+
+class BrokenRedis:
+    """Async Redis stub whose commands always raise, to test degradation."""
+
+    def __init__(self) -> None:
+        self.get_calls = 0
+        self.setex_calls = 0
+
+    async def get(self, key: str) -> str | None:
+        self.get_calls += 1
+        raise RedisError("redis down")
+
+    async def setex(self, key: str, ttl: int, value: str) -> None:
+        self.setex_calls += 1
+        raise RedisError("redis down")
+
+
+async def test_query_cache_miss_then_hit_calls_provider_once() -> None:
+    svc, _repo, embeddings, _jina = service()
+    redis = DictRedis()
+    svc.redis_client = redis  # type: ignore[assignment]
+
+    first = await svc._embed_query("rò rỉ gas")
+    second = await svc._embed_query("rò rỉ gas")
+
+    assert first == second
+    assert first == ([0.1] * 768, "match_documents")
+    # The provider is hit exactly once; the second call is served from cache.
+    assert len(embeddings.calls) == 1
+    assert redis.setex_calls == 1
+    assert redis.get_calls == 2
+
+
+async def test_query_cache_degrades_gracefully_on_redis_error() -> None:
+    svc, _repo, embeddings, _jina = service()
+    svc.redis_client = BrokenRedis()  # type: ignore[assignment]
+
+    embedding, match_function = await svc._embed_query("rò rỉ gas")
+
+    assert embedding == [0.1] * 768
+    assert match_function == "match_documents"
+    assert len(embeddings.calls) == 1  # provider used; the Redis error was swallowed
+
+    # A second call still works (no cache); nothing is ever raised.
+    await svc._embed_query("rò rỉ gas")
+    assert len(embeddings.calls) == 2
+
+
+async def test_query_cache_disabled_when_no_redis_client() -> None:
+    svc, _repo, embeddings, _jina = service()  # redis_client defaults to None
+
+    await svc._embed_query("rò rỉ gas")
+    await svc._embed_query("rò rỉ gas")
+
+    assert len(embeddings.calls) == 2
+
+
+async def test_query_cache_disabled_when_ttl_zero(monkeypatch: pytest.MonkeyPatch) -> None:
+    svc, _repo, embeddings, _jina = service()
+    redis = DictRedis()
+    svc.redis_client = redis  # type: ignore[assignment]
+    monkeypatch.setattr(svc.settings, "EMBEDDING_QUERY_CACHE_TTL", 0)
+
+    await svc._embed_query("rò rỉ gas")
+    await svc._embed_query("rò rỉ gas")
+
+    assert len(embeddings.calls) == 2
+    assert redis.get_calls == 0
+    assert redis.setex_calls == 0
+
+
+async def test_query_cache_key_namespaced_by_provider() -> None:
+    svc, _repo, _embeddings, _jina = service()
+    redis = DictRedis()
+    svc.redis_client = redis  # type: ignore[assignment]
+    ollama = FakeOllamaEmbeddingService()
+    svc.ollama_embedding_service = ollama  # type: ignore[assignment]
+
+    svc.embedding_provider = "gemini"
+    gemini_embedding, gemini_match = await svc._embed_query("rò rỉ gas")
+
+    svc.embedding_provider = "ollama"
+    ollama_embedding, ollama_match = await svc._embed_query("rò rỉ gas")
+
+    # A different provider uses a different key -> no cross-provider cache hit.
+    assert len(redis.store) == 2
+    assert ollama.calls == ["rò rỉ gas"]
+    assert gemini_match == "match_documents"
+    assert ollama_match == "match_documents_ollama"
+    assert gemini_embedding != ollama_embedding

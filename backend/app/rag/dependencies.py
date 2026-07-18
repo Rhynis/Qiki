@@ -4,8 +4,10 @@ from functools import lru_cache
 from typing import Annotated
 
 from fastapi import Depends
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.redis import get_redis
 from app.db.session import get_db
 from app.llm.base import BaseLLMProvider
 from app.llm.dependencies import get_llm_provider, get_observability, get_prompt_library
@@ -76,6 +78,7 @@ def get_knowledge_base_service(
         BgeEmbeddingService,
         Depends(get_bge_embedding_service),
     ],
+    redis: Annotated[Redis, Depends(get_redis)],
 ) -> KnowledgeBaseService:
     """Build a request-scoped knowledge base service."""
     return KnowledgeBaseService(
@@ -85,6 +88,7 @@ def get_knowledge_base_service(
         VietnameseTextProcessor(),
         ollama_embedding_service,
         bge_embedding_service,
+        redis_client=redis,
     )
 
 
