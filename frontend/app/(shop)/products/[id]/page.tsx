@@ -4,6 +4,10 @@ import { ProductDetail } from '@/components/shop/product-detail'
 import { formatProductSize } from '@/lib/utils/format'
 import type { Product, ProductParent } from '@/types/product'
 
+// Serve the product detail from the ISR cache (revalidated every 60s) so
+// navigating into a product and back is instant instead of a blocking fetch.
+export const revalidate = 60
+
 type ProductDetailPageProps = {
   params: Promise<{ id: string }>
 }
@@ -15,7 +19,9 @@ function apiUrl(path: string): URL {
 
 async function getProduct(productId: string): Promise<Product | null> {
   try {
-    const response = await fetch(apiUrl(`/api/v1/products/${productId}`), { cache: 'no-store' })
+    const response = await fetch(apiUrl(`/api/v1/products/${productId}`), {
+      next: { revalidate: 60 },
+    })
     if (!response.ok) return null
     return (await response.json()) as Product
   } catch {
@@ -28,7 +34,7 @@ async function getVariants(product: Product): Promise<Product[]> {
   if (!product.parent_id) return [product]
   try {
     const response = await fetch(apiUrl(`/api/v1/products/parents/${product.parent_id}`), {
-      cache: 'no-store',
+      next: { revalidate: 60 },
     })
     if (!response.ok) return [product]
     const parent = (await response.json()) as ProductParent

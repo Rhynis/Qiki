@@ -23,6 +23,7 @@ export function ProductCard({ product }: ProductCardProps) {
         aria-label={t('viewDetailsAria', { name: product.name })}
         className="absolute inset-0 z-10 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         href={productHref}
+        prefetch
       >
         <span className="sr-only">{t('viewDetailsAria', { name: product.name })}</span>
       </Link>
@@ -70,7 +71,9 @@ export function ProductCard({ product }: ProductCardProps) {
       </CardContent>
       <div className="relative z-20 p-6 pt-0">
         <Button asChild className="w-full">
-          <Link href={productHref}>{t('viewDetails')}</Link>
+          <Link href={productHref} prefetch>
+            {t('viewDetails')}
+          </Link>
         </Button>
       </div>
     </Card>

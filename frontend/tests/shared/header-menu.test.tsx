@@ -109,7 +109,7 @@ describe('user menu interactions', () => {
     const user = userEvent.setup()
     render(<UserMenu />)
 
-    const trigger = screen.getByRole('button', { name: /Khách Hàng Test/ })
+    const trigger = screen.getByRole('link', { name: /Khách Hàng Test/ })
     await user.hover(trigger)
 
     expect(await screen.findByRole('menuitem', { name: 'Tài khoản' })).toBeVisible()
@@ -120,12 +120,10 @@ describe('user menu interactions', () => {
     })
   })
 
-  it('opens on click for tap-style interaction', async () => {
-    const user = userEvent.setup({ skipHover: true })
+  it('links the username straight to the account page', () => {
     render(<UserMenu />)
 
-    await user.click(screen.getByRole('button', { name: /Khách Hàng Test/ }))
-
-    expect(await screen.findByRole('menuitem', { name: 'Tài khoản' })).toBeVisible()
+    const trigger = screen.getByRole('link', { name: /Khách Hàng Test/ })
+    expect(trigger).toHaveAttribute('href', '/account')
   })
 })

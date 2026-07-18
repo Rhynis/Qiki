@@ -67,16 +67,19 @@ export function UserMenu() {
     <div className="relative" onMouseEnter={openMenu} onMouseLeave={scheduleMenuClose}>
       <DropdownMenu modal={false} open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger asChild>
-          <button
+          {/* Clicking the name/avatar goes straight to /account; the dropdown
+              still opens on hover (wrapper) and on keyboard Enter (Radix). */}
+          <Link
             aria-label={displayName}
+            href="/account"
             className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            type="button"
+            onClick={() => setOpen(false)}
           >
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
               {initial}
             </span>
             <span className="hidden max-w-[140px] truncate text-sm sm:inline">{displayName}</span>
-          </button>
+          </Link>
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="end"
