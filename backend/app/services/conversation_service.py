@@ -85,13 +85,32 @@ AMBIGUOUS_DELIVERY_PERIODS = {"sang", "trua", "chieu", "toi", "dem"}
 # Accent-stripped buổi keyword -> display label for follow-up time windows.
 FOLLOWUP_PERIOD_LABELS = {"sang": "sáng", "trua": "trưa", "chieu": "chiều", "toi": "tối"}
 
+# Accent-stripped cues that mark an "enumerate the options" request. A list query
+# is answered as a compact deterministic price list (no cards); a browse query is
+# allowed to fall back to the whole (category) catalog as cards.
+CATALOG_LIST_CUES = (
+    "cac loai",
+    "nhung loai",
+    "loai nao",
+    "cac hang",
+    "nhung hang",
+    "danh sach",
+    "tat ca",
+    "menu",
+    "co nhung",
+    "gom nhung",
+    "bao nhieu loai",
+    "co gi",
+)
+CATALOG_BROWSE_CUES = (*CATALOG_LIST_CUES, "san pham")
+
 # Deterministic first-message greeting (no LLM call) shown when a chat opens.
 # Kept consistent with the Qiki persona in system_chatbot_vi.txt.
 GREETING_INTRO_VI = (
-    "Em là Qiki, trợ lý ảo của Cửa hàng Gas Quốc Cường ạ. "
-    "Em có thể giúp anh/chị tìm sản phẩm, xem giá, đặt gas hoặc nước uống, "
+    "Mình là Qiki, trợ lý ảo của Cửa hàng Gas Quốc Cường. "
+    "Mình có thể giúp bạn tìm sản phẩm, xem giá, đặt gas hoặc nước uống, "
     "tra cứu thông tin giao hàng và giải đáp thắc mắc về gas. "
-    "Anh/chị cần Qiki hỗ trợ gì hôm nay ạ?"
+    "Bạn cần Qiki hỗ trợ gì hôm nay?"
 )
 GREETING_INTRO_EN = (
     "I'm Qiki, the virtual assistant of Gas Quốc Cường Store. "
@@ -249,7 +268,7 @@ class ConversationService:
         if language == "en":
             salutation = f"Hello {name}!" if name else "Hello there!"
             return f"{salutation} {GREETING_INTRO_EN}"
-        salutation = f"Chào anh/chị {name}!" if name else "Chào quý khách!"
+        salutation = f"Chào bạn {name}!" if name else "Chào bạn!"
         return f"{salutation} {GREETING_INTRO_VI}"
 
     async def get_active_conversation(
@@ -467,6 +486,13 @@ class ConversationService:
             )
             if product_inquiry_message is None:
                 product_inquiry_message = self._gas_size_inquiry_message(
+                    request.content,
+                    catalog_products,
+                )
+            if product_inquiry_message is None:
+                # A deterministic "list the options" reply wins over card grids so
+                # a size/water enumeration does not dump the whole catalog as cards.
+                product_inquiry_message = self._catalog_list_message(
                     request.content,
                     catalog_products,
                 )
@@ -1526,9 +1552,76 @@ Tin mới:
     def _available_gas_sizes(cls, products: Sequence[ProductResponse]) -> list[Decimal]:
         return sorted({product.size_kg for product in products if product.category == "gas"})
 
+    @classmethod
+    def _catalog_list_message(
+        cls,
+        query: str,
+        catalog_products: Sequence[ProductResponse],
+    ) -> str | None:
+        """Answer an "enumerate the options" query as a compact price list (no LLM).
+
+        Fires only for a list-style query (an enumeration cue) that resolves to a
+        gas size (6/12/45) or the water category and does NOT name a specific
+        single brand. Returns a header + one ``- {display_name} - {price}`` line
+        per product (sorted by brand then price) + a one-line advisory. Prices are
+        read straight from ``catalog_products`` (deterministic pricing, #239).
+        A specific single-brand price question falls through unchanged.
+        """
+        normalized_query = cls._normalize_weight_units(cls._normalize_match_text(query))
+        if not cls._is_catalog_list_query(normalized_query):
+            return None
+        if cls._query_mentions_product_brand(normalized_query, catalog_products):
+            return None
+
+        requested_size = cls._extract_gas_size_query(normalized_query)
+        if requested_size is not None:
+            if requested_size not in set(cls._available_gas_sizes(catalog_products)):
+                return None
+            items = [
+                product
+                for product in catalog_products
+                if product.category == "gas" and product.size_kg == requested_size
+            ]
+            header = (
+                f"Cửa hàng Gas Quốc Cường có các loại gas "
+                f"{cls._format_decimal(requested_size)}kg sau:"
+            )
+        elif cls._category_filter_from_query(normalized_query) == "nuoc_uong":
+            items = [product for product in catalog_products if product.category == "nuoc_uong"]
+            header = "Cửa hàng Gas Quốc Cường có các loại nước uống sau:"
+        else:
+            return None
+
+        if not items:
+            return None
+        ordered = sorted(
+            items, key=lambda product: (cls._normalize_match_text(product.brand), product.price)
+        )
+        lines = [
+            f"- {cls._format_product_display_name(product)} - {cls._format_vnd(product.price)}"
+            for product in ordered
+        ]
+        advisory = "Bạn muốn đặt hãng/màu nào để Qiki báo giá và lên đơn nhé?"
+        return "\n".join([header, *lines, advisory])
+
     @staticmethod
-    def _extract_gas_size_query(normalized_query: str) -> Decimal | None:
-        match = re.search(r"\b([1-9][0-9]?)\s*kg\b", normalized_query)
+    def _is_catalog_list_query(normalized_query: str) -> bool:
+        return any(cue in normalized_query for cue in CATALOG_LIST_CUES)
+
+    @staticmethod
+    def _normalize_weight_units(normalized_query: str) -> str:
+        """Rewrite colloquial gas-weight units ('12 kí/ký/ki/ky') to '12kg'.
+
+        Runs on accent-stripped text, where 'kí'/'ký' have already lost their
+        diacritics ('ki'/'ky'). A digit must precede the unit so unrelated words
+        are never touched.
+        """
+        return re.sub(r"\b([1-9][0-9]?)\s*(?:kg|ki|ky)\b", r"\1kg", normalized_query)
+
+    @classmethod
+    def _extract_gas_size_query(cls, normalized_query: str) -> Decimal | None:
+        normalized = cls._normalize_weight_units(normalized_query)
+        match = re.search(r"\b([1-9][0-9]?)\s*kg\b", normalized)
         if not match:
             return None
         return Decimal(match.group(1))
@@ -1588,10 +1681,12 @@ Tin mới:
         """Pick which product cards to attach for a query.
 
         A specific question that names a brand and/or cylinder size returns only
-        the matching products. A broad or advice-style question (no brand or
-        size mentioned) returns the whole catalog so the customer can browse.
+        the matching products. The whole (category) catalog is returned ONLY for
+        an explicit browse/enumeration query (a bare category or a browse cue);
+        any other unmatched query returns ``[]`` so unrelated follow-ups (e.g.
+        "cảm ơn Qiki") never re-emit catalog cards.
         """
-        normalized_query = self._normalize_match_text(query)
+        normalized_query = self._normalize_weight_units(self._normalize_match_text(query))
         if not normalized_query:
             return list(products)
         query_tokens = set(normalized_query.split())
@@ -1632,7 +1727,20 @@ Tin mới:
         for group in (brand_and_size, brand_only, size_only):
             if group:
                 return group
-        return candidate_products
+        # The sticky-card bug: an unrelated follow-up ("cảm ơn", "ok") names no
+        # brand/size/category, so candidate_products is the WHOLE catalog. Return
+        # it only when the query resolves a category (a genuine category inquiry)
+        # or is an explicit browse request; otherwise return nothing.
+        if category_filter is not None or self._is_browse_query(normalized_query):
+            return candidate_products
+        return []
+
+    @classmethod
+    def _is_browse_query(cls, normalized_query: str) -> bool:
+        """True for a bare category ("gas"/"nước") or an explicit browse cue."""
+        if cls._is_bare_category_query(normalized_query):
+            return True
+        return any(cue in normalized_query for cue in CATALOG_BROWSE_CUES)
 
     @staticmethod
     def _category_filter_from_query(normalized_query: str) -> str | None:

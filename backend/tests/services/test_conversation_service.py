@@ -449,8 +449,12 @@ async def test_start_conversation_greets_guest() -> None:
     assert len(response.messages) == 1
     greeting = response.messages[0]
     assert greeting.role == "assistant"
-    assert greeting.content.startswith("Chào quý khách!")
+    assert greeting.content.startswith("Chào bạn!")
     assert "Qiki" in greeting.content
+    # New persona: no "anh/chị" / "quý khách" / "Em ".
+    assert "anh/chị" not in greeting.content
+    assert "quý khách" not in greeting.content
+    assert "Em " not in greeting.content
     assert rag.calls == 0  # greeting is deterministic, no LLM call
 
 
@@ -462,7 +466,7 @@ async def test_start_conversation_greets_authenticated_user_by_name() -> None:
         user=account_user(full_name="Tran Minh Quan"), session_id="abc"
     )
 
-    assert response.messages[0].content.startswith("Chào anh/chị Tran Minh Quan!")
+    assert response.messages[0].content.startswith("Chào bạn Tran Minh Quan!")
 
 
 @pytest.mark.asyncio
@@ -716,6 +720,50 @@ def _inference_collision_catalog() -> list[ProductResponse]:
             for sku, name, brand, size, price, stock in specs
         ],
     ]
+
+
+def _full_seed_catalog() -> list[ProductResponse]:
+    """The real production catalog (from seed.sql) for catalog-list tests."""
+    now = datetime.now(UTC)
+    gas_specs = [
+        ("SP-12KG-XAM", "Bình gas Saigon Petro 12kg (xám)", "Saigon Petro", "12", "605000"),
+        (
+            "SP-12KG-XANH",
+            "Bình gas Saigon Petro 12kg (xanh/vàng/biển)",
+            "Saigon Petro",
+            "12",
+            "665000",
+        ),
+        ("VT-12KG-XAM", "Bình gas VT 12kg (xám)", "VT Gas", "12", "605000"),
+        ("ELF-12KG-DO", "Bình gas Elf 12kg (đỏ)", "Elf", "12", "710000"),
+        ("PLX-12KG-BIEN", "Bình gas Petrolimex 12kg (biển)", "Petrolimex", "12", "675000"),
+        ("SAOMAI-12KG", "Bình gas Sao Mai 12kg", "Sao Mai", "12", "625000"),
+        ("THUDUC-12KG", "Bình gas Thủ Đức 12kg", "Gas Thủ Đức", "12", "625000"),
+        ("ELF-6KG-DO", "Bình gas Elf 6kg (đỏ)", "Elf", "6", "350000"),
+        ("THUDUC-6KG-NHUA", "Bình gas Thủ Đức 6kg (vỏ nhựa)", "Gas Thủ Đức", "6", "320000"),
+        ("SP-45KG-BO", "Bình gas Saigon Petro 45kg (bò)", "Saigon Petro", "45", "2250000"),
+    ]
+    gas = [
+        ProductResponse(
+            id=uuid.uuid4(),
+            sku=sku,
+            name=name,
+            brand=brand,
+            size_kg=Decimal(size),
+            category="gas",
+            unit="kg",
+            price=Decimal(price),
+            stock_quantity=50,
+            description=None,
+            image_url=None,
+            safety_info=None,
+            is_active=True,
+            created_at=now,
+            updated_at=now,
+        )
+        for sku, name, brand, size, price in gas_specs
+    ]
+    return gas + _water_catalog()
 
 
 def _water_catalog() -> list[ProductResponse]:
@@ -1065,6 +1113,155 @@ async def test_unavailable_gas_size_apologizes() -> None:
     assert response.assistant_message is not None
     assert "chỉ có gas loại 6, 12, 45 kg" in response.assistant_message.content
     assert response.products == []
+
+
+def _list_lines(content: str) -> list[str]:
+    return [line for line in content.splitlines() if line.startswith("- ")]
+
+
+@pytest.mark.asyncio
+async def test_catalog_list_12kg_is_deterministic_text_no_cards() -> None:
+    service, _conversations, _messages, rag, _orders = make_service(
+        product_service=FakeProductService(products=_full_seed_catalog())
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    # Colloquial "kí" must normalize to "kg" and resolve to the 7 twelve-kg items.
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="các loại bình 12 kí"),
+        user=None,
+    )
+
+    assert response.products == []
+    assert rag.calls == 0  # deterministic list, no LLM answer
+    assert response.assistant_message is not None
+    content = response.assistant_message.content
+    assert "các loại gas 12kg sau:" in content
+    lines = _list_lines(content)
+    assert len(lines) == 7
+    # All 7 twelve-kg items, each rendered "- {name} - {price}".
+    for fragment in (
+        "- Bình gas Elf 12kg (đỏ) - 710.000đ",
+        "- Bình gas Thủ Đức 12kg - 625.000đ",
+        "- Bình gas Petrolimex 12kg (biển) - 675.000đ",
+        "- Bình gas Sao Mai 12kg - 625.000đ",
+        "- Bình gas Saigon Petro 12kg (xám) - 605.000đ",
+        "- Bình gas Saigon Petro 12kg (xanh/vàng/biển) - 665.000đ",
+        "- Bình gas VT 12kg (xám) - 605.000đ",
+    ):
+        assert fragment in content
+    # Sorted by brand then price ("saigon petro" < "sao mai").
+    assert (
+        content.index("Elf 12kg")
+        < content.index("Thủ Đức 12kg")
+        < content.index("Petrolimex 12kg")
+        < content.index("Saigon Petro 12kg (xám)")
+        < content.index("Saigon Petro 12kg (xanh/vàng/biển)")
+        < content.index("Sao Mai 12kg")
+        < content.index("VT 12kg")
+    )
+    # No 6kg / 45kg / water leakage.
+    assert "6kg" not in content
+    assert "45kg" not in content
+    assert "350.000đ" not in content and "320.000đ" not in content
+    assert "2.250.000đ" not in content
+    assert "Vihawa" not in content and "Hoàn Hảo" not in content
+    assert content.endswith("Bạn muốn đặt hãng/màu nào để Qiki báo giá và lên đơn nhé?")
+
+
+@pytest.mark.asyncio
+async def test_catalog_list_6kg_lists_only_two_items() -> None:
+    service, _conversations, _messages, _rag, _orders = make_service(
+        product_service=FakeProductService(products=_full_seed_catalog())
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="các loại bình 6 kí"),
+        user=None,
+    )
+
+    assert response.products == []
+    assert response.assistant_message is not None
+    content = response.assistant_message.content
+    assert "các loại gas 6kg sau:" in content
+    lines = _list_lines(content)
+    assert len(lines) == 2
+    assert "- Bình gas Elf 6kg (đỏ) - 350.000đ" in content
+    assert "- Bình gas Thủ Đức 6kg (vỏ nhựa) - 320.000đ" in content
+    # No 12kg / 45kg / water leakage.
+    assert "12kg" not in content
+    assert "45kg" not in content
+    assert "Vihawa" not in content and "Hoàn Hảo" not in content
+
+
+@pytest.mark.asyncio
+async def test_catalog_list_water_lists_only_water() -> None:
+    service, _conversations, _messages, _rag, _orders = make_service(
+        product_service=FakeProductService(products=_full_seed_catalog())
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="các loại nước"),
+        user=None,
+    )
+
+    assert response.products == []
+    assert response.assistant_message is not None
+    content = response.assistant_message.content
+    assert "các loại nước uống sau:" in content
+    lines = _list_lines(content)
+    assert len(lines) == 2
+    assert "- Nước Hoàn Hảo 20 lít - 15.000đ" in content
+    assert "- Nước Vihawa 20 lít - 55.000đ" in content
+    # No gas leakage (the header names the store "Gas Quốc Cường", but no gas
+    # product line or price may appear).
+    assert "Bình gas" not in content
+    assert "710.000đ" not in content and "605.000đ" not in content
+
+
+@pytest.mark.asyncio
+async def test_followup_after_inquiry_emits_no_sticky_cards() -> None:
+    service, _conversations, _messages, _rag, _orders = make_service(
+        product_service=FakeProductService(products=_full_seed_catalog())
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    first = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="bình elf 12kg"),
+        user=None,
+    )
+    assert first.products  # a specific brand+size query still shows its card(s)
+
+    # A generic follow-up must NOT re-emit the whole catalog as cards.
+    followup = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="cảm ơn Qiki"),
+        user=None,
+    )
+    assert followup.products == []
+
+
+@pytest.mark.asyncio
+async def test_persona_deterministic_strings_have_no_old_salutations() -> None:
+    service, _conversations, _messages, _rag, _orders = make_service()
+
+    guest = await service.start_conversation(user=None, session_id="abc")
+    named = await service.start_conversation(
+        user=account_user(full_name="Tran Minh Quan"), session_id="def"
+    )
+
+    for response in (guest, named):
+        greeting = response.messages[0].content
+        assert greeting.startswith("Chào bạn")
+        assert "Qiki" in greeting
+        for forbidden in ("anh/chị", "quý khách", "Em "):
+            assert forbidden not in greeting
 
 
 def complete_order_payload(
