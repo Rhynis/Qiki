@@ -528,7 +528,7 @@ class ConversationService:
                 content=request.content,
                 history=list(history_payload),
                 catalog_products=catalog_products,
-                locale=request.locale,
+                locale=request.locale or "vi",
                 intent=intent.category,
                 confidence=intent.confidence,
             )
