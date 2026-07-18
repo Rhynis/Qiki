@@ -59,13 +59,11 @@ export function ProductCard({ product }: ProductCardProps) {
       <CardContent className="flex-1 space-y-3">
         <p className="text-2xl font-semibold text-primary">
           {product.parent_id ? (
-            <span className="mr-1 text-sm font-normal text-slate-500">Từ</span>
+            <span className="mr-1 text-sm font-normal text-slate-500">{t('priceFrom')}</span>
           ) : null}
           {formatPrice(product.price)}
         </p>
-        {product.parent_id ? (
-          <p className="text-sm text-slate-500">Nhiều lựa chọn màu/loại</p>
-        ) : null}
+        {product.parent_id ? <p className="text-sm text-slate-500">{t('variantOptions')}</p> : null}
         {product.description ? (
           <p className="line-clamp-2 text-sm text-slate-600">{product.description}</p>
         ) : null}

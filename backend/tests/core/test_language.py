@@ -20,3 +20,12 @@ def test_accentless_vietnamese_stays_vietnamese() -> None:
 def test_ambiguous_or_empty_defaults_to_vietnamese() -> None:
     assert detect_language("12kg") == "vi"
     assert detect_language("") == "vi"
+
+
+def test_ambiguous_message_follows_the_given_default() -> None:
+    # An English UI biases an otherwise-ambiguous message to English...
+    assert detect_language("12kg", default="en") == "en"
+    assert detect_language("", default="en") == "en"
+    # ...but a clear signal still overrides the default in both directions.
+    assert detect_language("Chào bạn", default="en") == "vi"
+    assert detect_language("how much is delivery", default="vi") == "en"

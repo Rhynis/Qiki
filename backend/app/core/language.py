@@ -56,12 +56,18 @@ _ENGLISH_MARKERS = {
 _WORD_RE = re.compile(r"[a-z]+")
 
 
-def detect_language(text: str) -> Language:
-    """Return 'en' for clearly-English text, otherwise 'vi'."""
+def detect_language(text: str, default: Language = "vi") -> Language:
+    """Return 'en'/'vi' from a clear signal, else ``default``.
+
+    Vietnamese diacritics always win; a distinct English marker (with no
+    diacritics) gives 'en'. When the text is ambiguous (e.g. accent-less ASCII
+    with no marker) the caller's ``default`` — normally the UI locale — decides,
+    so an English user's terse message is not forced back to Vietnamese.
+    """
     lowered = text.lower()
     if any(char in _VIETNAMESE_CHARS for char in lowered):
         return "vi"
     tokens = set(_WORD_RE.findall(lowered))
     if tokens & _ENGLISH_MARKERS:
         return "en"
-    return "vi"
+    return default

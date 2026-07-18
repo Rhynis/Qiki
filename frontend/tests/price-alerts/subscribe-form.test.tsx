@@ -1,6 +1,7 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { renderWithIntl } from '@/tests/i18n-render'
 import { PriceAlertSubscribeForm } from '@/components/price-alerts/subscribe-form'
 import { TokenActionClient } from '@/components/price-alerts/token-action-client'
 
@@ -30,7 +31,7 @@ describe('PriceAlertSubscribeForm', () => {
   it('subscribes with the entered email and shows the returned message', async () => {
     const user = userEvent.setup()
     apiMocks.subscribePriceAlerts.mockResolvedValueOnce({ message: 'Đã gửi email xác nhận.' })
-    render(<PriceAlertSubscribeForm />)
+    renderWithIntl(<PriceAlertSubscribeForm />)
 
     await user.type(screen.getByLabelText('Email nhận thông báo giá'), 'buyer@example.com')
     await user.click(screen.getByRole('button', { name: 'Đăng ký nhận giá' }))
@@ -43,7 +44,7 @@ describe('PriceAlertSubscribeForm', () => {
 
   it('blocks submit without consent', async () => {
     const user = userEvent.setup()
-    render(<PriceAlertSubscribeForm />)
+    renderWithIntl(<PriceAlertSubscribeForm />)
 
     await user.type(screen.getByLabelText('Email nhận thông báo giá'), 'buyer@example.com')
     await user.click(screen.getByLabelText(/Tôi đồng ý nhận email/)) // uncheck consent
@@ -61,7 +62,7 @@ describe('TokenActionClient', () => {
 
   it('shows an invalid message when the token is missing', () => {
     searchParams.value = new URLSearchParams()
-    render(<TokenActionClient variant="confirm" />)
+    renderWithIntl(<TokenActionClient variant="confirm" />)
 
     expect(screen.getByText('Liên kết xác nhận không hợp lệ hoặc đã hết hạn.')).toBeInTheDocument()
   })
@@ -70,7 +71,7 @@ describe('TokenActionClient', () => {
     const user = userEvent.setup()
     searchParams.value = new URLSearchParams('token=abc123')
     apiMocks.confirmPriceAlerts.mockResolvedValueOnce({ message: 'Đã xác nhận.' })
-    render(<TokenActionClient variant="confirm" />)
+    renderWithIntl(<TokenActionClient variant="confirm" />)
 
     // Not run on mount (avoids email-scanner auto-triggering).
     expect(apiMocks.confirmPriceAlerts).not.toHaveBeenCalled()

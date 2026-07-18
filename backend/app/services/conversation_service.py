@@ -139,6 +139,7 @@ class RagStreamPlan:
     catalog_products: list[ProductResponse] | None
     intent: IntentCategory
     confidence: float
+    locale: str
 
 
 @dataclass
@@ -204,8 +205,15 @@ class ConversationService:
         user: User | None,
         session_id: str | None = None,
         initial_message: str | None = None,
+        locale: str | None = None,
     ) -> ConversationResponse:
-        """Start a new conversation, greeting the customer as the first message."""
+        """Start a new conversation, greeting the customer as the first message.
+
+        ``locale`` is the storefront UI language; the greeting follows it so an
+        English UI is greeted in English, and it biases the reply language of any
+        initial message that is otherwise ambiguous.
+        """
+        ui_locale: Literal["vi", "en"] = "en" if locale == "en" else "vi"
         conversation = await self.conversation_repository.create(
             {
                 "user_id": user.id if user else None,
@@ -213,18 +221,21 @@ class ConversationService:
                 "status": "active",
             }
         )
-        greeting_language = detect_language(initial_message) if initial_message else "vi"
         await self.message_repository.create(
             {
                 "conversation_id": conversation.id,
                 "role": "assistant",
-                "content": self._build_greeting(user, greeting_language),
+                "content": self._build_greeting(user, ui_locale),
             }
         )
         if initial_message:
             await self.send_message(
                 conversation.id,
-                SendMessageRequest(content=initial_message, session_id=conversation.session_id),
+                SendMessageRequest(
+                    content=initial_message,
+                    session_id=conversation.session_id,
+                    locale=ui_locale,
+                ),
                 user,
             )
         # Re-read so the response includes the greeting (and any initial-message turn).
@@ -286,6 +297,7 @@ class ConversationService:
                 plan.rag_stream.intent,
                 plan.rag_stream.confidence,
                 catalog_products=plan.rag_stream.catalog_products,
+                locale=plan.rag_stream.locale,
             )
         conversation = await self._require_conversation(plan.conversation.id)
         return SendMessageResponse(
@@ -328,7 +340,10 @@ class ConversationService:
                 plan.rag_stream.content,
                 conversation_history=plan.rag_stream.history,
                 product_context=product_context,
-                language=detect_language(plan.rag_stream.content),
+                language=detect_language(
+                    plan.rag_stream.content,
+                    default="en" if plan.rag_stream.locale == "en" else "vi",
+                ),
                 sources_sink=sources,
             ):
                 if not delta:
@@ -471,6 +486,7 @@ class ConversationService:
                 user,
                 intent.category,
                 intent.confidence,
+                locale=request.locale,
             )
         elif followup_note is not None:
             assistant_message = await self._create_followup_message(
@@ -512,6 +528,7 @@ class ConversationService:
                 content=request.content,
                 history=list(history_payload),
                 catalog_products=catalog_products,
+                locale=request.locale or "vi",
                 intent=intent.category,
                 confidence=intent.confidence,
             )
@@ -1268,6 +1285,7 @@ Tin mới:
         intent: IntentCategory,
         confidence: float,
         catalog_products: Sequence[ProductResponse] | None = None,
+        locale: str | None = None,
     ) -> Message:
         product_context = await self._resolve_product_context(content, intent, catalog_products)
         response = await self.rag_pipeline.query(
@@ -1276,7 +1294,7 @@ Tin mới:
             conversation_id=conversation.id,
             user_id=user.id if user else None,
             product_context=product_context,
-            language=detect_language(content),
+            language=detect_language(content, default="en" if locale == "en" else "vi"),
         )
         return await self.message_repository.create(
             {

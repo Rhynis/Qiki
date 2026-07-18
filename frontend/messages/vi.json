@@ -117,7 +117,9 @@
     "viewDetails": "Xem chi tiết",
     "viewDetailsAria": "Xem chi tiết {name}",
     "previous": "Trước",
-    "nextPage": "Sau"
+    "nextPage": "Sau",
+    "priceFrom": "Từ",
+    "variantOptions": "Nhiều lựa chọn màu/loại"
   },
   "stock": {
     "outOfStock": "Hết hàng",
@@ -139,7 +141,10 @@
     "subtotal": "Tạm tính",
     "shippingFee": "Phí giao hàng",
     "total": "Tổng cộng",
-    "pickProducts": "Chọn sản phẩm"
+    "pickProducts": "Chọn sản phẩm",
+    "couponApplied": "Đã áp dụng: {code}",
+    "discount": "Giảm giá",
+    "couponInvalid": "Mã giảm giá không hợp lệ"
   },
   "checkout": {
     "title": "Thanh toán",
@@ -200,7 +205,9 @@
     "safety": "An toàn sử dụng",
     "addToCart": "Thêm vào giỏ",
     "buyNow": "Mua ngay",
-    "addedToCart": "Đã thêm vào giỏ hàng"
+    "addedToCart": "Đã thêm vào giỏ hàng",
+    "selectVariant": "Chọn loại",
+    "selectVariantAria": "Chọn loại sản phẩm"
   },
   "wishlistButton": {
     "save": "Lưu vào yêu thích",
@@ -359,5 +366,57 @@
     "verify": "Xác minh",
     "resendCodeCooldown": "Gửi lại mã ({seconds}s)",
     "resendCode": "Gửi lại mã"
+  },
+  "chat": {
+    "title": "Qiki",
+    "subtitle": "Trợ lý Gas Quốc Cường",
+    "newConversation": "Tạo cuộc trò chuyện mới",
+    "minimize": "Thu nhỏ",
+    "closeAria": "Đóng chat",
+    "openAria": "Mở chat hỗ trợ",
+    "startFailed": "Không kết nối được với Qiki, vui lòng thử lại.",
+    "inputPlaceholder": "Nhập tin nhắn...",
+    "send": "Gửi",
+    "rateLimit": "Bạn gửi hơi nhanh, vui lòng đợi vài giây.",
+    "copied": "Đã sao chép",
+    "copyFailed": "Không sao chép được",
+    "copyAria": "Sao chép tin nhắn",
+    "helpful": "Hài lòng",
+    "notHelpful": "Chưa hài lòng",
+    "emptyPrompt": "Bạn cần hỗ trợ gì hôm nay?",
+    "typingReading": "Đang đọc câu hỏi…",
+    "typingSearching": "Đang tìm thông tin…",
+    "typingComposing": "Đang soạn câu trả lời…",
+    "stockLeft": "Còn {count} bình",
+    "outOfStock": "Tạm hết hàng",
+    "viewAndOrder": "Xem & Đặt",
+    "escalationTitle": "Nhân viên đang hỗ trợ",
+    "escalationDefault": "Cuộc trò chuyện đã được chuyển cho đội hỗ trợ.",
+    "emergencyTitle": "Khẩn cấp an toàn gas",
+    "emergencyBody": "Khóa van gas, mở cửa thông gió, không bật/tắt thiết bị điện."
+  },
+  "priceAlerts": {
+    "subscribeTitle": "Đăng ký nhận giá gas",
+    "subscribeIntro": "Giá gas thường thay đổi hằng tháng. Để lại email để Gas Quốc Cường gửi bảng giá mới ngay khi có cập nhật. Bạn sẽ nhận một email xác nhận trước khi đăng ký hoàn tất.",
+    "emailLabel": "Email nhận thông báo giá",
+    "consent": "Tôi đồng ý nhận email thông báo khi Gas Quốc Cường thay đổi giá gas. Bạn có thể hủy đăng ký bất cứ lúc nào.",
+    "submit": "Đăng ký nhận giá",
+    "submitting": "Đang gửi...",
+    "subscribeError": "Không thể đăng ký, vui lòng thử lại",
+    "confirmTitle": "Xác nhận đăng ký",
+    "confirmIntro": "Nhấn nút bên dưới để xác nhận đăng ký nhận email thông báo giá gas.",
+    "confirmAction": "Xác nhận đăng ký",
+    "confirmPending": "Đang xác nhận...",
+    "confirmInvalid": "Liên kết xác nhận không hợp lệ hoặc đã hết hạn.",
+    "unsubscribeTitle": "Hủy nhận thông báo giá",
+    "unsubscribeIntro": "Nhấn nút bên dưới để ngừng nhận email thông báo giá gas từ Gas Quốc Cường.",
+    "unsubscribeAction": "Hủy đăng ký",
+    "unsubscribePending": "Đang hủy...",
+    "unsubscribeInvalid": "Liên kết hủy đăng ký không hợp lệ hoặc đã hết hạn.",
+    "viewProducts": "Xem sản phẩm"
+  },
+  "bestSellers": {
+    "title": "Bán chạy",
+    "subtitle": "Những sản phẩm được khách đặt nhiều nhất."
   }
 }

@@ -85,9 +85,9 @@ export function ProductDetail({ product, variants }: ProductDetailProps) {
 
           {options.length > 0 ? (
             <div className="space-y-2">
-              <p className="text-sm font-semibold text-slate-950">Chọn loại</p>
+              <p className="text-sm font-semibold text-slate-950">{t('selectVariant')}</p>
               <div
-                aria-label="Chọn loại sản phẩm"
+                aria-label={t('selectVariantAria')}
                 className="flex flex-wrap gap-2"
                 role="radiogroup"
               >

@@ -23,6 +23,24 @@ test.describe('mobile layout', () => {
     })
   }
 
+  // English can be longer than Vietnamese; guard the same pages against clipping
+  // ("rớt chữ") when the storefront is switched to English via the locale cookie.
+  test.describe('english locale', () => {
+    test.beforeEach(async ({ context, baseURL }) => {
+      await context.addCookies([
+        { name: 'NEXT_LOCALE', value: 'en', url: baseURL ?? 'http://localhost:3000' },
+      ])
+    })
+
+    for (const { name, path } of pagesWithoutOverflow) {
+      test(`no horizontal overflow on ${name} (EN)`, async ({ page }) => {
+        await page.goto(path)
+        await page.waitForLoadState('networkidle')
+        await expectNoHorizontalScroll(page)
+      })
+    }
+  })
+
   test('chat widget opens near full-width and stays on-screen', async ({ page }) => {
     await page.goto('/')
     await page.getByRole('button', { name: 'Mở chat hỗ trợ' }).click()

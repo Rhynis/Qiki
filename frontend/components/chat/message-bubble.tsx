@@ -1,5 +1,8 @@
+'use client'
+
 import Link from 'next/link'
 import { Bot, PackageOpen, UserRound } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -84,6 +87,7 @@ type ProductCardsProps = {
 }
 
 function ProductCards({ products }: ProductCardsProps) {
+  const t = useTranslations('chat')
   return (
     <div className="mt-2 grid gap-2 sm:grid-cols-2">
       {products.map((product) => (
@@ -114,14 +118,16 @@ function ProductCards({ products }: ProductCardsProps) {
             <div className="space-y-1">
               <p className="text-sm font-semibold text-slate-900">{formatPrice(product.price)}</p>
               <p className="text-xs text-slate-500">
-                {product.stock_quantity > 0 ? `Còn ${product.stock_quantity} bình` : 'Tạm hết hàng'}
+                {product.stock_quantity > 0
+                  ? t('stockLeft', { count: product.stock_quantity })
+                  : t('outOfStock')}
               </p>
             </div>
             <Link
               href={`/products/${product.id}`}
               className="mt-auto block rounded-md bg-slate-900 px-3 py-2 text-center text-xs font-medium text-white transition hover:bg-slate-700"
             >
-              Xem & Đặt
+              {t('viewAndOrder')}
             </Link>
           </div>
         </article>

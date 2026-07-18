@@ -1,6 +1,7 @@
 'use client'
 
 import { SendHorizonal } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import { FormEvent, KeyboardEvent, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -13,6 +14,7 @@ type MessageInputProps = {
 }
 
 export function MessageInput({ disabled, rateLimited, sending, onSend }: MessageInputProps) {
+  const t = useTranslations('chat')
   const [content, setContent] = useState('')
 
   function submitMessage() {
@@ -40,7 +42,7 @@ export function MessageInput({ disabled, rateLimited, sending, onSend }: Message
           value={content}
           onChange={(event) => setContent(event.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Nhập tin nhắn..."
+          placeholder={t('inputPlaceholder')}
           className="min-h-10 resize-none"
           disabled={disabled}
           rows={1}
@@ -49,16 +51,14 @@ export function MessageInput({ disabled, rateLimited, sending, onSend }: Message
           type="submit"
           size="icon"
           className="h-11 w-11 shrink-0"
-          title="Gửi"
-          aria-label="Gửi"
+          title={t('send')}
+          aria-label={t('send')}
           disabled={disabled || rateLimited || sending || !content.trim()}
         >
           <SendHorizonal className="h-4 w-4" />
         </Button>
       </div>
-      {rateLimited ? (
-        <p className="mt-2 text-xs text-slate-500">Bạn gửi hơi nhanh, vui lòng đợi vài giây.</p>
-      ) : null}
+      {rateLimited ? <p className="mt-2 text-xs text-slate-500">{t('rateLimit')}</p> : null}
     </form>
   )
 }

@@ -2,6 +2,7 @@
 
 import { useIsMutating, useQueryClient } from '@tanstack/react-query'
 import { MessageCircle, MessageSquarePlus, Minus, X } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
@@ -21,6 +22,8 @@ const MESSAGE_RATE_LIMIT_COUNT = 10
 const MESSAGE_RATE_LIMIT_WINDOW_MS = 60_000
 
 export function ChatWindow() {
+  const t = useTranslations('chat')
+  const tc = useTranslations('common')
   const close = useChatStore((state) => state.close)
   const sessionId = useChatStore((state) => state.sessionId)
   const conversationId = useChatStore((state) => state.conversationId)
@@ -174,7 +177,7 @@ export function ChatWindow() {
           <MessageCircle className="h-5 w-5" />
           <div>
             <p className="text-sm font-semibold">Qiki</p>
-            <p className="text-xs text-slate-300">Trợ lý Gas Quốc Cường</p>
+            <p className="text-xs text-slate-300">{t('subtitle')}</p>
           </div>
         </div>
         <div className="flex gap-1">
@@ -185,14 +188,14 @@ export function ChatWindow() {
                 variant="ghost"
                 size="icon"
                 className="h-11 w-11 text-primary hover:bg-primary/10 hover:text-primary focus-visible:ring-ring"
-                title="Tạo cuộc trò chuyện mới"
-                aria-label="Tạo cuộc trò chuyện mới"
+                title={t('newConversation')}
+                aria-label={t('newConversation')}
                 onClick={handleNewConversation}
               >
                 <MessageSquarePlus className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Tạo cuộc trò chuyện mới</TooltipContent>
+            <TooltipContent>{t('newConversation')}</TooltipContent>
           </Tooltip>
           <Tooltip delayDuration={150}>
             <TooltipTrigger asChild>
@@ -201,22 +204,22 @@ export function ChatWindow() {
                 variant="ghost"
                 size="icon"
                 className="h-11 w-11 text-white hover:bg-slate-700"
-                title="Thu nhỏ"
-                aria-label="Thu nhỏ"
+                title={t('minimize')}
+                aria-label={t('minimize')}
                 onClick={close}
               >
                 <Minus className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Thu nhỏ</TooltipContent>
+            <TooltipContent>{t('minimize')}</TooltipContent>
           </Tooltip>
           <Button
             type="button"
             variant="ghost"
             size="icon"
             className="h-11 w-11 text-white hover:bg-slate-700"
-            title="Đóng"
-            aria-label="Đóng chat"
+            title={tc('close')}
+            aria-label={t('closeAria')}
             onClick={close}
           >
             <X className="h-4 w-4" />
@@ -236,16 +239,14 @@ export function ChatWindow() {
       {startFailed ? (
         <div className="border-t bg-white px-4 py-3">
           <div className="rounded-md border border-primary/20 bg-primary/5 p-3">
-            <p className="text-sm font-medium text-slate-950">
-              Không kết nối được với Qiki, vui lòng thử lại.
-            </p>
+            <p className="text-sm font-medium text-slate-950">{t('startFailed')}</p>
             <Button
               className="mt-3 bg-primary text-primary-foreground hover:bg-primary/90"
               size="sm"
               type="button"
               onClick={handleRetryStart}
             >
-              Thử lại
+              {tc('retry')}
             </Button>
           </div>
         </div>
