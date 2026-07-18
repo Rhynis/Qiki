@@ -1,6 +1,7 @@
 """Knowledge base service layer."""
 
 import csv
+import hashlib
 import json
 from io import StringIO
 from typing import Any, cast
@@ -8,6 +9,8 @@ from uuid import UUID
 
 import sentry_sdk
 from fastapi import UploadFile
+from redis.asyncio import Redis
+from redis.exceptions import RedisError
 
 from app.core.config import get_settings
 from app.core.exceptions import ForbiddenException, NotFoundException, ValidationException
@@ -50,6 +53,7 @@ class KnowledgeBaseService:
         text_processor: VietnameseTextProcessor | None = None,
         ollama_embedding_service: OllamaEmbeddingService | None = None,
         bge_embedding_service: BgeEmbeddingService | None = None,
+        redis_client: Redis | None = None,
     ) -> None:
         self.repository = repository
         self.embedding_service = embedding_service or EmbeddingService()
@@ -59,6 +63,10 @@ class KnowledgeBaseService:
         self.text_processor = text_processor or VietnameseTextProcessor()
         self.settings = get_settings()
         self.embedding_provider = self.settings.EMBEDDING_PROVIDER
+        # Optional query-embedding cache. Kept optional so existing constructions
+        # and tests that omit it still work (the cache simply stays off).
+        self.redis_client = redis_client
+        self._cache_warning_logged = False
         self.logger = get_logger(__name__)
 
     async def create_document(
@@ -299,7 +307,24 @@ class KnowledgeBaseService:
         return f"{title}\n\n{content}"
 
     async def _embed_query(self, query: str) -> tuple[list[float], str]:
-        """Embed a query and return the match function for its vector space."""
+        """Embed a query and return the match function for its vector space.
+
+        Read-through Redis cache: a repeated question skips the embedding-provider
+        round-trip. The cached value stores the ``(embedding, match_function)`` pair
+        together so the vector and its space are always internally consistent
+        (Gemini and the Jina fallback live in different spaces). Any Redis failure
+        is swallowed and the value is computed without the cache.
+        """
+        cache_key = self._query_cache_key(query)
+        cached = await self._cache_get_query(cache_key)
+        if cached is not None:
+            return cached
+        embedding, match_function = await self._compute_query_embedding(query)
+        await self._cache_set_query(cache_key, embedding, match_function)
+        return embedding, match_function
+
+    async def _compute_query_embedding(self, query: str) -> tuple[list[float], str]:
+        """Embed a query via the active provider (Gemini -> Jina fallback)."""
         if self.embedding_provider == "ollama":
             embedding = await self.ollama_embedding_service.embed_text(query)
             return embedding, MATCH_DOCUMENTS_OLLAMA
@@ -318,6 +343,50 @@ class KnowledgeBaseService:
                 task="retrieval.query",
             )
             return embedding, MATCH_DOCUMENTS_JINA
+
+    def _query_cache_key(self, query: str) -> str:
+        """Namespace the key by provider + dimensions so a model/provider change
+        never returns a vector from a different space."""
+        digest = hashlib.sha256(query.encode()).hexdigest()
+        return f"kbq:{self.embedding_provider}:d{self.settings.EMBEDDING_DIMENSIONS}:{digest}"
+
+    async def _cache_get_query(self, key: str) -> tuple[list[float], str] | None:
+        """Return a cached ``(embedding, match_function)`` pair, or None on miss."""
+        client = self.redis_client
+        if client is None or self.settings.EMBEDDING_QUERY_CACHE_TTL <= 0:
+            return None
+        try:
+            raw = await client.get(key)
+        except (RedisError, OSError) as exc:
+            self._warn_cache_unavailable(exc)
+            return None
+        if raw is None:
+            return None
+        try:
+            payload = json.loads(raw)
+            return [float(value) for value in payload["embedding"]], str(payload["match_function"])
+        except (ValueError, TypeError, KeyError):
+            # A corrupt entry is treated as a miss; the value is recomputed.
+            return None
+
+    async def _cache_set_query(self, key: str, embedding: list[float], match_function: str) -> None:
+        """Write the ``(embedding, match_function)`` pair back to the cache."""
+        client = self.redis_client
+        ttl = self.settings.EMBEDDING_QUERY_CACHE_TTL
+        if client is None or ttl <= 0:
+            return
+        payload = json.dumps({"embedding": embedding, "match_function": match_function})
+        try:
+            await client.setex(key, ttl, payload)
+        except (RedisError, OSError) as exc:
+            self._warn_cache_unavailable(exc)
+
+    def _warn_cache_unavailable(self, exc: Exception) -> None:
+        """Log a Redis cache failure once per service instance (avoid log spam)."""
+        if self._cache_warning_logged:
+            return
+        self._cache_warning_logged = True
+        self.logger.warning("embedding_query_cache_unavailable", error=str(exc))
 
     async def _embed_document(
         self, title: str, content: str

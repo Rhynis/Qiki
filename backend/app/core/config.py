@@ -65,6 +65,9 @@ class Settings(BaseSettings):
     EMBEDDING_PROVIDER: Literal["gemini", "ollama", "bge"] = "gemini"
     OLLAMA_BGE_MODEL: str = "bge-m3"
     BGE_EMBEDDING_DIMENSIONS: int = 1024
+    # Read-through Redis cache TTL (seconds) for query embeddings so repeated chat
+    # questions skip the embedding-provider round-trip. 0 disables the cache.
+    EMBEDDING_QUERY_CACHE_TTL: int = 3600
 
     # Per-vector-space similarity thresholds. The threshold filter is gated to the
     # local providers; the Gemini retrieval path keeps its existing behavior so
