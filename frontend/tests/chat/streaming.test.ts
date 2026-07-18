@@ -41,13 +41,11 @@ describe('streamMessage', () => {
       'event: delta\ndata: {"text":"there"}\n\n',
       `event: done\ndata: ${JSON.stringify(doneResponse)}\n\n`,
     ]
-    global.fetch = vi
-      .fn()
-      .mockResolvedValue({
-        ok: true,
-        status: 200,
-        body: streamFromStrings(frames),
-      }) as unknown as typeof fetch
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: streamFromStrings(frames),
+    }) as unknown as typeof fetch
 
     const deltas: string[] = []
     let finalContent = ''
