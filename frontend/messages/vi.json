@@ -117,7 +117,9 @@
     "viewDetails": "Xem chi tiết",
     "viewDetailsAria": "Xem chi tiết {name}",
     "previous": "Trước",
-    "nextPage": "Sau"
+    "nextPage": "Sau",
+    "priceFrom": "Từ",
+    "variantOptions": "Nhiều lựa chọn màu/loại"
   },
   "stock": {
     "outOfStock": "Hết hàng",
@@ -139,7 +141,9 @@
     "subtotal": "Tạm tính",
     "shippingFee": "Phí giao hàng",
     "total": "Tổng cộng",
-    "pickProducts": "Chọn sản phẩm"
+    "pickProducts": "Chọn sản phẩm",
+    "couponApplied": "Đã áp dụng: {code}",
+    "discount": "Giảm giá"
   },
   "checkout": {
     "title": "Thanh toán",
@@ -200,7 +204,9 @@
     "safety": "An toàn sử dụng",
     "addToCart": "Thêm vào giỏ",
     "buyNow": "Mua ngay",
-    "addedToCart": "Đã thêm vào giỏ hàng"
+    "addedToCart": "Đã thêm vào giỏ hàng",
+    "selectVariant": "Chọn loại",
+    "selectVariantAria": "Chọn loại sản phẩm"
   },
   "wishlistButton": {
     "save": "Lưu vào yêu thích",

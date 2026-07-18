@@ -117,7 +117,9 @@
     "viewDetails": "View details",
     "viewDetailsAria": "View details of {name}",
     "previous": "Previous",
-    "nextPage": "Next"
+    "nextPage": "Next",
+    "priceFrom": "From",
+    "variantOptions": "Multiple colour/type options"
   },
   "stock": {
     "outOfStock": "Out of stock",
@@ -139,7 +141,9 @@
     "subtotal": "Subtotal",
     "shippingFee": "Shipping fee",
     "total": "Total",
-    "pickProducts": "Pick products"
+    "pickProducts": "Pick products",
+    "couponApplied": "Applied: {code}",
+    "discount": "Discount"
   },
   "checkout": {
     "title": "Checkout",
@@ -200,7 +204,9 @@
     "safety": "Safe use",
     "addToCart": "Add to cart",
     "buyNow": "Buy now",
-    "addedToCart": "Added to cart"
+    "addedToCart": "Added to cart",
+    "selectVariant": "Select an option",
+    "selectVariantAria": "Select a product option"
   },
   "wishlistButton": {
     "save": "Save to wishlist",

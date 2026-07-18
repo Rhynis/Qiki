@@ -78,7 +78,9 @@ export function OrderSummarySidebar() {
             </label>
             {couponCode ? (
               <div className="flex items-center justify-between gap-2 text-sm">
-                <span className="font-medium text-emerald-700">Đã áp dụng: {couponCode}</span>
+                <span className="font-medium text-emerald-700">
+                  {t('couponApplied', { code: couponCode })}
+                </span>
                 <button
                   type="button"
                   className="text-slate-500 hover:text-primary hover:underline"
@@ -122,7 +124,7 @@ export function OrderSummarySidebar() {
         </div>
         {discount > 0 ? (
           <div className="flex justify-between text-emerald-700">
-            <span>Giảm giá</span>
+            <span>{t('discount')}</span>
             <span>-{formatPrice(discount)}</span>
           </div>
         ) : null}
