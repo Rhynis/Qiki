@@ -3,10 +3,11 @@
 import json
 import re
 import unicodedata
-from collections.abc import Mapping, Sequence
+from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, time, timedelta, timezone
 from decimal import Decimal
+from time import monotonic
 from typing import Any, Literal, cast
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
@@ -129,6 +130,50 @@ class ChatOrderResult:
     card_products: list[ProductResponse]
 
 
+@dataclass
+class RagStreamPlan:
+    """Descriptor for a RAG answer that should be streamed token-by-token."""
+
+    content: str
+    history: list[dict[str, str]]
+    catalog_products: list[ProductResponse] | None
+    intent: IntentCategory
+    confidence: float
+
+
+@dataclass
+class ResponsePlan:
+    """The outcome of planning a customer turn, shared by the blocking and
+    streaming endpoints so the (complex) decision tree lives in one place.
+
+    Exactly one of ``assistant_message`` (a deterministic reply already persisted)
+    or ``rag_stream`` (a RAG answer still to be generated/streamed) is set.
+    """
+
+    user_message: Message
+    conversation: Conversation
+    product_cards: list[ProductCardResponse]
+    assistant_message: Message | None
+    rag_stream: RagStreamPlan | None
+
+
+@dataclass
+class StreamDelta:
+    """A chunk of assistant text to append to the current bubble."""
+
+    text: str
+
+
+@dataclass
+class StreamDone:
+    """Terminal event carrying the fully-persisted turn (message + products)."""
+
+    response: SendMessageResponse
+
+
+StreamEvent = StreamDelta | StreamDone
+
+
 class ConversationService:
     """Coordinate intent classification, RAG answers, and staff handoff."""
 
@@ -229,7 +274,99 @@ class ConversationService:
         request: SendMessageRequest,
         user: User | None,
     ) -> SendMessageResponse:
-        """Handle a customer message and optional assistant reply."""
+        """Handle a customer message and optional assistant reply (blocking)."""
+        plan = await self._plan_response(conversation_id, request, user)
+        assistant_message = plan.assistant_message
+        if plan.rag_stream is not None:
+            assistant_message = await self._create_rag_answer(
+                plan.conversation,
+                plan.rag_stream.content,
+                plan.rag_stream.history,
+                user,
+                plan.rag_stream.intent,
+                plan.rag_stream.confidence,
+                catalog_products=plan.rag_stream.catalog_products,
+            )
+        conversation = await self._require_conversation(plan.conversation.id)
+        return SendMessageResponse(
+            user_message=self._message_to_response(plan.user_message),
+            assistant_message=(
+                self._message_to_response(assistant_message) if assistant_message else None
+            ),
+            conversation=self._conversation_to_response(conversation),
+            products=plan.product_cards,
+        )
+
+    async def stream_message(
+        self,
+        conversation_id: UUID,
+        request: SendMessageRequest,
+        user: User | None,
+    ) -> AsyncIterator[StreamEvent]:
+        """Plan a turn, stream the RAG answer token-by-token, then persist it.
+
+        Deterministic branches (safety, greeting, price, order, handoff,
+        clarification) are already instant and are emitted as a single delta;
+        only the open-ended RAG answer streams. Safety never reaches the LLM
+        (query_stream returns the fixed constant).
+        """
+        plan = await self._plan_response(conversation_id, request, user)
+        assistant_message = plan.assistant_message
+        if plan.rag_stream is None:
+            if assistant_message is not None and assistant_message.content:
+                yield StreamDelta(assistant_message.content)
+        else:
+            start_time = monotonic()
+            sources: list[RetrievedDocument] = []
+            chunks: list[str] = []
+            product_context = await self._resolve_product_context(
+                plan.rag_stream.content,
+                plan.rag_stream.intent,
+                plan.rag_stream.catalog_products,
+            )
+            async for delta in self.rag_pipeline.query_stream(
+                plan.rag_stream.content,
+                conversation_history=plan.rag_stream.history,
+                product_context=product_context,
+                language=detect_language(plan.rag_stream.content),
+                sources_sink=sources,
+            ):
+                if not delta:
+                    continue
+                chunks.append(delta)
+                yield StreamDelta(delta)
+            assistant_message = await self._persist_streamed_answer(
+                plan.conversation,
+                "".join(chunks),
+                plan.rag_stream.intent,
+                plan.rag_stream.confidence,
+                int((monotonic() - start_time) * 1000),
+                sources,
+            )
+        conversation = await self._require_conversation(plan.conversation.id)
+        yield StreamDone(
+            SendMessageResponse(
+                user_message=self._message_to_response(plan.user_message),
+                assistant_message=(
+                    self._message_to_response(assistant_message) if assistant_message else None
+                ),
+                conversation=self._conversation_to_response(conversation),
+                products=plan.product_cards,
+            )
+        )
+
+    async def _plan_response(
+        self,
+        conversation_id: UUID,
+        request: SendMessageRequest,
+        user: User | None,
+    ) -> ResponsePlan:
+        """Run the full decision tree for a turn (shared by both endpoints).
+
+        Persists the user message and any deterministic assistant reply. For the
+        open-ended RAG branch it returns a ``RagStreamPlan`` (not the answer) so the
+        caller can block on ``query`` or stream via ``query_stream``.
+        """
         conversation = await self._require_conversation(conversation_id)
         history = await self.message_repository.get_recent(conversation_id, limit=10)
         history_payload = self._history_to_payload(history)
@@ -323,7 +460,10 @@ class ConversationService:
                 product_cards = [self._product_to_card(product) for product in card_products]
 
         assistant_message: Message | None
+        rag_stream: RagStreamPlan | None = None
         if intent.category == IntentCategory.SAFETY_EMERGENCY:
+            # Safety stays deterministic (the pipeline returns the fixed constant
+            # with no LLM call), so it is a ready message, not a streamed one.
             assistant_message = await self._create_rag_answer(
                 conversation,
                 request.content,
@@ -366,24 +506,22 @@ class ConversationService:
                 self._product_to_card(product) for product in order_result.card_products
             ]
         else:
-            assistant_message = await self._create_rag_answer(
-                conversation,
-                request.content,
-                history_payload,
-                user,
-                intent.category,
-                intent.confidence,
+            # The only open-ended branch: defer generation so the caller can stream.
+            assistant_message = None
+            rag_stream = RagStreamPlan(
+                content=request.content,
+                history=list(history_payload),
                 catalog_products=catalog_products,
+                intent=intent.category,
+                confidence=intent.confidence,
             )
 
-        conversation = await self._require_conversation(conversation.id)
-        return SendMessageResponse(
-            user_message=self._message_to_response(user_message),
-            assistant_message=(
-                self._message_to_response(assistant_message) if assistant_message else None
-            ),
-            conversation=self._conversation_to_response(conversation),
-            products=product_cards,
+        return ResponsePlan(
+            user_message=user_message,
+            conversation=conversation,
+            product_cards=product_cards,
+            assistant_message=assistant_message,
+            rag_stream=rag_stream,
         )
 
     async def submit_feedback(self, message_id: UUID, score: int) -> MessageResponse:
@@ -1131,15 +1269,7 @@ Tin mới:
         confidence: float,
         catalog_products: Sequence[ProductResponse] | None = None,
     ) -> Message:
-        if intent == IntentCategory.SAFETY_EMERGENCY:
-            product_context = None
-        elif catalog_products is not None:
-            product_context = self._query_aware_catalog_context(content, catalog_products)
-        else:
-            product_context = self._query_aware_catalog_context(
-                content,
-                await self.product_service.list_active_catalog(limit=50),
-            )
+        product_context = await self._resolve_product_context(content, intent, catalog_products)
         response = await self.rag_pipeline.query(
             content,
             conversation_history=history,
@@ -1162,6 +1292,61 @@ Tin mới:
                 else None,
                 "latency_ms": response.total_latency_ms,
                 "retrieved_documents": self._serialize_sources(response),
+                "flagged_for_review": confidence < 0.6,
+            }
+        )
+
+    async def _resolve_product_context(
+        self,
+        content: str,
+        intent: IntentCategory,
+        catalog_products: Sequence[ProductResponse] | None,
+    ) -> str | None:
+        """Build the query-aware catalog context injected into a RAG answer.
+
+        Shared by the blocking and streaming answer paths so both inject the same
+        deterministic price context (#239). Safety turns inject nothing.
+        """
+        if intent == IntentCategory.SAFETY_EMERGENCY:
+            return None
+        products = (
+            catalog_products
+            if catalog_products is not None
+            else await self.product_service.list_active_catalog(limit=50)
+        )
+        return self._query_aware_catalog_context(content, products)
+
+    async def _persist_streamed_answer(
+        self,
+        conversation: Conversation,
+        content: str,
+        intent: IntentCategory,
+        confidence: float,
+        latency_ms: int,
+        sources: Sequence[RetrievedDocument],
+    ) -> Message:
+        """Persist a streamed RAG answer with the same fields as a blocking one."""
+        return await self.message_repository.create(
+            {
+                "conversation_id": conversation.id,
+                "role": "assistant",
+                "content": content,
+                "intent": intent.value,
+                "intent_confidence": confidence,
+                "llm_provider": self.llm_provider.provider_name,
+                "llm_model": self.llm_provider.model,
+                "tokens_used": None,
+                "latency_ms": latency_ms,
+                "retrieved_documents": [
+                    {
+                        "id": str(source.id),
+                        "title": source.title,
+                        "category": source.category,
+                        "similarity": source.similarity,
+                        "source_type": source.source_type,
+                    }
+                    for source in sources
+                ],
                 "flagged_for_review": confidence < 0.6,
             }
         )

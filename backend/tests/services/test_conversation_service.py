@@ -25,6 +25,8 @@ from app.services.conversation_service import (
     ORDER_CONTEXT_CONFIDENCE,
     ChatOrderItem,
     ConversationService,
+    StreamDelta,
+    StreamDone,
 )
 from app.services.product_query import ProductQuery, filter_products
 from app.services.routing_service import RoutingDecision
@@ -209,7 +211,16 @@ class FakeRoutingService:
 class FakeRAGPipeline:
     def __init__(self) -> None:
         self.calls = 0
+        self.stream_calls = 0
         self.last_kwargs: dict[str, object] = {}
+
+    async def query_stream(
+        self, query: str, sources_sink: list[object] | None = None, **kwargs: object
+    ) -> AsyncIterator[str]:
+        del query, kwargs
+        self.stream_calls += 1
+        for token in ("Câu ", "trả ", "lời ", "từ ", "RAG"):
+            yield token
 
     async def query(self, query: str, **kwargs: object) -> RAGResponse:
         self.last_kwargs = kwargs
@@ -4449,3 +4460,64 @@ async def test_nonstandard_size_price_query_does_not_crash() -> None:
 
     assert response.assistant_message is not None
     assert "chưa có" in response.assistant_message.content
+
+
+@pytest.mark.asyncio
+async def test_stream_message_streams_rag_answer_and_persists() -> None:
+    service, _conversations, _messages, rag, _orders = make_service()
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    events = [
+        event
+        async for event in service.stream_message(
+            conversation.id,
+            SendMessageRequest(content="Gia gas bao nhieu?"),
+            user=None,
+        )
+    ]
+
+    deltas = [event.text for event in events if isinstance(event, StreamDelta)]
+    done = [event for event in events if isinstance(event, StreamDone)]
+    # The RAG answer arrives token-by-token, not as one blob.
+    assert len(deltas) > 1
+    assert "".join(deltas) == "Câu trả lời từ RAG"
+    assert rag.stream_calls == 1
+    assert rag.calls == 0  # the blocking query() is not used on the stream path
+    # The terminal event carries the persisted turn (message + product cards).
+    assert len(done) == 1
+    assistant = done[0].response.assistant_message
+    assert assistant is not None
+    assert assistant.content == "Câu trả lời từ RAG"
+    assert done[0].response.products[0].name == "Bình gas Petrolimex 12kg (biển)"
+    # History is intact: the assistant message is persisted like a blocking reply.
+    persisted = await service.list_messages(conversation.id)
+    assert any(
+        message.role == "assistant" and message.content == "Câu trả lời từ RAG"
+        for message in persisted
+    )
+
+
+@pytest.mark.asyncio
+async def test_stream_message_safety_uses_constant_without_streaming_llm() -> None:
+    service, _conversations, _messages, rag, _orders = make_service(
+        category=IntentCategory.SAFETY_EMERGENCY
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    events = [
+        event
+        async for event in service.stream_message(
+            conversation.id,
+            SendMessageRequest(content="Toi ngui thay mui gas trong nha"),
+            user=None,
+        )
+    ]
+
+    text = "".join(event.text for event in events if isinstance(event, StreamDelta))
+    # The fixed emergency response (with the real hotline) is emitted deterministically.
+    assert "114" in text
+    # Safety NEVER goes through the streaming/LLM path.
+    assert rag.stream_calls == 0
+    done = next(event for event in events if isinstance(event, StreamDone))
+    assert done.response.assistant_message is not None
+    assert "114" in done.response.assistant_message.content

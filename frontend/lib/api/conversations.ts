@@ -19,6 +19,80 @@ export async function startConversation(data: StartConversationRequest): Promise
   return response.data
 }
 
+export type StreamMessageHandlers = {
+  onDelta: (text: string) => void
+  onDone: (response: SendMessageResponse) => void
+}
+
+type SseFrame = { event: string; data: string }
+
+/** Split a raw SSE chunk buffer into complete frames, returning the leftover. */
+export function parseSseFrames(buffer: string): { frames: SseFrame[]; rest: string } {
+  const frames: SseFrame[] = []
+  let rest = buffer
+  let separator = rest.indexOf('\n\n')
+  while (separator !== -1) {
+    const raw = rest.slice(0, separator)
+    rest = rest.slice(separator + 2)
+    let event = 'message'
+    const dataLines: string[] = []
+    for (const line of raw.split('\n')) {
+      if (line.startsWith('event:')) event = line.slice(6).trim()
+      else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim())
+    }
+    if (dataLines.length > 0) frames.push({ event, data: dataLines.join('\n') })
+    separator = rest.indexOf('\n\n')
+  }
+  return { frames, rest }
+}
+
+/**
+ * Stream a customer message as Server-Sent Events: `onDelta` fires per token and
+ * `onDone` fires once with the persisted turn. Throws on a non-OK/unsupported
+ * response so the caller can fall back to the blocking endpoint.
+ */
+export async function streamMessage(
+  conversationId: string,
+  data: SendMessageRequest,
+  handlers: StreamMessageHandlers,
+  signal?: AbortSignal
+): Promise<void> {
+  const response = await fetch(`/api/v1/conversations/${conversationId}/messages/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(data),
+    signal,
+  })
+  if (!response.ok || !response.body) {
+    throw new Error(`Streaming request failed with status ${response.status}`)
+  }
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let receivedDone = false
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const { frames, rest } = parseSseFrames(buffer)
+    buffer = rest
+    for (const frame of frames) {
+      if (frame.event === 'delta') {
+        handlers.onDelta((JSON.parse(frame.data) as { text: string }).text)
+      } else if (frame.event === 'done') {
+        receivedDone = true
+        handlers.onDone(JSON.parse(frame.data) as SendMessageResponse)
+      }
+    }
+  }
+  // A stream that ends without a terminal `done` frame is treated as a failure so
+  // the caller can fall back to the blocking endpoint (e.g. an SSE-unaware proxy).
+  if (!receivedDone) {
+    throw new Error('Stream ended before the final event')
+  }
+}
+
 export async function getActiveConversation(sessionId: string): Promise<Conversation | null> {
   const response = await apiClient.get<Conversation | null>('/api/v1/conversations/active', {
     params: { session_id: sessionId },
