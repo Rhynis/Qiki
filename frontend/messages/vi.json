@@ -39,7 +39,8 @@
     "wishlist": "Sản phẩm yêu thích",
     "admin": "Quản trị",
     "logout": "Đăng xuất",
-    "fallbackName": "Tài khoản"
+    "fallbackName": "Tài khoản",
+    "openMenu": "Mở menu tài khoản"
   },
   "footer": {
     "tagline": "Giao gas LPG tận nơi tại {area}, hỗ trợ đặt hàng qua trợ lý ảo, hotline và Zalo.",

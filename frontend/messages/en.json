@@ -39,7 +39,8 @@
     "wishlist": "Wishlist",
     "admin": "Admin",
     "logout": "Log out",
-    "fallbackName": "Account"
+    "fallbackName": "Account",
+    "openMenu": "Open account menu"
   },
   "footer": {
     "tagline": "LPG gas delivered to your door in {area}, with ordering via virtual assistant, hotline and Zalo.",

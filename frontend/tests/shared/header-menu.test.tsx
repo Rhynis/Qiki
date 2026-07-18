@@ -126,4 +126,13 @@ describe('user menu interactions', () => {
     const trigger = screen.getByRole('link', { name: /Khách Hàng Test/ })
     expect(trigger).toHaveAttribute('href', '/account')
   })
+
+  it('opens the menu when the caret is clicked (touch fallback)', async () => {
+    const user = userEvent.setup({ skipHover: true })
+    render(<UserMenu />)
+
+    await user.click(screen.getByRole('button', { name: 'Mở menu tài khoản' }))
+
+    expect(await screen.findByRole('menuitem', { name: 'Tài khoản' })).toBeVisible()
+  })
 })
