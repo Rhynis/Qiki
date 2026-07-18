@@ -41,7 +41,7 @@ export function OrderSummarySidebar() {
       setCodeInput('')
     } catch (caught) {
       clearCoupon()
-      setCouponError(caught instanceof Error ? caught.message : 'Mã giảm giá không hợp lệ')
+      setCouponError(caught instanceof Error ? caught.message : t('couponInvalid'))
     } finally {
       setIsValidating(false)
     }
