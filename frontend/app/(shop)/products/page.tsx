@@ -7,6 +7,10 @@ import { ProductPagination } from '@/components/shop/product-pagination'
 import { ProductSort } from '@/components/shop/product-sort'
 import type { ProductCategory, ProductListResponse, ProductSearchParams } from '@/types/product'
 
+// Serve the catalog route from the ISR cache (revalidated every 60s) so a repeat
+// visit renders instantly instead of blocking on a fresh server-side fetch.
+export const revalidate = 60
+
 type ProductsPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }
@@ -57,7 +61,7 @@ async function getInitialProducts(params: ProductSearchParams): Promise<ProductL
   try {
     // Cache the catalog briefly so switching category/brand is instant on repeat
     // navigations instead of blocking on a fresh server fetch every time.
-    const response = await fetch(url, { next: { revalidate: 30 } })
+    const response = await fetch(url, { next: { revalidate: 60 } })
     if (!response.ok) return emptyProductList
     return (await response.json()) as ProductListResponse
   } catch {

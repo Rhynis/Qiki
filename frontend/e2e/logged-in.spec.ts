@@ -31,20 +31,26 @@ test.describe('logged-in customer', () => {
     test.skip(isMobile, 'Hover behavior is covered by the desktop project.')
 
     await page.goto('/')
-    const trigger = page.getByRole('button', { name: /Khách Hàng Test/ })
-    await trigger.hover()
+    // The name/avatar is a link to /account; hovering the row opens the menu.
+    const nameLink = page.getByRole('link', { name: /Khách Hàng Test/ })
+    await nameLink.hover()
 
     await expect(page.getByRole('menuitem', { name: 'Tài khoản' })).toBeVisible()
 
     await page.mouse.move(0, 0)
     await expect(page.getByRole('menuitem', { name: 'Tài khoản' })).toBeHidden()
+
+    // Clicking the name navigates straight to the account page.
+    await nameLink.click()
+    await expect(page).toHaveURL(/\/account$/)
   })
 
   test('user menu opens on tap for touch viewports', async ({ page, isMobile }) => {
     test.skip(!isMobile, 'Tap behavior is covered by the mobile projects.')
 
     await page.goto('/')
-    await page.getByRole('button', { name: /Khách Hàng Test/ }).click()
+    // Touch has no hover, so the dedicated caret button opens the menu.
+    await page.getByRole('button', { name: 'Mở menu tài khoản' }).click()
 
     await expect(page.getByRole('menuitem', { name: 'Tài khoản' })).toBeVisible()
   })
