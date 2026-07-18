@@ -99,7 +99,10 @@ class AdminChatService:
     # -- execution (confirmation: re-validates, mutates, audits) ----------------
 
     async def _execute_pending(self, token: str, admin: User) -> AdminChatResponse:
-        raw = await self.redis.get(self._pending_key(token))
+        # Claim the token atomically (GETDEL): read + delete in one round trip so
+        # two racing confirms can't both pass and apply the mutation twice. Any
+        # later exit path has already consumed it, so no separate delete is needed.
+        raw = await self.redis.getdel(self._pending_key(token))
         if raw is None:
             return AdminChatResponse(status="expired", reply=EXPIRED_REPLY)
         data = cast(dict[str, Any], json.loads(raw))
@@ -110,14 +113,12 @@ class AdminChatService:
         parsed = self._instruction_from_payload(data)
         product = await self.product_repository.get_by_id(UUID(data["product_id"]))
         if product is None:
-            await self.redis.delete(self._pending_key(token))
             return AdminChatResponse(status="not_found", reply=NOT_FOUND_REPLY)
 
         # Re-validate against the live row: the catalog may have changed since the
         # confirmation prompt was issued.
         error = self._validation_error(parsed, product)
         if error is not None:
-            await self.redis.delete(self._pending_key(token))
             return AdminChatResponse(status="invalid", reply=error)
 
         before, after, update = self._compute_change(parsed, product)
@@ -131,7 +132,6 @@ class AdminChatService:
             before=before,
             after=after,
         )
-        await self.redis.delete(self._pending_key(token))
         self.logger.info(
             "admin_chat_mutation",
             admin_id=str(admin.id),
