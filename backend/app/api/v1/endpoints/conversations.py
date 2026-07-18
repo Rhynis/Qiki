@@ -1,9 +1,12 @@
 """Conversation management endpoints."""
 
+import json
+from collections.abc import AsyncIterator
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.dependencies.auth import get_current_staff, get_current_user_optional
@@ -40,7 +43,10 @@ from app.schemas.conversation import (
     TransferRequest,
 )
 from app.schemas.message import MessageListResponse, MessageResponse
-from app.services.conversation_service import ConversationService
+from app.services.conversation_service import (
+    ConversationService,
+    StreamDelta,
+)
 from app.services.order_service import OrderService
 from app.services.product_service import ProductService
 from app.services.routing_service import RoutingService
@@ -160,6 +166,38 @@ async def send_message(
     """Send a customer message and return the bot response."""
     del request
     return await service.send_message(conversation_id, payload, user=current_user)
+
+
+@router.post(
+    "/conversations/{conversation_id}/messages/stream",
+    summary="Send a customer message (streamed, token-by-token)",
+)
+@limiter.limit("10/minute")
+async def stream_message(
+    request: Request,
+    conversation_id: UUID,
+    payload: SendMessageRequest,
+    service: Annotated[ConversationService, Depends(get_conversation_service)],
+    current_user: Annotated[User | None, Depends(get_current_user_optional)] = None,
+) -> StreamingResponse:
+    """Stream the assistant reply as Server-Sent Events.
+
+    Emits ``event: delta`` frames with incremental text, then a final
+    ``event: done`` frame carrying the persisted turn (message + product cards +
+    conversation) so the client can reconcile. Deterministic replies (safety,
+    price, order, handoff, clarification) arrive as a single delta with no LLM
+    call; only the open-ended RAG answer streams token-by-token.
+    """
+    del request
+
+    async def event_stream() -> AsyncIterator[str]:
+        async for event in service.stream_message(conversation_id, payload, user=current_user):
+            if isinstance(event, StreamDelta):
+                yield f"event: delta\ndata: {json.dumps({'text': event.text})}\n\n"
+            else:
+                yield f"event: done\ndata: {event.response.model_dump_json()}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @router.post(

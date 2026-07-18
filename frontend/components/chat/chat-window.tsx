@@ -10,6 +10,7 @@ import {
   useMessages,
   useSendMessage,
   useStartConversation,
+  useStreamMessage,
 } from '@/lib/hooks/use-conversation'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useChatStore } from '@/lib/stores/chat-store'
@@ -37,11 +38,12 @@ export function ChatWindow() {
   const [rateLimited, setRateLimited] = useState(false)
   const startConversation = useStartConversation()
   const sendMessage = useSendMessage()
+  const { streamSend, isStreaming } = useStreamMessage()
   // Track the send globally so the "typing" indicator survives the window being
   // closed and reopened while a reply is still in flight (the mutation outlives
   // this component because it lives on the shared QueryClient).
   const isSending = useIsMutating({ mutationKey: conversationKeys.send }) > 0
-  const messages = useMessages(conversationId, true, isSending)
+  const messages = useMessages(conversationId, true, isSending || isStreaming)
 
   function clearRateLimitTimer() {
     if (rateLimitTimeoutRef.current) {
@@ -122,7 +124,7 @@ export function ChatWindow() {
   const latestConversation = startConversation.data
   const isEscalated = latestConversation?.status === 'escalated'
   const startFailed = startConversation.isError && !conversationId
-  const isBusy = isSending || (startConversation.isPending && !startFailed)
+  const isBusy = isSending || isStreaming || (startConversation.isPending && !startFailed)
   const conversationReady = Boolean(conversationId)
 
   function handleRetryStart() {
@@ -161,10 +163,10 @@ export function ChatWindow() {
     sentAtRef.current = [...recentSentAt, now]
     setRateLimited(false)
     markActivity()
-    sendMessage.mutate({
-      conversationId,
-      data: { content, session_id: sessionId },
-    })
+    const payload = { conversationId, data: { content, session_id: sessionId } }
+    // Stream the reply token-by-token; fall back to the blocking endpoint if the
+    // browser/server can't stream (streamSend rejects after rolling back).
+    void streamSend(payload).catch(() => sendMessage.mutate(payload))
     return true
   }
 
