@@ -34,10 +34,6 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str = "postgresql+asyncpg://gasbot:gasbot_dev_password@localhost:5432/gasbot_dev"
 
-    SUPABASE_URL: str = ""
-    SUPABASE_KEY: str = ""
-    SUPABASE_SERVICE_KEY: str = ""
-
     REDIS_URL: str = "redis://localhost:6379/0"
 
     LLM_PROVIDER: Literal["ollama", "gemini", "groq"] = "ollama"
@@ -57,7 +53,6 @@ class Settings(BaseSettings):
     JINA_API_KEY: str | None = None
     JINA_EMBED_MODEL: str = "jina-embeddings-v3"
 
-    EMBEDDING_MODEL: str = "keepitreal/vietnamese-sbert"
     EMBEDDING_DIMENSIONS: int = 768
     # Retrieval embedding backend. "gemini" keeps Gemini primary -> Jina fallback;
     # "ollama" uses the local nomic-embed-text model (768-d); "bge" uses the local
@@ -71,9 +66,7 @@ class Settings(BaseSettings):
 
     # Per-vector-space similarity thresholds. The threshold filter is gated to the
     # local providers; the Gemini retrieval path keeps its existing behavior so
-    # production (EMBEDDING_PROVIDER=gemini) output stays identical. RAG_THRESHOLD_GEMINI
-    # is kept for reference and is not applied to the Gemini path.
-    RAG_THRESHOLD_GEMINI: float = 0.5
+    # production (EMBEDDING_PROVIDER=gemini) output stays identical.
     RAG_THRESHOLD_OLLAMA: float = 0.7
     RAG_THRESHOLD_BGE: float = 0.55
 
@@ -121,10 +114,6 @@ class Settings(BaseSettings):
 
     CORS_ORIGINS: str = "http://localhost:3000"
     CORS_ORIGIN_REGEX: str | None = None
-
-    RATE_LIMIT_PER_MINUTE: int = 60
-    RATE_LIMIT_AUTH_PER_MINUTE: int = 5
-    RATE_LIMIT_LLM_PER_MINUTE: int = 10
 
     @property
     def is_production(self) -> bool:
