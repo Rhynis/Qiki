@@ -20,46 +20,6 @@ class BaseRetriever(ABC):
         """Retrieve relevant documents for a query."""
 
 
-class VectorRetriever(BaseRetriever):
-    """Pure vector similarity retrieval using SBERT embeddings."""
-
-    def __init__(
-        self,
-        kb_service: KnowledgeBaseService,
-        embedding_service: EmbeddingService,
-        threshold: float = 0.5,
-    ) -> None:
-        self.kb_service = kb_service
-        self.embedding_service = embedding_service
-        self.threshold = threshold
-
-    async def retrieve(
-        self,
-        query: str,
-        top_k: int = 5,
-        category_filter: str | None = None,
-    ) -> list[RetrievedDocument]:
-        """Retrieve documents via vector similarity."""
-        results = await self.kb_service.search_documents(
-            query=query,
-            top_k=top_k,
-            category=category_filter,
-            use_hybrid=False,
-        )
-        return [
-            RetrievedDocument(
-                id=result.id,
-                title=result.title,
-                content=result.content,
-                category=result.category,
-                similarity=result.similarity,
-                source_type="vector",
-                metadata={"source": result.source} if result.source else {},
-            )
-            for result in results
-        ]
-
-
 class HybridRetriever(BaseRetriever):
     """Hybrid retrieval combining vector similarity and BM25 keyword search."""
 

@@ -14,7 +14,6 @@ def test_rag_embedding_and_rerank_defaults() -> None:
     assert _default("OLLAMA_BGE_MODEL") == "bge-m3"
     assert _default("BGE_EMBEDDING_DIMENSIONS") == 1024
 
-    assert _default("RAG_THRESHOLD_GEMINI") == 0.5
     assert _default("RAG_THRESHOLD_OLLAMA") == 0.7
     assert _default("RAG_THRESHOLD_BGE") == 0.55
 

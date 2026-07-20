@@ -20,7 +20,7 @@ from app.rag.jina_embeddings import JinaEmbeddingService
 from app.rag.ollama_embeddings import OllamaEmbeddingService
 from app.rag.pipeline import RAGPipeline
 from app.rag.reranker import LlmReranker
-from app.rag.retriever import BaseRetriever, HybridRetriever, VectorRetriever
+from app.rag.retriever import BaseRetriever, HybridRetriever
 from app.rag.safety import SafetyChecker
 from app.rag.text_processor import VietnameseTextProcessor
 from app.repositories.knowledge_base_repository import KnowledgeBaseRepository
@@ -98,14 +98,6 @@ def get_reranker(
 ) -> LlmReranker:
     """Build the offline LLM reranker (used only when RAG_RERANK_ENABLED)."""
     return LlmReranker(llm_provider, prompt_library)
-
-
-def get_vector_retriever(
-    kb_service: Annotated[KnowledgeBaseService, Depends(get_knowledge_base_service)],
-    embedding_service: Annotated[EmbeddingService, Depends(get_embedding_service)],
-) -> VectorRetriever:
-    """Build a vector retriever."""
-    return VectorRetriever(kb_service, embedding_service)
 
 
 def get_hybrid_retriever(
