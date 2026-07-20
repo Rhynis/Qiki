@@ -10,12 +10,7 @@ const nextConfig = {
   poweredByHeader: false,
   output: 'standalone',
   images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: '*.supabase.co',
-      },
-    ],
+    remotePatterns: [],
   },
   async headers() {
     return [
