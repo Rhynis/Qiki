@@ -67,6 +67,10 @@ class GroqProvider(BaseLLMProvider):
             "max_tokens": max_tokens,
             "stream": stream,
         }
+        if stream:
+            # Ask Groq to emit a final usage chunk so a streamed answer can record
+            # its token count (OpenAI-compatible streaming option).
+            payload["stream_options"] = {"include_usage": True}
         if stop_sequences:
             payload["stop"] = stop_sequences
         return payload
@@ -180,16 +184,27 @@ class GroqProvider(BaseLLMProvider):
                         if payload_line == "[DONE]":
                             break
                         data = json.loads(payload_line)
-                        choice = next(iter(data.get("choices", [{}])))
+                        # The final usage frame (stream_options.include_usage) has
+                        # empty choices and a usage block; surface its token count.
+                        usage = data.get("usage")
+                        total_tokens = (
+                            int(usage.get("total_tokens", 0) or 0)
+                            if isinstance(usage, dict)
+                            else None
+                        )
+                        choice: dict[str, Any] = next(iter(data.get("choices", [{}])), {})
                         delta = str(choice.get("delta", {}).get("content", ""))
                         finish_reason = choice.get("finish_reason")
-                        if not delta and finish_reason is None:
+                        if not delta and finish_reason is None and total_tokens is None:
                             continue
                         accumulated += delta
                         yield LLMStreamChunk(
                             delta=delta,
                             finish_reason=finish_reason,
                             accumulated_text=accumulated,
+                            provider=self.provider_name,
+                            model=str(data.get("model", self.model)),
+                            total_tokens=total_tokens,
                         )
         except httpx.TimeoutException as exc:
             raise LLMTimeoutError(f"Groq stream timed out: {exc}") from exc

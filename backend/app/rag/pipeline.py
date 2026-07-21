@@ -3,6 +3,7 @@
 import time
 from collections.abc import AsyncIterator, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -151,12 +152,16 @@ class RAGPipeline:
         product_context: str | None = None,
         language: str = "vi",
         sources_sink: list[RetrievedDocument] | None = None,
+        generation_sink: dict[str, Any] | None = None,
     ) -> AsyncIterator[str]:
         """Stream an answer while keeping the same safety-first behavior.
 
         When ``sources_sink`` is provided, the retrieved documents are appended to
         it so a caller can persist them after the stream completes (mirroring the
-        non-streaming ``query``).
+        non-streaming ``query``). When ``generation_sink`` is provided, the actual
+        serving provider/model and token usage are written into it after streaming
+        so the caller can attribute the answer correctly (safety leaves it empty:
+        no LLM runs).
         """
         safety = await self.safety_checker.check_query(query)
         if safety.is_emergency:
@@ -180,13 +185,26 @@ class RAGPipeline:
             conversation_history=history,
             current_date=self._current_date_vn(),
         )
+        provider: str | None = None
+        model: str | None = None
+        total_tokens: int | None = None
         async for chunk in self.llm_provider.stream(
             prompt=query,
             system_prompt=system_prompt,
             temperature=0.3,
             max_tokens=2048,
         ):
+            if chunk.provider is not None:
+                provider = chunk.provider
+            if chunk.model is not None:
+                model = chunk.model
+            if chunk.total_tokens is not None:
+                total_tokens = chunk.total_tokens
             yield chunk.delta
+        if generation_sink is not None:
+            generation_sink["provider"] = provider
+            generation_sink["model"] = model
+            generation_sink["total_tokens"] = total_tokens
 
     def _rerank_active(self) -> bool:
         return self.rerank_enabled and self.reranker is not None

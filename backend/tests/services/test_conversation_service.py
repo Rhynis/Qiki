@@ -215,12 +215,20 @@ class FakeRAGPipeline:
         self.last_kwargs: dict[str, object] = {}
 
     async def query_stream(
-        self, query: str, sources_sink: list[object] | None = None, **kwargs: object
+        self,
+        query: str,
+        sources_sink: list[object] | None = None,
+        generation_sink: dict[str, object] | None = None,
+        **kwargs: object,
     ) -> AsyncIterator[str]:
         del query, kwargs
         self.stream_calls += 1
         for token in ("Câu ", "trả ", "lời ", "từ ", "RAG"):
             yield token
+        if generation_sink is not None:
+            generation_sink["provider"] = "groq"
+            generation_sink["model"] = "llama-3.3-70b-versatile"
+            generation_sink["total_tokens"] = 42
 
     async def query(self, query: str, **kwargs: object) -> RAGResponse:
         self.last_kwargs = kwargs
@@ -4730,6 +4738,57 @@ async def test_stream_message_safety_uses_constant_without_streaming_llm() -> No
     done = next(event for event in events if isinstance(event, StreamDone))
     assert done.response.assistant_message is not None
     assert "114" in done.response.assistant_message.content
+
+
+@pytest.mark.asyncio
+async def test_stream_message_records_actual_provider_model_and_tokens() -> None:
+    # The streamed row must record the provider/model that actually served plus the
+    # reported token count (surfaced from the stream), not the "fallback" wrapper.
+    service, _conversations, _messages, _rag, _orders = make_service()
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    events = [
+        event
+        async for event in service.stream_message(
+            conversation.id,
+            SendMessageRequest(content="Gia gas bao nhieu?"),
+            user=None,
+        )
+    ]
+    assert any(isinstance(event, StreamDone) for event in events)
+
+    persisted = await service.list_messages(conversation.id)
+    assistant = next(
+        message
+        for message in persisted
+        if message.role == "assistant" and message.content == "Câu trả lời từ RAG"
+    )
+    assert assistant.llm_provider == "groq"
+    assert assistant.llm_model == "llama-3.3-70b-versatile"
+    assert assistant.tokens_used == 42
+
+
+@pytest.mark.asyncio
+async def test_stream_message_persists_partial_reply_on_disconnect() -> None:
+    # A client that disconnects mid-stream (the generator is aclosed) must not lose
+    # the reply: stream_message's finally persists the partial answer.
+    service, _conversations, _messages, _rag, _orders = make_service()
+    conversation = await service.start_conversation(user=None, session_id="abc")
+
+    stream = service.stream_message(
+        conversation.id,
+        SendMessageRequest(content="Gia gas bao nhieu?"),
+        user=None,
+    )
+    first = await stream.__anext__()
+    assert isinstance(first, StreamDelta)
+    # Simulate the client going away before the stream completes.
+    await stream.aclose()
+
+    persisted = await service.list_messages(conversation.id)
+    assistant = [message for message in persisted if message.role == "assistant"]
+    assert assistant, "the partial streamed reply must be persisted on disconnect"
+    assert assistant[-1].content  # a non-empty partial answer was saved
 
 
 @pytest.mark.asyncio

@@ -82,7 +82,14 @@ class FallbackLLMProvider(BaseLLMProvider):
                     **kwargs,
                 ):
                     yielded = True
-                    yield chunk
+                    # Attribute the chunk to the provider that actually served it,
+                    # not the "fallback" wrapper, so analytics/cost are accurate.
+                    yield chunk.model_copy(
+                        update={
+                            "provider": chunk.provider or provider.provider_name,
+                            "model": chunk.model or provider.model,
+                        }
+                    )
                 return
             except FALLBACK_ERRORS as exc:
                 if yielded:

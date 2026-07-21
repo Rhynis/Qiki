@@ -175,3 +175,17 @@ async def test_embed_uses_primary_provider_only() -> None:
 async def test_requires_at_least_one_provider() -> None:
     with pytest.raises(ValueError, match="at least one provider"):
         FallbackLLMProvider([])
+
+
+async def test_stream_annotates_chunks_with_serving_provider_identity() -> None:
+    # The wrapper must attribute each chunk to the provider that actually served,
+    # not the "fallback" name, so streamed rows record the real provider/model.
+    primary = FakeProvider("gemini", stream_error=LLMQuotaExceededError("quota"))
+    secondary = FakeProvider("groq")
+    provider = FallbackLLMProvider([primary, secondary])
+
+    chunks = [chunk async for chunk in provider.stream("Hello")]
+
+    assert chunks
+    assert all(chunk.provider == "groq" for chunk in chunks)
+    assert all(chunk.model == "groq-model" for chunk in chunks)
