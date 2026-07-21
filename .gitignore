@@ -53,6 +53,7 @@ backend/htmlcov/
 
 # Planning and build plan documents
 gasbot_build_plan*.md
+BUILD_PLAN_FOUNDATION.md
 
 # TypeScript build cache
 frontend/tsconfig.tsbuildinfo

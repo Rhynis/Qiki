@@ -52,4 +52,5 @@ This repo is built by two AI assistants working together, coordinated by the hum
 | GitHub Issue | Task definition (scope, criteria, notes) |
 | GitHub PR | Implementation + review thread |
 | `gasbot_build_plan.md` | Long-term reference (gitignored from the repo, lives only on the owner's machine) |
+| `BUILD_PLAN_FOUNDATION.md` | Reusable, project-agnostic template for build plans, workflow, code-quality standards, issue/prompt templates, and CI/CD — copy into future projects (gitignored, owner's machine only) |
 | This file | Process documentation |
