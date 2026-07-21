@@ -3,6 +3,7 @@
 import json
 import re
 import unicodedata
+from asyncio import shield
 from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, time, timedelta, timezone
@@ -347,36 +348,51 @@ class ConversationService:
             if assistant_message is not None and assistant_message.content:
                 yield StreamDelta(assistant_message.content)
         else:
+            rag_stream = plan.rag_stream
             start_time = monotonic()
             sources: list[RetrievedDocument] = []
             chunks: list[str] = []
+            generation: dict[str, Any] = {}
             product_context = await self._resolve_product_context(
-                plan.rag_stream.content,
-                plan.rag_stream.intent,
-                plan.rag_stream.catalog_products,
+                rag_stream.content,
+                rag_stream.intent,
+                rag_stream.catalog_products,
             )
-            async for delta in self.rag_pipeline.query_stream(
-                plan.rag_stream.content,
-                conversation_history=plan.rag_stream.history,
-                product_context=product_context,
-                language=detect_language(
-                    plan.rag_stream.content,
-                    default="en" if plan.rag_stream.locale == "en" else "vi",
-                ),
-                sources_sink=sources,
-            ):
-                if not delta:
-                    continue
-                chunks.append(delta)
-                yield StreamDelta(delta)
-            assistant_message = await self._persist_streamed_answer(
-                plan.conversation,
-                "".join(chunks),
-                plan.rag_stream.intent,
-                plan.rag_stream.confidence,
-                int((monotonic() - start_time) * 1000),
-                sources,
-            )
+            try:
+                async for delta in self.rag_pipeline.query_stream(
+                    rag_stream.content,
+                    conversation_history=rag_stream.history,
+                    product_context=product_context,
+                    language=detect_language(
+                        rag_stream.content,
+                        default="en" if rag_stream.locale == "en" else "vi",
+                    ),
+                    sources_sink=sources,
+                    generation_sink=generation,
+                ):
+                    if not delta:
+                        continue
+                    chunks.append(delta)
+                    yield StreamDelta(delta)
+            finally:
+                # Persist even if the client disconnects mid-stream (the loop is
+                # interrupted by GeneratorExit/CancelledError at a yield) so a
+                # partial reply is never lost from history. Shielded so a task
+                # cancellation cannot abort the DB write.
+                if chunks:
+                    assistant_message = await shield(
+                        self._persist_streamed_answer(
+                            plan.conversation,
+                            "".join(chunks),
+                            rag_stream.intent,
+                            rag_stream.confidence,
+                            int((monotonic() - start_time) * 1000),
+                            sources,
+                            llm_provider=generation.get("provider"),
+                            llm_model=generation.get("model"),
+                            tokens_used=generation.get("total_tokens"),
+                        )
+                    )
         conversation = await self._require_conversation(plan.conversation.id)
         yield StreamDone(
             SendMessageResponse(
@@ -1368,8 +1384,16 @@ Tin mới:
         confidence: float,
         latency_ms: int,
         sources: Sequence[RetrievedDocument],
+        llm_provider: str | None = None,
+        llm_model: str | None = None,
+        tokens_used: int | None = None,
     ) -> Message:
-        """Persist a streamed RAG answer with the same fields as a blocking one."""
+        """Persist a streamed RAG answer with the same fields as a blocking one.
+
+        ``llm_provider`` / ``llm_model`` / ``tokens_used`` come from the stream
+        (the provider that actually served, via the fallback chain, plus reported
+        usage) so streamed rows are attributed the same way as blocking ones.
+        """
         return await self.message_repository.create(
             {
                 "conversation_id": conversation.id,
@@ -1377,9 +1401,9 @@ Tin mới:
                 "content": content,
                 "intent": intent.value,
                 "intent_confidence": confidence,
-                "llm_provider": self.llm_provider.provider_name,
-                "llm_model": self.llm_provider.model,
-                "tokens_used": None,
+                "llm_provider": llm_provider,
+                "llm_model": llm_model,
+                "tokens_used": tokens_used,
                 "latency_ms": latency_ms,
                 "retrieved_documents": [
                     {

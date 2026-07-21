@@ -27,11 +27,21 @@ class LLMResponse(BaseModel):
 
 
 class LLMStreamChunk(BaseModel):
-    """A single chunk from a streaming generation."""
+    """A single chunk from a streaming generation.
+
+    ``provider`` / ``model`` / ``total_tokens`` are surfaced so a streaming caller
+    can attribute the answer to the provider that actually served it (e.g. through
+    the fallback chain) and record usage when the provider reports it. They are
+    optional because not every chunk carries them (usage typically arrives on the
+    final chunk).
+    """
 
     delta: str
     finish_reason: str | None = None
     accumulated_text: str
+    provider: str | None = None
+    model: str | None = None
+    total_tokens: int | None = None
 
 
 class EmbeddingResponse(BaseModel):

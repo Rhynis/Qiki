@@ -297,8 +297,17 @@ export function useStreamMessage() {
           },
         })
       } catch (error) {
-        // Roll back so the caller can retry through the blocking endpoint.
+        // Roll back the optimistic entries so the refetch below reconciles to the
+        // server's truth.
         queryClient.setQueryData(key, previous)
+        // If the stream already started, the server owns this turn and persists it
+        // even on a mid-stream disconnect (see stream_message's finally). Re-POSTing
+        // to the blocking endpoint would create a SECOND user message + reply (double
+        // LLM spend), so swallow the error and let the invalidate below refetch the
+        // persisted turn. Only a stream that never started falls back to blocking.
+        if (started) {
+          return
+        }
         throw error
       } finally {
         setIsStreaming(false)

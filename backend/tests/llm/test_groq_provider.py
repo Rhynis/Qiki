@@ -145,3 +145,28 @@ async def test_health_check_returns_false_when_down(httpx_mock: HTTPXMock) -> No
     httpx_mock.add_exception(httpx.ConnectError("offline"))
 
     assert await provider().health_check() is False
+
+
+async def test_stream_surfaces_usage_tokens_and_provider(httpx_mock: HTTPXMock) -> None:
+    # With stream_options.include_usage, Groq emits a final usage frame; the chunk
+    # must surface total_tokens plus the serving provider/model for analytics.
+    httpx_mock.add_response(
+        method="POST",
+        url="https://api.groq.com/openai/v1/chat/completions",
+        stream=IteratorStream(
+            [
+                b'data: {"model":"llama-test","choices":[{"delta":{"content":"Hi"},'
+                b'"finish_reason":null}]}\n\n',
+                b'data: {"model":"llama-test","choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+                b'data: {"model":"llama-test","choices":[],"usage":{"total_tokens":33}}\n\n',
+                b"data: [DONE]\n\n",
+            ]
+        ),
+    )
+
+    chunks = [chunk async for chunk in provider().stream("Hello")]
+
+    assert "".join(chunk.delta for chunk in chunks) == "Hi"
+    assert chunks[-1].total_tokens == 33
+    assert chunks[-1].provider == "groq"
+    assert chunks[-1].model == "llama-test"
