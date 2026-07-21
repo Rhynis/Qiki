@@ -43,6 +43,10 @@ NOT_FOUND_REPLY = (
     "hoặc mã SKU giúp mình nhé."
 )
 EXPIRED_REPLY = "Phiên xác nhận đã hết hạn hoặc không hợp lệ. Bạn gửi lại yêu cầu giúp mình nhé."
+STALE_REPLY = (
+    "Sản phẩm này vừa được thay đổi bởi một thao tác khác, nên Qiki chưa áp dụng để "
+    "tránh ghi đè. Bạn gửi lại yêu cầu để mình báo giá/tồn mới nhất nhé."
+)
 
 
 class AdminChatService:
@@ -87,8 +91,11 @@ class AdminChatService:
             return AdminChatResponse(status="invalid", reply=error)
 
         preview = self._build_preview(parsed, product)
+        # Snapshot the value the admin is approving so the confirm step can detect a
+        # concurrent change (optimistic concurrency) instead of silently overwriting.
+        before_snapshot, _after, _update = self._compute_change(parsed, product)
         token = uuid4().hex
-        await self._store_pending(token, admin.id, parsed, product.id)
+        await self._store_pending(token, admin.id, parsed, product.id, before_snapshot)
         return AdminChatResponse(
             status="confirm_required",
             reply=self._confirm_prompt(parsed, product),
@@ -122,6 +129,20 @@ class AdminChatService:
             return AdminChatResponse(status="invalid", reply=error)
 
         before, after, update = self._compute_change(parsed, product)
+        # Optimistic concurrency: if the live value no longer matches the snapshot the
+        # admin approved, another operation changed the row in between. Abort rather
+        # than silently overwriting that change; the admin can re-issue for a fresh
+        # preview. (The token was already consumed by GETDEL above.)
+        before_snapshot = data.get("before_snapshot")
+        if before_snapshot is not None and before != before_snapshot:
+            self.logger.warning(
+                "admin_chat_stale_confirm",
+                admin_id=str(admin.id),
+                product_id=str(product.id),
+                approved=before_snapshot,
+                current=before,
+            )
+            return AdminChatResponse(status="stale", reply=STALE_REPLY)
         product_name = product.name
         await self.product_service.update_product(product.id, update, admin)
         await self.audit_repository.record(
@@ -226,7 +247,12 @@ class AdminChatService:
         return f"{PENDING_KEY_PREFIX}{token}"
 
     async def _store_pending(
-        self, token: str, admin_id: UUID, parsed: ParsedInstruction, product_id: UUID
+        self,
+        token: str,
+        admin_id: UUID,
+        parsed: ParsedInstruction,
+        product_id: UUID,
+        before_snapshot: dict[str, Any],
     ) -> None:
         payload: dict[str, Any] = {
             "admin_id": str(admin_id),
@@ -235,6 +261,8 @@ class AdminChatService:
             "price_value": str(parsed.price_value) if parsed.price_value is not None else None,
             "stock_value": parsed.stock_value,
             "active_value": parsed.active_value,
+            # The live value the preview was built from, to guard against a lost update.
+            "before_snapshot": before_snapshot,
         }
         await self.redis.setex(self._pending_key(token), PENDING_TTL_SECONDS, json.dumps(payload))
 

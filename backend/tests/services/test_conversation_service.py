@@ -4789,3 +4789,95 @@ async def test_stream_message_persists_partial_reply_on_disconnect() -> None:
     assistant = [message for message in persisted if message.role == "assistant"]
     assert assistant, "the partial streamed reply must be persisted on disconnect"
     assert assistant[-1].content  # a non-empty partial answer was saved
+
+
+@pytest.mark.asyncio
+async def test_price_inquiry_reply_follows_english_locale() -> None:
+    # Same trigger as the Vietnamese path, but the EN UI locale yields an EN reply.
+    product_service = FakeProductService(products=_price_query_catalog())
+    service, _conversations, _messages, rag, _orders = make_service(product_service=product_service)
+    conversation = await service.start_conversation(user=None, session_id="abc", locale="en")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="Gas 12kg loại nào rẻ nhất?", locale="en"),
+        user=None,
+    )
+
+    assert response.assistant_message is not None
+    answer = response.assistant_message.content
+    assert "cheapest" in answer
+    assert "420.000đ" in answer
+    assert "Dạ" not in answer  # not the Vietnamese wording
+    assert rag.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_intent_clarification_reply_follows_english_locale() -> None:
+    service, _conversations, _messages, _rag, _orders = make_service(
+        category=IntentCategory.GENERAL_INFO,
+        confidence=0.2,
+        llm_provider=FakeLLMProvider([{}]),
+        product_service=FakeProductService(products=_water_catalog()),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc", locale="en")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="not sure", locale="en"),
+        user=None,
+    )
+
+    assert response.assistant_message is not None
+    answer = response.assistant_message.content
+    assert "Qiki isn't sure what you mean" in answer
+    assert "chưa rõ ý bạn" not in answer
+
+
+@pytest.mark.asyncio
+async def test_handoff_reply_follows_english_locale() -> None:
+    service, _conversations, _messages, _rag, _orders = make_service(
+        category=IntentCategory.COMPLAINT,
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc", locale="en")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="This is unacceptable, I want a refund", locale="en"),
+        user=None,
+    )
+
+    assert response.conversation.status == "escalated"
+    assert response.assistant_message is not None
+    answer = response.assistant_message.content
+    assert "handed this conversation over" in answer
+    assert "nhân viên" not in answer
+
+
+@pytest.mark.asyncio
+async def test_order_confirmation_summary_follows_english_locale(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        ConversationService,
+        "_now_vn",
+        staticmethod(lambda: datetime(2026, 6, 8, 9, 0, tzinfo=timezone(timedelta(hours=7)))),
+    )
+    payload = complete_order_payload()
+    service, _conversations, _messages, _rag, _orders = make_service(
+        category=IntentCategory.PLACE_ORDER,
+        llm_provider=FakeLLMProvider([payload]),
+    )
+    conversation = await service.start_conversation(user=None, session_id="abc", locale="en")
+
+    response = await service.send_message(
+        conversation.id,
+        SendMessageRequest(content="I want to order 1 Petrolimex 12kg", locale="en"),
+        user=None,
+    )
+
+    assert response.assistant_message is not None
+    answer = response.assistant_message.content
+    assert "Qiki's summary of your order:" in answer
+    assert "Would you like to confirm this order?" in answer
+    assert "tóm tắt đơn hàng" not in answer

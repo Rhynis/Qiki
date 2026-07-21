@@ -55,6 +55,7 @@ CHAT_ORDER_STATE_METADATA_TYPE = "chat_order_state"
 # message's retrieved_documents, surfaced as-is via the admin conversation payload.
 CHAT_FOLLOWUP_NOTE_METADATA_TYPE = "chat_followup_note"
 ORDER_CONFIRMATION_PROMPT = "Bạn xác nhận đặt đơn này không?"
+ORDER_CONFIRMATION_PROMPT_EN = "Would you like to confirm this order?"
 ORDER_CONTEXT_CONFIDENCE = 0.9
 ORDER_STATE_TTL = timedelta(minutes=30)
 VN_TIMEZONE = timezone(timedelta(hours=7))
@@ -492,6 +493,10 @@ class ConversationService:
         ):
             followup_note = self._detect_followup_request(request.content, intent.category)
 
+        # Deterministic replies follow the UI locale (default Vietnamese) so an
+        # English UI user gets English answers on the non-LLM paths too.
+        language = request.locale or "vi"
+
         product_cards: list[ProductCardResponse] = []
         product_inquiry_message: str | None = None
         if intent.category == IntentCategory.PRODUCT_INQUIRY and not should_ask_clarification:
@@ -499,6 +504,7 @@ class ConversationService:
             product_inquiry_message = await self._price_inquiry_message(
                 request.content,
                 catalog_products,
+                language=language,
             )
             if product_inquiry_message is None:
                 product_inquiry_message = self._gas_size_inquiry_message(
@@ -532,15 +538,18 @@ class ConversationService:
             )
         elif followup_note is not None:
             assistant_message = await self._create_followup_message(
-                conversation, followup_note, intent
+                conversation, followup_note, intent, language=language
             )
         elif routing.requires_human:
-            assistant_message = await self._create_handoff_message(conversation, routing)
+            assistant_message = await self._create_handoff_message(
+                conversation, routing, language=language
+            )
         elif should_ask_clarification:
             assistant_message = await self._create_intent_clarification_message(
                 conversation,
                 intent.category,
                 intent.confidence,
+                language=language,
             )
         elif product_inquiry_message is not None:
             assistant_message = await self._create_assistant_message(
@@ -558,6 +567,7 @@ class ConversationService:
                 user,
                 intent.confidence,
                 catalog_products or [],
+                language=language,
             )
             assistant_message = order_result.message
             product_cards = [
@@ -666,6 +676,7 @@ class ConversationService:
         user: User | None,
         confidence: float,
         products: Sequence[ProductResponse],
+        language: str = "vi",
     ) -> ChatOrderResult:
         existing_order = self._find_existing_chat_order(history)
         if existing_order and self._is_post_order_change_request(content):
@@ -1117,13 +1128,21 @@ class ConversationService:
 
         delivery_zone_match = resolve_ward_delivery_zone(slots.delivery_address)
         if delivery_zone_match is None:
+            if language == "en":
+                out_of_area = (
+                    "Gas Quốc Cường currently only delivers within the Bình Thạnh and "
+                    "Thủ Đức areas. This address isn't in an area Qiki can take an order for "
+                    "via chat. You can call 090 3026306 for further staff assistance."
+                )
+            else:
+                out_of_area = (
+                    "Hiện Gas Quốc Cường chỉ giao trong khu vực Bình Thạnh và Thủ Đức. "
+                    "Địa chỉ này chưa thuộc khu vực Qiki có thể nhận đơn qua chat. "
+                    "Bạn có thể gọi 090 3026306 để được nhân viên hỗ trợ thêm."
+                )
             return result(
                 await order_state_message(
-                    (
-                        "Hiện Gas Quốc Cường chỉ giao trong khu vực Bình Thạnh và Thủ Đức. "
-                        "Địa chỉ này chưa thuộc khu vực Qiki có thể nhận đơn qua chat. "
-                        "Bạn có thể gọi 090 3026306 để được nhân viên hỗ trợ thêm."
-                    ),
+                    out_of_area,
                     "awaiting_missing_slots",
                     slots,
                 ),
@@ -1189,6 +1208,7 @@ class ConversationService:
                         normalized_phone,
                         slots.delivery_address,
                         payment_method,
+                        language,
                     ),
                     "awaiting_confirmation",
                     slots,
@@ -1441,7 +1461,10 @@ Tin mới:
         return self._build_product_catalog_context(catalog_products)
 
     async def _price_inquiry_message(
-        self, content: str, catalog_products: Sequence[ProductResponse]
+        self,
+        content: str,
+        catalog_products: Sequence[ProductResponse],
+        language: str = "vi",
     ) -> str | None:
         """Answer a superlative/range price question deterministically.
 
@@ -1450,6 +1473,7 @@ Tin mới:
         answer is correct regardless of the generator's list-scanning ability.
         Specific single-product price questions are left to the product cards and
         the query-aware RAG context. Returns None when there is no such intent.
+        The reply follows ``language`` (default Vietnamese).
         """
         brands = sorted({product.brand for product in catalog_products})
         query = parse_product_query(content, brands)
@@ -1457,50 +1481,73 @@ Tin mới:
             return None
         matches = await self.product_service.find_products(query)
         if not matches:
+            if language == "en":
+                return (
+                    "Sorry, the store doesn't have an option matching your request yet. "
+                    "Please take a look at the price list below."
+                )
             return (
                 "Dạ hiện cửa hàng chưa có loại phù hợp với yêu cầu của bạn. "
                 "Bạn tham khảo bảng giá bên dưới giúp Qiki nhé ạ."
             )
         if query.price_kind == "cheapest":
-            return self._superlative_price_message(query, matches[0], "rẻ nhất")
+            label = "cheapest" if language == "en" else "rẻ nhất"
+            return self._superlative_price_message(query, matches[0], label, language)
         if query.price_kind == "most_expensive":
-            return self._superlative_price_message(query, matches[-1], "đắt nhất")
-        return self._price_range_message(query, matches)
+            label = "most expensive" if language == "en" else "đắt nhất"
+            return self._superlative_price_message(query, matches[-1], label, language)
+        return self._price_range_message(query, matches, language)
 
     def _superlative_price_message(
-        self, query: ProductQuery, product: ProductResponse, label: str
+        self, query: ProductQuery, product: ProductResponse, label: str, language: str = "vi"
     ) -> str:
-        scope = self._price_scope_label(query)
+        scope = self._price_scope_label(query, language)
         name = self._format_product_display_name(product)
+        if language == "en":
+            return (
+                f"The {label} {scope} option is {name} ({product.brand}), "
+                f"priced at {self._format_vnd(product.price)}."
+            )
         return (
             f"Dạ loại {scope} {label} là {name} ({product.brand}), "
             f"giá {self._format_vnd(product.price)} ạ."
         )
 
-    def _price_range_message(self, query: ProductQuery, matches: Sequence[ProductResponse]) -> str:
-        scope = self._price_scope_label(query)
+    def _price_range_message(
+        self, query: ProductQuery, matches: Sequence[ProductResponse], language: str = "vi"
+    ) -> str:
+        scope = self._price_scope_label(query, language)
         amount = self._format_vnd(query.price_value) if query.price_value is not None else ""
+        options = "; ".join(
+            f"{self._format_product_display_name(product)} ({self._format_vnd(product.price)})"
+            for product in matches[:5]
+        )
+        if language == "en":
+            phrase = {
+                "around": f"around {amount}",
+                "under": f"under {amount}",
+                "over": f"over {amount}",
+            }.get(query.price_kind or "", amount)
+            return f"The {scope} options {phrase} are: {options}."
         phrase = {
             "around": f"tầm {amount}",
             "under": f"dưới {amount}",
             "over": f"trên {amount}",
         }.get(query.price_kind or "", amount)
-        options = "; ".join(
-            f"{self._format_product_display_name(product)} ({self._format_vnd(product.price)})"
-            for product in matches[:5]
-        )
         return f"Dạ loại {scope} {phrase} có: {options} ạ."
 
-    def _price_scope_label(self, query: ProductQuery) -> str:
+    def _price_scope_label(self, query: ProductQuery, language: str = "vi") -> str:
         parts: list[str] = []
         if query.category == "nuoc_uong":
-            parts.append("nước")
+            parts.append("water" if language == "en" else "nước")
         elif query.category == "gas" or query.size_kg is not None:
             parts.append("gas")
         if query.size_kg is not None:
             unit = "lít" if query.category == "nuoc_uong" else "kg"
             parts.append(f"{self._format_decimal(query.size_kg)}{unit}")
-        return " ".join(parts) if parts else "sản phẩm"
+        if parts:
+            return " ".join(parts)
+        return "product" if language == "en" else "sản phẩm"
 
     @classmethod
     def _format_product_catalog_line(cls, product: ProductResponse) -> str:
@@ -1822,13 +1869,21 @@ Tin mới:
         conversation: Conversation,
         intent: IntentCategory,
         confidence: float,
+        language: str = "vi",
     ) -> Message:
-        return await self._create_assistant_message(
-            conversation,
-            (
+        if language == "en":
+            content = (
+                "Qiki isn't sure what you mean. Would you like to **place an order**, "
+                "**ask about prices/products**, or **ask about the store**?"
+            )
+        else:
+            content = (
                 "Qiki chưa rõ ý bạn. Bạn muốn **đặt hàng**, "
                 "**hỏi giá/sản phẩm**, hay **hỏi thông tin cửa hàng** ạ?"
-            ),
+            )
+        return await self._create_assistant_message(
+            conversation,
+            content,
             intent,
             confidence,
         )
@@ -2194,10 +2249,12 @@ Tin mới:
         return "Khách yêu cầu gọi lại"
 
     @classmethod
-    def _format_followup_reply(cls, note: dict[str, Any]) -> str:
+    def _format_followup_reply(cls, note: dict[str, Any], language: str = "vi") -> str:
         window = note.get("time_window")
         period = note.get("period")
         declined = bool(note.get("declined_callback"))
+        if language == "en":
+            return cls._format_followup_reply_en(window, period, declined, note)
         if note.get("note_type") == "delivery_window":
             if window and not period:
                 return (
@@ -2222,18 +2279,45 @@ Tin mới:
             f"Dạ Qiki đã ghi chú gọi lại {window_text}, nhân viên sẽ gọi lại cho bạn. Cảm ơn bạn!"
         )
 
+    @staticmethod
+    def _format_followup_reply_en(
+        window: str | None, period: str | None, declined: bool, note: dict[str, Any]
+    ) -> str:
+        if note.get("note_type") == "delivery_window":
+            if window and not period:
+                return (
+                    f"Qiki has noted delivery around **{window}** — would you prefer the "
+                    "morning or the evening? Our staff will deliver within that window."
+                )
+            note_text = f"delivery **{window}**" if window else "the delivery window you suggested"
+            tail = " Qiki won't call back again." if declined else ""
+            return (
+                f"Qiki has noted {note_text}; our staff will deliver within that window.{tail} "
+                "Thank you!"
+            )
+        if declined:
+            return "Qiki has noted that you don't need a callback. Thank you!"
+        if window and not period:
+            return (
+                f"Qiki has noted a callback around **{window}** — would you prefer the "
+                "morning or the evening?"
+            )
+        window_text = f"**{window}**" if window else "as soon as possible"
+        return f"Qiki has noted a callback {window_text}; our staff will call you back. Thank you!"
+
     async def _create_followup_message(
         self,
         conversation: Conversation,
         note: dict[str, Any],
         intent: IntentResult,
+        language: str = "vi",
     ) -> Message:
         """Persist a follow-up acknowledgement carrying the structured note + flag."""
         return await self.message_repository.create(
             {
                 "conversation_id": conversation.id,
                 "role": "assistant",
-                "content": self._format_followup_reply(note),
+                "content": self._format_followup_reply(note, language),
                 "intent": intent.category.value,
                 "intent_confidence": intent.confidence,
                 "latency_ms": 0,
@@ -3673,6 +3757,7 @@ Tin mới:
         phone: str,
         address: str,
         payment_method: Literal["cod", "bank_transfer"],
+        language: str = "vi",
     ) -> str:
         product_subtotal = sum(
             (product.price * (item.quantity or 0) for item, product in items),
@@ -3681,6 +3766,17 @@ Tin mới:
         water_quantity = cls._water_item_quantity(items)
         water_delivery_fee = cls._water_delivery_fee(items)
         subtotal = product_subtotal + water_delivery_fee
+        if language == "en":
+            return cls._format_order_summary_en(
+                items,
+                customer_name,
+                phone,
+                address,
+                payment_method,
+                subtotal,
+                water_delivery_fee,
+                water_quantity,
+            )
         payment_label = "COD" if payment_method == "cod" else "chuyển khoản"
         lines = ["Qiki tóm tắt đơn hàng của bạn:"]
         for item, product in items:
@@ -3706,6 +3802,48 @@ Tin mới:
         if water_delivery_fee:
             lines.append("- Ghi chú: Phí lên lầu +5.000đ/lầu (nếu có), nhân viên báo khi giao.")
         lines.extend(["", ORDER_CONFIRMATION_PROMPT])
+        return "\n".join(lines)
+
+    @classmethod
+    def _format_order_summary_en(
+        cls,
+        items: Sequence[tuple[ChatOrderItem, ProductResponse]],
+        customer_name: str,
+        phone: str,
+        address: str,
+        payment_method: Literal["cod", "bank_transfer"],
+        subtotal: Decimal,
+        water_delivery_fee: Decimal,
+        water_quantity: int,
+    ) -> str:
+        payment_label = "COD" if payment_method == "cod" else "bank transfer"
+        lines = ["Qiki's summary of your order:"]
+        for item, product in items:
+            quantity = item.quantity or 0
+            line_total = product.price * quantity
+            lines.append(
+                f"- {product.name} ({product.brand}) × {quantity} — {cls._format_vnd(line_total)}"  # noqa: RUF001
+            )
+        if water_delivery_fee:
+            lines.append(
+                f"- Water delivery fee: +{cls._format_vnd(water_delivery_fee)} "
+                f"(5k/bottle × {water_quantity} water bottles)"  # noqa: RUF001
+            )
+        lines.extend(
+            [
+                f"- Subtotal: **{cls._format_vnd(subtotal)}**",
+                f"- Recipient: **{customer_name}**",
+                f"- Phone: **{cls._format_phone_display(phone)}**",
+                f"- Address: **{address}**",
+                f"- Payment: **{payment_label}**",
+            ]
+        )
+        if water_delivery_fee:
+            lines.append(
+                "- Note: Extra +5,000đ/floor for carrying upstairs (if any); "
+                "staff confirm on delivery."
+            )
+        lines.extend(["", ORDER_CONFIRMATION_PROMPT_EN])
         return "\n".join(lines)
 
     @staticmethod
@@ -3865,11 +4003,18 @@ Tin mới:
         self,
         conversation: Conversation,
         routing: RoutingDecision,
+        language: str = "vi",
     ) -> Message:
-        content = (
-            "Cảm ơn bạn đã chia sẻ. Mình đã chuyển cuộc trò chuyện này cho nhân viên "
-            "hỗ trợ để xử lý kỹ hơn."
-        )
+        if language == "en":
+            content = (
+                "Thanks for sharing. I've handed this conversation over to a support "
+                "staff member for closer assistance."
+            )
+        else:
+            content = (
+                "Cảm ơn bạn đã chia sẻ. Mình đã chuyển cuộc trò chuyện này cho nhân viên "
+                "hỗ trợ để xử lý kỹ hơn."
+            )
         return await self.message_repository.create(
             {
                 "conversation_id": conversation.id,
