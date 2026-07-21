@@ -376,3 +376,26 @@ async def test_admin_chat_non_admin_cannot_execute_mutation(mock_redis: FakeRedi
         )
     assert repository.products[product.id].price == Decimal("445000")
     assert audit.entries == []
+
+
+async def test_admin_chat_confirm_aborts_on_concurrent_change(mock_redis: FakeRedis) -> None:
+    # If another operation changes the row between plan and confirm, the confirm
+    # must abort (optimistic concurrency) instead of silently overwriting it.
+    product = make_product(price=Decimal("445000"))
+    service, repository, audit = build_service([product], mock_redis)
+    admin = make_admin()
+
+    planned = await service.handle(AdminChatRequest(message="đổi giá Elf 12kg thành 460000"), admin)
+    assert planned.status == "confirm_required"
+
+    # A concurrent change to the live price between plan and confirm.
+    repository.products[product.id].price = Decimal("500000")
+
+    stale = await service.handle(
+        AdminChatRequest(message="", confirm=True, pending_token=planned.pending_token), admin
+    )
+
+    assert stale.status == "stale"
+    # The concurrent change is preserved; nothing was overwritten or audited.
+    assert Decimal(str(repository.products[product.id].price)) == Decimal("500000")
+    assert audit.entries == []

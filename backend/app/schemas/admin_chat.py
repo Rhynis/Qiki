@@ -13,6 +13,7 @@ AdminChatStatus = Literal[
     "invalid",
     "unrecognized",
     "expired",
+    "stale",
 ]
 
 AdminChatAction = Literal["update_price", "update_stock", "set_active"]

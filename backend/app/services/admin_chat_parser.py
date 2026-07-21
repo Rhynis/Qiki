@@ -17,9 +17,14 @@ from app.services.product_query import parse_price_value, strip_accents
 
 AdminAction = Literal["update_price", "update_stock", "set_active"]
 
-# Verb cues (accent-stripped, whole-word) for toggling product visibility.
-_HIDE_WORDS = ("an", "hide", "tat", "ngung", "deactivate", "khoa", "dung ban")
-_SHOW_WORDS = ("hien", "show", "bat", "kich hoat", "activate", "mo ban", "mo lai")
+# Distinctive visibility verbs (accent-stripped): safe to match anywhere because
+# they do not collide with brand/product names.
+_HIDE_WORDS = ("hide", "ngung", "deactivate", "khoa", "dung ban")
+_SHOW_WORDS = ("hien", "show", "kich hoat", "activate", "mo ban", "mo lai")
+# Very short visibility verbs ("ẩn", "tắt", "bật") that DO collide with names
+# (e.g. a brand "An"), so they only count as a command when they LEAD the message.
+_HIDE_LEADING_WORDS = ("an", "tat")
+_SHOW_LEADING_WORDS = ("bat",)
 _PRICE_WORDS = ("gia", "price")
 _STOCK_WORDS = ("ton", "kho", "stock", "quantity", "so luong")
 
@@ -43,6 +48,14 @@ def _has_word(normalized: str, word: str) -> bool:
     return re.search(rf"\b{re.escape(word)}\b", normalized) is not None
 
 
+def _is_leading_command(normalized: str, word: str) -> bool:
+    """True when ``word`` leads the instruction (an imperative verb), not an
+    incidental brand/name token further in the message. Allows one leading filler
+    (e.g. "vui long", "hay") so polite phrasings still classify."""
+    tokens = normalized.split()
+    return word in tokens[:2]
+
+
 def _strip_size_tokens(normalized: str) -> str:
     """Remove size tokens ('12kg', '5l') so they cannot be read as the new value."""
     without_kg = _SIZE_KG_RE.sub(" ", normalized)
@@ -61,16 +74,12 @@ def _extract_int(value_source: str) -> int | None:
 def parse_admin_instruction(text: str) -> ParsedInstruction | None:
     """Classify an admin message into a catalog action, or None if unrecognized.
 
-    Toggling visibility is checked first (it needs no numeric value); a price
-    command wins over a stock command when both cue words appear.
+    Price/stock commands are classified BEFORE the visibility toggles: they carry a
+    distinctive keyword ("giá"/"tồn"...) plus a value, so a brand like "An"/"Bật"
+    inside such a command is never misread as a hide/show verb. A price command wins
+    over a stock command when both cue words appear.
     """
     normalized = strip_accents(text)
-
-    if any(_has_word(normalized, word) for word in _SHOW_WORDS):
-        return ParsedInstruction(action="set_active", active_value=True)
-    if any(_has_word(normalized, word) for word in _HIDE_WORDS):
-        return ParsedInstruction(action="set_active", active_value=False)
-
     value_source = _strip_size_tokens(normalized)
 
     if any(_has_word(normalized, word) for word in _PRICE_WORDS):
@@ -82,5 +91,16 @@ def parse_admin_instruction(text: str) -> ParsedInstruction | None:
         stock_value = _extract_int(value_source)
         if stock_value is not None:
             return ParsedInstruction(action="update_stock", stock_value=stock_value)
+
+    # Visibility toggles: distinctive verbs match anywhere; the short ambiguous
+    # verbs (ẩn/tắt/bật) only count when they lead the command.
+    if any(_has_word(normalized, word) for word in _SHOW_WORDS) or any(
+        _is_leading_command(normalized, word) for word in _SHOW_LEADING_WORDS
+    ):
+        return ParsedInstruction(action="set_active", active_value=True)
+    if any(_has_word(normalized, word) for word in _HIDE_WORDS) or any(
+        _is_leading_command(normalized, word) for word in _HIDE_LEADING_WORDS
+    ):
+        return ParsedInstruction(action="set_active", active_value=False)
 
     return None

@@ -52,3 +52,31 @@ def test_admin_action_parse_unrecognized_returns_none() -> None:
     assert parse_admin_instruction("chào bạn, hôm nay thế nào?") is None
     # A price cue with no parseable amount is not actionable.
     assert parse_admin_instruction("đổi giá Elf 12kg") is None
+
+
+def test_admin_action_price_command_with_brand_an_is_not_hide() -> None:
+    # "An" is a brand token, not the hide verb "ẩn": a price command must win.
+    parsed = parse_admin_instruction("cập nhật giá An Gas 12kg thành 460000")
+    assert parsed is not None
+    assert parsed.action == "update_price"
+    assert parsed.price_value == Decimal("460000")
+
+
+def test_admin_action_stock_command_with_brand_an_is_not_hide() -> None:
+    parsed = parse_admin_instruction("cập nhật tồn An Gas 12kg thành 8")
+    assert parsed is not None
+    assert parsed.action == "update_stock"
+    assert parsed.stock_value == 8
+
+
+def test_admin_action_leading_hide_verb_still_toggles() -> None:
+    # "ẩn" leading the command is still a hide toggle.
+    parsed = parse_admin_instruction("ẩn An Gas 12kg")
+    assert parsed is not None
+    assert parsed.action == "set_active"
+    assert parsed.active_value is False
+
+
+def test_admin_action_non_leading_short_verb_does_not_toggle() -> None:
+    # A short verb token that only appears mid-message (as a name) is not a command.
+    assert parse_admin_instruction("cho xem An Gas 12kg") is None
