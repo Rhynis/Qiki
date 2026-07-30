@@ -32,6 +32,7 @@ const productBaseSchema = z.object({
   price: z.string().trim().min(1, 'Giá không được để trống').regex(/^\d+$/, 'Giá phải là số'),
   stock_quantity: z.coerce.number().int('Tồn kho phải là số nguyên').min(0, 'Tồn kho không âm'),
   description: z.string().trim().optional(),
+  long_description: z.string().trim().optional(),
   image_url: optionalUrl,
   safety_info: z.string().trim().optional(),
   pricing_note: z.string().trim().optional(),

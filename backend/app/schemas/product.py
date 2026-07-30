@@ -31,6 +31,7 @@ class ProductBase(BaseModel):
     unit: ProductUnit = "kg"
     price: Decimal = Field(gt=0)
     description: str | None = None
+    long_description: str | None = None
     image_url: HttpUrl | None = None
     safety_info: str | None = None
     pricing_note: str | None = None
@@ -73,6 +74,7 @@ class ProductUpdate(BaseModel):
     unit: ProductUnit | None = None
     price: Decimal | None = Field(default=None, gt=0)
     description: str | None = None
+    long_description: str | None = None
     image_url: HttpUrl | None = None
     safety_info: str | None = None
     pricing_note: str | None = None
@@ -136,6 +138,7 @@ class ProductParentBase(BaseModel):
     brand: str = Field(min_length=1, max_length=100)
     category: ProductCategory = "gas"
     description: str | None = None
+    long_description: str | None = None
     image_url: HttpUrl | None = None
 
 
@@ -150,6 +153,7 @@ class ProductParentUpdate(BaseModel):
     brand: str | None = Field(default=None, min_length=1, max_length=100)
     category: ProductCategory | None = None
     description: str | None = None
+    long_description: str | None = None
     image_url: HttpUrl | None = None
     is_active: bool | None = None
 

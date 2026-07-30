@@ -34,6 +34,7 @@ type ProductFormState = {
   price: string
   stock_quantity: string
   description: string
+  long_description: string
   image_url: string
   safety_info: string
   pricing_note: string
@@ -58,6 +59,7 @@ const emptyState: ProductFormState = {
   price: '',
   stock_quantity: '0',
   description: '',
+  long_description: '',
   image_url: '',
   safety_info: '',
   pricing_note: '',
@@ -78,6 +80,7 @@ function initialState(product?: Product): ProductFormState {
     price: Number(product.price).toString(),
     stock_quantity: product.stock_quantity.toString(),
     description: product.description ?? '',
+    long_description: product.long_description ?? '',
     image_url: product.image_url ?? '',
     safety_info: product.safety_info ?? '',
     pricing_note: product.pricing_note ?? '',
@@ -139,6 +142,7 @@ export function ProductForm({ product, isSubmitting = false, onSubmit }: Product
     await onSubmit({
       ...parsed.data,
       description: normalizeText(form.description),
+      long_description: normalizeText(form.long_description),
       image_url: normalizeText(form.image_url),
       safety_info: normalizeText(form.safety_info),
       pricing_note: form.category === 'nuoc_uong' ? normalizeText(form.pricing_note) : null,
@@ -255,10 +259,17 @@ export function ProductForm({ product, isSubmitting = false, onSubmit }: Product
           onChange={(event) => updateField('image_url', event.target.value)}
         />
       </FieldError>
-      <FieldError label="Mô tả" error={errors.description}>
+      <FieldError label="Mô tả ngắn" error={errors.description}>
         <Textarea
           value={form.description}
           onChange={(event) => updateField('description', event.target.value)}
+        />
+      </FieldError>
+      <FieldError label="Mô tả chi tiết" error={errors.long_description}>
+        <Textarea
+          rows={6}
+          value={form.long_description}
+          onChange={(event) => updateField('long_description', event.target.value)}
         />
       </FieldError>
       <FieldError label="An toàn sử dụng" error={errors.safety_info}>

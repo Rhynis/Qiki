@@ -13,6 +13,7 @@ const product: Product = {
   price: '350000.00',
   stock_quantity: 5,
   description: null,
+  long_description: null,
   image_url: null,
   safety_info: null,
   pricing_note: null,

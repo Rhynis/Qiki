@@ -22,6 +22,7 @@ function toProduct(item: ReorderItem): Product {
     price: item.price,
     stock_quantity: item.stock_quantity,
     description: null,
+    long_description: null,
     image_url: item.image_url,
     safety_info: null,
     pricing_note: null,
