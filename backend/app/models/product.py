@@ -23,6 +23,7 @@ class ProductParent(Base, UUIDMixin, TimestampMixin):
     brand: Mapped[str] = mapped_column(String(100), nullable=False)
     category: Mapped[str] = mapped_column(String(30), default="gas", nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    long_description: Mapped[str | None] = mapped_column(Text, nullable=True)
     image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
@@ -54,6 +55,7 @@ class Product(Base, UUIDMixin, TimestampMixin):
     price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     stock_quantity: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    long_description: Mapped[str | None] = mapped_column(Text, nullable=True)
     image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     safety_info: Mapped[str | None] = mapped_column(Text, nullable=True)
     pricing_note: Mapped[str | None] = mapped_column(Text, nullable=True)

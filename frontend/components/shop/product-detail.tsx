@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
+import { GasSafetyNotice } from '@/components/shop/gas-safety-notice'
 import { StockBadge } from '@/components/shop/stock-badge'
 import { WishlistButton } from '@/components/shop/wishlist-button'
 import { useCartStore } from '@/lib/stores/cart-store'
@@ -41,6 +42,14 @@ export function ProductDetail({ product, variants }: ProductDetailProps) {
     [options, selectedId, product]
   )
 
+  // Prefer the detailed (long) description on the product page, falling back to the
+  // short listing description when no long text has been provided yet.
+  const detailDescription =
+    selected.long_description ??
+    product.long_description ??
+    selected.description ??
+    product.description
+
   const inStock = selected.stock_quantity > 0
   const addToCart = () => {
     addItem(selected, 1)
@@ -56,7 +65,7 @@ export function ProductDetail({ product, variants }: ProductDetailProps) {
         </Link>
       </Button>
 
-      <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+      <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
         <div className="flex aspect-square items-center justify-center rounded-lg border bg-white">
           {(selected.image_url ?? product.image_url) ? (
             <div
@@ -133,14 +142,18 @@ export function ProductDetail({ product, variants }: ProductDetailProps) {
             </div>
           ) : null}
 
-          {product.description ? (
+          {detailDescription ? (
             <Card>
               <CardHeader>
                 <CardTitle>{t('description')}</CardTitle>
               </CardHeader>
-              <CardContent className="text-slate-700">{product.description}</CardContent>
+              <CardContent className="whitespace-pre-line text-slate-700">
+                {detailDescription}
+              </CardContent>
             </Card>
           ) : null}
+
+          {selected.category === 'gas' ? <GasSafetyNotice /> : null}
 
           {(selected.safety_info ?? product.safety_info) ? (
             <Card>

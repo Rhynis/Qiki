@@ -53,6 +53,9 @@ VALUES
   ('THUDUC-12KG', 'Bình gas Thủ Đức 12kg', 'Gas Thủ Đức', 12, 'gas', 'kg', 625000, 50, 'Bình gas Thủ Đức 12kg cho gia đình.', NULL, NULL),
   ('THUDUC-6KG-NHUA', 'Bình gas Thủ Đức 6kg (vỏ nhựa)', 'Gas Thủ Đức', 6, 'gas', 'kg', 320000, 50, 'Bình gas Thủ Đức 6kg vỏ nhựa, nhỏ gọn.', NULL, NULL),
   ('VIHAWA-20L', 'Nước Vihawa 20 lít', 'Vihawa', 20, 'nuoc_uong', 'lít', 55000, 50, 'Bình nước uống Vihawa 20 lít dùng cho gia đình và văn phòng.', NULL, 'Giá niêm yết là giá mua tại cửa hàng. Giao hàng tận nơi +5.000đ; lên lầu +5.000đ mỗi lầu.'),
+  -- Vihawa also comes as a hot-cold ("bình nóng lạnh") bottle; the price here is a
+  -- placeholder until the owner sets the real one.
+  ('VIHAWA-20L-NL', 'Nước Vihawa 20 lít (bình nóng lạnh)', 'Vihawa', 20, 'nuoc_uong', 'lít', 55000, 50, 'Bình nước uống Vihawa 20 lít loại dùng cho máy nóng lạnh.', NULL, 'Giá niêm yết là giá mua tại cửa hàng. Giao hàng tận nơi +5.000đ; lên lầu +5.000đ mỗi lầu.'),
   ('HOANHAO-20L', 'Nước Hoàn Hảo 20 lít', 'Hoàn Hảo', 20, 'nuoc_uong', 'lít', 15000, 50, 'Bình nước uống Hoàn Hảo 20 lít tiện đổi bình định kỳ.', NULL, 'Giá niêm yết là giá mua tại cửa hàng. Giao hàng tận nơi +5.000đ; lên lầu +5.000đ mỗi lầu.')
 ON CONFLICT (sku) DO UPDATE SET
   name = EXCLUDED.name,
@@ -106,6 +109,11 @@ SET variant_label = trim(
                 THEN ' (' || colour || ')' ELSE '' END
     )
 );
+
+-- Vihawa 20L is offered as a normal bottle and a hot-cold ("bình nóng lạnh") one;
+-- label the two variants explicitly (the generic label above is size-only for water).
+UPDATE products SET variant_label = 'Bình thường' WHERE sku = 'VIHAWA-20L';
+UPDATE products SET variant_label = 'Bình nóng lạnh' WHERE sku = 'VIHAWA-20L-NL';
 
 INSERT INTO knowledge_base (title, content, category, source, embedding)
 SELECT

@@ -9,6 +9,7 @@ export interface Product {
   price: string
   stock_quantity: number
   description: string | null
+  long_description: string | null
   image_url: string | null
   safety_info: string | null
   pricing_note: string | null
@@ -105,6 +106,7 @@ export interface ProductCreateInput {
   price: string
   stock_quantity: number
   description?: string | null
+  long_description?: string | null
   image_url?: string | null
   safety_info?: string | null
   pricing_note?: string | null

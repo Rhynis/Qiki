@@ -9,7 +9,12 @@ import pytest
 from app.core.exceptions import ForbiddenException, InsufficientStockException, NotFoundException
 from app.models.product import Product
 from app.models.user import User
-from app.schemas.product import ProductCreate, ProductSearchParams, ProductUpdate
+from app.schemas.product import (
+    ProductCreate,
+    ProductResponse,
+    ProductSearchParams,
+    ProductUpdate,
+)
 from app.services.product_query import ProductQuery
 from app.services.product_service import ProductService
 
@@ -366,3 +371,34 @@ async def test_find_products_nonstandard_gas_size_does_not_raise() -> None:
     )
 
     assert matched == []
+
+
+async def test_product_schema_accepts_long_description() -> None:
+    # A detailed (long) description is optional on create, defaults to None, and is
+    # accepted on update, distinct from the short listing `description`.
+    payload = create_payload()
+    assert payload.long_description is None
+
+    detailed = ProductCreate(
+        sku="GAS-12-DETAIL",
+        name="Binh gas 12kg",
+        brand="Saigon Petro",
+        size_kg=Decimal("12"),
+        price=Decimal("350000"),
+        stock_quantity=20,
+        description="Short listing text",
+        long_description="Line one\n\nLine two with detail",
+    )
+    assert detailed.description == "Short listing text"
+    assert detailed.long_description == "Line one\n\nLine two with detail"
+
+    assert ProductUpdate(long_description="Updated detail").long_description == "Updated detail"
+
+
+async def test_product_response_exposes_long_description() -> None:
+    product = make_product()
+    product.long_description = "Detailed multi-paragraph text"
+
+    response = ProductResponse.model_validate(product)
+
+    assert response.long_description == "Detailed multi-paragraph text"
