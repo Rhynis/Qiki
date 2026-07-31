@@ -65,7 +65,7 @@ export function ProductDetail({ product, variants }: ProductDetailProps) {
         </Link>
       </Button>
 
-      <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+      <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
         <div className="flex aspect-square items-center justify-center rounded-lg border bg-white">
           {(selected.image_url ?? product.image_url) ? (
             <div
