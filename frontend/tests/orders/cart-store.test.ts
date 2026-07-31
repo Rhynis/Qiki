@@ -11,6 +11,7 @@ const product: Product = {
   category: 'gas',
   unit: 'kg',
   price: '350000.00',
+  sale_price: null,
   stock_quantity: 5,
   description: null,
   long_description: null,

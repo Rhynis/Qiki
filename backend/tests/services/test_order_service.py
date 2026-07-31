@@ -539,3 +539,56 @@ async def test_staff_can_see_all_orders(order_session: AsyncSession) -> None:
     result = await service(order_session).list_all_orders(staff, OrderSearchParams())
 
     assert result.total == 1
+
+
+async def test_order_charges_the_sale_price(order_session: AsyncSession) -> None:
+    # A product on sale is charged at the sale price, not the list price.
+    product = await create_product(order_session, price=Decimal("710000"), stock_quantity=10)
+    product.sale_price = Decimal("600000")
+    await order_session.commit()
+
+    order = await service(order_session).create_order(
+        checkout_payload(product, items=[OrderItemCreate(product_id=product.id, quantity=2)]),
+        None,
+        uuid4(),
+        order_session,
+    )
+
+    line = order.items[0]
+    assert line.unit_price == Decimal("600000")  # the sale price, not 710000
+    assert order.subtotal == Decimal("1200000")  # 600000 x 2
+    assert order.total_amount == Decimal("1200000")  # gas ships free
+
+
+async def test_concurrent_order_no_oversell_with_sale_price(order_session: AsyncSession) -> None:
+    # No-oversell (SERIALIZABLE + SELECT FOR UPDATE) still holds with a sale price set.
+    product = await create_product(order_session, price=Decimal("710000"), stock_quantity=5)
+    product.sale_price = Decimal("600000")
+    await order_session.commit()
+
+    async def attempt_checkout() -> bool:
+        async with AsyncSessionLocal() as session:
+            try:
+                await service(session).create_order(
+                    checkout_payload(
+                        product,
+                        items=[OrderItemCreate(product_id=product.id, quantity=1)],
+                    ),
+                    None,
+                    uuid4(),
+                    session,
+                )
+                await session.commit()
+                return True
+            except (DBAPIError, InsufficientStockException, ValidationException):
+                await session.rollback()
+                return False
+
+    results = await asyncio.gather(*(attempt_checkout() for _ in range(10)))
+
+    refreshed = await ProductRepository(order_session).get_by_id(product.id)
+    assert refreshed is not None
+    await order_session.refresh(refreshed)
+    successful_orders = sum(results)
+    assert 0 < successful_orders <= 5
+    assert refreshed.stock_quantity == 5 - successful_orders

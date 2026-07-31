@@ -48,6 +48,7 @@ from app.services.product_query import (
 )
 from app.services.product_service import ProductService
 from app.services.routing_service import RoutingDecision, RoutingService
+from app.utils.pricing import effective_price
 
 CHAT_ORDER_METADATA_TYPE = "chat_order"
 CHAT_ORDER_STATE_METADATA_TYPE = "chat_order_state"
@@ -1503,15 +1504,10 @@ Tin mới:
     ) -> str:
         scope = self._price_scope_label(query, language)
         name = self._format_product_display_name(product)
+        price = self._format_vnd(self._effective_price(product))
         if language == "en":
-            return (
-                f"The {label} {scope} option is {name} ({product.brand}), "
-                f"priced at {self._format_vnd(product.price)}."
-            )
-        return (
-            f"Dạ loại {scope} {label} là {name} ({product.brand}), "
-            f"giá {self._format_vnd(product.price)} ạ."
-        )
+            return f"The {label} {scope} option is {name} ({product.brand}), priced at {price}."
+        return f"Dạ loại {scope} {label} là {name} ({product.brand}), giá {price} ạ."
 
     def _price_range_message(
         self, query: ProductQuery, matches: Sequence[ProductResponse], language: str = "vi"
@@ -1519,7 +1515,8 @@ Tin mới:
         scope = self._price_scope_label(query, language)
         amount = self._format_vnd(query.price_value) if query.price_value is not None else ""
         options = "; ".join(
-            f"{self._format_product_display_name(product)} ({self._format_vnd(product.price)})"
+            f"{self._format_product_display_name(product)} "
+            f"({self._format_vnd(self._effective_price(product))})"
             for product in matches[:5]
         )
         if language == "en":
@@ -1552,7 +1549,7 @@ Tin mới:
     @classmethod
     def _format_product_catalog_line(cls, product: ProductResponse) -> str:
         display_name = cls._format_product_display_name(product)
-        price = cls._format_vnd(product.price)
+        price = cls._format_vnd(cls._effective_price(product))
         stock = (
             f"còn {product.stock_quantity} bình" if product.stock_quantity > 0 else "tạm hết hàng"
         )
@@ -1572,6 +1569,11 @@ Tin mới:
         return f"{int(price):,}".replace(",", ".") + "đ"
 
     @staticmethod
+    def _effective_price(product: ProductResponse) -> Decimal:
+        """The price Qiki quotes and charges — the sale price when it is a discount."""
+        return effective_price(product.price, product.sale_price)
+
+    @staticmethod
     def _format_decimal(value: Decimal) -> str:
         text = format(value, "f")
         return text.rstrip("0").rstrip(".") if "." in text else text
@@ -1584,7 +1586,8 @@ Tin mới:
             brand=product.brand,
             size_kg=product.size_kg,
             unit=product.unit,
-            price=product.price,
+            # Quote the effective (sale) price on the chat card too.
+            price=effective_price(product.price, product.sale_price),
             image_url=str(product.image_url) if product.image_url else None,
             sku=product.sku,
             stock_quantity=product.stock_quantity,
@@ -1666,10 +1669,15 @@ Tin mới:
         if not items:
             return None
         ordered = sorted(
-            items, key=lambda product: (cls._normalize_match_text(product.brand), product.price)
+            items,
+            key=lambda product: (
+                cls._normalize_match_text(product.brand),
+                cls._effective_price(product),
+            ),
         )
         lines = [
-            f"- {cls._format_product_display_name(product)} - {cls._format_vnd(product.price)}"
+            f"- {cls._format_product_display_name(product)} "
+            f"- {cls._format_vnd(cls._effective_price(product))}"
             for product in ordered
         ]
         advisory = "Bạn muốn đặt hãng/màu nào để Qiki báo giá và lên đơn nhé?"
@@ -3760,7 +3768,7 @@ Tin mới:
         language: str = "vi",
     ) -> str:
         product_subtotal = sum(
-            (product.price * (item.quantity or 0) for item, product in items),
+            (cls._effective_price(product) * (item.quantity or 0) for item, product in items),
             Decimal("0"),
         )
         water_quantity = cls._water_item_quantity(items)
@@ -3781,7 +3789,7 @@ Tin mới:
         lines = ["Qiki tóm tắt đơn hàng của bạn:"]
         for item, product in items:
             quantity = item.quantity or 0
-            line_total = product.price * quantity
+            line_total = cls._effective_price(product) * quantity
             lines.append(
                 f"- {product.name} ({product.brand}) × {quantity} — {cls._format_vnd(line_total)}"  # noqa: RUF001
             )
@@ -3820,7 +3828,7 @@ Tin mới:
         lines = ["Qiki's summary of your order:"]
         for item, product in items:
             quantity = item.quantity or 0
-            line_total = product.price * quantity
+            line_total = cls._effective_price(product) * quantity
             lines.append(
                 f"- {product.name} ({product.brand}) × {quantity} — {cls._format_vnd(line_total)}"  # noqa: RUF001
             )

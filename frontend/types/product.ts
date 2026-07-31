@@ -7,6 +7,7 @@ export interface Product {
   category: ProductCategory
   unit: ProductUnit
   price: string
+  sale_price: string | null
   stock_quantity: number
   description: string | null
   long_description: string | null
@@ -104,6 +105,7 @@ export interface ProductCreateInput {
   category?: ProductCategory
   unit?: ProductUnit
   price: string
+  sale_price?: string | null
   stock_quantity: number
   description?: string | null
   long_description?: string | null

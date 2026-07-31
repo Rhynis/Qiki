@@ -7,6 +7,7 @@ from sqlalchemy import Boolean, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDMixin
+from app.utils.pricing import effective_price
 
 
 class ProductParent(Base, UUIDMixin, TimestampMixin):
@@ -53,6 +54,7 @@ class Product(Base, UUIDMixin, TimestampMixin):
     category: Mapped[str] = mapped_column(String(30), default="gas", nullable=False)
     unit: Mapped[str] = mapped_column(String(20), default="kg", nullable=False)
     price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    sale_price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     stock_quantity: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     long_description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -72,6 +74,11 @@ class Product(Base, UUIDMixin, TimestampMixin):
         back_populates="variants",
         lazy="select",
     )
+
+    @property
+    def effective_price(self) -> Decimal:
+        """The price actually charged (the sale price when it is a valid discount)."""
+        return effective_price(self.price, self.sale_price)
 
     def is_in_stock(self) -> bool:
         """Return whether product has available stock."""
