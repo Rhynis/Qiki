@@ -1,9 +1,9 @@
 ---
-title: "Hướng dẫn chọn và đổi bình gas an toàn"
+title: 'Hướng dẫn chọn và đổi bình gas an toàn'
 slug: chon-va-doi-binh-gas
 category: kien-thuc-gas
 order: 2
-summary: "Cách chọn bình phù hợp, quy trình đổi bình gas an toàn, kiểm tra bình thật – giả và bảo quản bình mới nhận."
+summary: 'Cách chọn bình phù hợp, quy trình đổi bình gas an toàn, kiểm tra bình thật – giả và bảo quản bình mới nhận.'
 ---
 
 ## Chọn bình phù hợp với nhu cầu

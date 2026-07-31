@@ -1,9 +1,9 @@
 ---
-title: "An toàn sử dụng gas tại nhà: hướng dẫn từ A đến Z"
+title: 'An toàn sử dụng gas tại nhà: hướng dẫn từ A đến Z'
 slug: an-toan-su-dung-gas
 category: an-toan
 order: 1
-summary: "Những nguyên tắc an toàn quan trọng khi dùng gas LPG trong gia đình — từ lắp đặt, kiểm tra rò rỉ đến cách xử lý khi có sự cố khẩn cấp."
+summary: 'Những nguyên tắc an toàn quan trọng khi dùng gas LPG trong gia đình — từ lắp đặt, kiểm tra rò rỉ đến cách xử lý khi có sự cố khẩn cấp.'
 ---
 
 Gas LPG là nhiên liệu tiện lợi nhưng dễ cháy, nên việc dùng đúng cách quyết định sự an toàn cho cả gia đình. Dưới đây là những nguyên tắc Cửa hàng Gas Quốc Cường khuyến nghị mọi khách hàng nắm rõ.

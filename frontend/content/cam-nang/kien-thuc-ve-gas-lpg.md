@@ -1,9 +1,9 @@
 ---
-title: "Gas LPG là gì? Kiến thức cơ bản trước khi mua bình gas"
+title: 'Gas LPG là gì? Kiến thức cơ bản trước khi mua bình gas'
 slug: kien-thuc-ve-gas-lpg
 category: kien-thuc-gas
 order: 1
-summary: "LPG là khí gì, bình 6/12/45 kg khác nhau ra sao, và các phụ kiện van – dây – vỏ bình cần biết khi dùng gas gia đình."
+summary: 'LPG là khí gì, bình 6/12/45 kg khác nhau ra sao, và các phụ kiện van – dây – vỏ bình cần biết khi dùng gas gia đình.'
 ---
 
 ## LPG là gì?
@@ -16,11 +16,11 @@ Một điểm quan trọng: **LPG nguyên chất không màu, không mùi**. Nh�
 
 ## Chọn kích cỡ bình: 6 kg, 12 kg hay 45 kg?
 
-| Loại bình | Phù hợp với | Đặc điểm |
-| --- | --- | --- |
-| **6 kg** | Phòng trọ, căn hộ nhỏ, người ít nấu | Gọn, nhẹ, dễ di chuyển, chi phí ban đầu thấp; dùng hết nhanh hơn nếu nấu thường xuyên |
-| **12 kg** | Hộ gia đình nấu hằng ngày | Kinh tế nhất cho nhu cầu thường xuyên: thời gian dùng dài, chi phí trên mỗi kg gas thường tốt hơn |
-| **45 kg** | Nhà hàng, quán ăn, bếp công nghiệp | Công suất lớn, cần không gian đặt riêng thoáng khí, đường ống và van điều áp phù hợp; **không** dùng trong căn hộ nhỏ |
+| Loại bình | Phù hợp với                         | Đặc điểm                                                                                                              |
+| --------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **6 kg**  | Phòng trọ, căn hộ nhỏ, người ít nấu | Gọn, nhẹ, dễ di chuyển, chi phí ban đầu thấp; dùng hết nhanh hơn nếu nấu thường xuyên                                 |
+| **12 kg** | Hộ gia đình nấu hằng ngày           | Kinh tế nhất cho nhu cầu thường xuyên: thời gian dùng dài, chi phí trên mỗi kg gas thường tốt hơn                     |
+| **45 kg** | Nhà hàng, quán ăn, bếp công nghiệp  | Công suất lớn, cần không gian đặt riêng thoáng khí, đường ống và van điều áp phù hợp; **không** dùng trong căn hộ nhỏ |
 
 **Gợi ý:** nấu 1–2 bữa mỗi ngày thì bình 12 kg thường hợp lý nhất. Chỉ nấu cuối tuần hoặc cần di chuyển nhiều thì bình 6 kg tiện hơn. Kinh doanh ăn uống nên khảo sát vị trí trước khi lắp bình 45 kg.
 

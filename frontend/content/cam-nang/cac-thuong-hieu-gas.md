@@ -1,9 +1,9 @@
 ---
-title: "Các thương hiệu gas phổ biến và cách chọn cho đúng"
+title: 'Các thương hiệu gas phổ biến và cách chọn cho đúng'
 slug: cac-thuong-hieu-gas
 category: thuong-hieu
 order: 1
-summary: "Điểm qua các thương hiệu gas thông dụng tại TP.HCM (Petrolimex, Saigon Petro, Elf, Total, VT, MT, Shell) và tiêu chí chọn thương hiệu an toàn."
+summary: 'Điểm qua các thương hiệu gas thông dụng tại TP.HCM (Petrolimex, Saigon Petro, Elf, Total, VT, MT, Shell) và tiêu chí chọn thương hiệu an toàn.'
 ---
 
 Tại TP. Hồ Chí Minh có nhiều thương hiệu gas cùng lưu hành. Khác biệt giữa chúng chủ yếu ở **giá, độ sẵn hàng và chính sách đổi vỏ** — chất lượng gas khi đạt chuẩn kiểm định là tương đương nhau. Dưới đây là các thương hiệu Gas Quốc Cường thường cung cấp.

@@ -1,9 +1,9 @@
 ---
-title: "Nước uống đóng bình 20 lít: chọn và dùng sao cho đúng"
+title: 'Nước uống đóng bình 20 lít: chọn và dùng sao cho đúng'
 slug: nuoc-uong-dong-binh
 category: nuoc-uong
 order: 1
-summary: "Tìm hiểu bình nước uống 20 lít, khác biệt giữa bình thường và bình dùng cho máy nóng lạnh, cùng cách bảo quản và đổi bình."
+summary: 'Tìm hiểu bình nước uống 20 lít, khác biệt giữa bình thường và bình dùng cho máy nóng lạnh, cùng cách bảo quản và đổi bình.'
 ---
 
 Bên cạnh gas, Cửa hàng Gas Quốc Cường còn giao **nước uống đóng bình 20 lít** — tiện lợi cho gia đình, văn phòng và quán nhỏ.
