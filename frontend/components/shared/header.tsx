@@ -19,6 +19,7 @@ import { useCartStore } from '@/lib/stores/cart-store'
 
 export function Header() {
   const t = useTranslations('header')
+  const tNav = useTranslations('nav')
   const router = useRouter()
   const itemCount = useCartStore((state) => state.getItemCount())
   const [productMenuOpen, setProductMenuOpen] = useState(false)
@@ -42,11 +43,14 @@ export function Header() {
 
   return (
     <header className="border-b bg-white">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-4 sm:px-4">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-1.5 px-2 py-4 sm:px-4">
         <Link href="/" className="text-base font-semibold text-slate-950 sm:text-lg">
           {SHOP_INFO.name}
         </Link>
-        <nav className="flex items-center gap-1.5 text-sm sm:gap-3">
+        {/* Wrap on very narrow screens so an extra nav item can never push the
+            header past the viewport (horizontal-scroll guard); stays a single
+            row from the small breakpoint up. */}
+        <nav className="flex flex-wrap items-center justify-end gap-x-1 gap-y-1 text-sm sm:gap-x-3">
           <div
             className="flex items-center"
             onMouseEnter={openProductMenu}
@@ -97,6 +101,7 @@ export function Header() {
             </DropdownMenu>
           </div>
           <Link href="/track">{t('track')}</Link>
+          <Link href="/cam-nang">{tNav('guide')}</Link>
           <a
             className="hidden items-center gap-2 rounded-md border border-slate-200 px-3 py-2 font-medium text-slate-700 transition hover:bg-slate-100 hover:text-slate-950 md:inline-flex"
             href={SHOP_INFO.hotline.href}

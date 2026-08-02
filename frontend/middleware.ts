@@ -43,6 +43,7 @@ export function middleware(request: NextRequest) {
     '/cart',
     '/checkout',
     '/track',
+    '/cam-nang',
     '/login',
     '/register',
     '/forgot-password',
