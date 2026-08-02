@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { ProductDetail } from '@/components/shop/product-detail'
 import { formatProductSize } from '@/lib/utils/format'
+import { serializeJsonLd } from '@/lib/utils/json-ld'
 import type { Product, ProductParent } from '@/types/product'
 
 // Serve the product detail from the ISR cache (revalidated every 60s) so
@@ -95,7 +96,7 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
       <ProductDetail product={product} variants={variants} />
     </>
