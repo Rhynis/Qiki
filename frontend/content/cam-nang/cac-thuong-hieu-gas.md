@@ -3,15 +3,18 @@ title: 'Các thương hiệu gas phổ biến và cách chọn cho đúng'
 slug: cac-thuong-hieu-gas
 category: thuong-hieu
 order: 1
-summary: 'Điểm qua các thương hiệu gas thông dụng tại TP.HCM (Petrolimex, Saigon Petro, Elf, Total, VT, MT, Shell) và tiêu chí chọn thương hiệu an toàn.'
+summary: 'Điểm qua các thương hiệu gas thông dụng tại TP.HCM (Saigon Petro, Sao Mai, Petrolimex, Elf, Total, VT, MT, Shell) và tiêu chí chọn thương hiệu an toàn.'
 ---
 
 Tại TP. Hồ Chí Minh có nhiều thương hiệu gas cùng lưu hành. Khác biệt giữa chúng chủ yếu ở **giá, độ sẵn hàng và chính sách đổi vỏ** — chất lượng gas khi đạt chuẩn kiểm định là tương đương nhau. Dưới đây là các thương hiệu Gas Quốc Cường thường cung cấp.
 
+Gas Quốc Cường phục vụ khu vực Bình Thạnh – Thủ Đức **từ năm 2000**, nên hiểu rõ từng dòng bình và nhu cầu của khách trong khu vực. Hai dòng được cửa hàng dùng nhiều nhất là **Saigon Petro** và **Sao Mai (vỏ xám)** — sẵn hàng, giá hợp lý và dễ đổi vỏ.
+
 ## Các thương hiệu thông dụng
 
 - **Petrolimex Gas (PGC)** — thuộc Tập đoàn Xăng dầu Việt Nam (Petrolimex), doanh nghiệp nhà nước có hệ thống phân phối rộng khắp cả nước. Vỏ bình màu xanh đặc trưng, tiêu chuẩn kiểm định rõ ràng; phù hợp hộ gia đình nấu ăn hằng ngày.
-- **Saigon Petro** — thương hiệu gas quen thuộc, rất phổ biến cho bếp gia đình và căn hộ tại TP.HCM. Dễ đổi vỏ trong khu vực nội thành, tương thích với các loại van dân dụng thông dụng.
+- **Saigon Petro** — thương hiệu gas quen thuộc, rất phổ biến cho bếp gia đình và căn hộ tại TP.HCM. Dễ đổi vỏ trong khu vực nội thành, tương thích với các loại van dân dụng thông dụng. Đây là một trong hai dòng chủ lực tại Gas Quốc Cường.
+- **Sao Mai** — dòng bình phổ biến, tại cửa hàng thường dùng loại **vỏ xám**; giá hợp lý, nguồn cung ổn định, phù hợp hộ gia đình nấu ăn hằng ngày.
 - **Elf** và **Total** — các thương hiệu quốc tế (gốc Pháp), được khách ưa chuộng vì độ ổn định và sự quen thuộc lâu năm. Phù hợp nhu cầu nấu ăn gia đình, quán nhỏ, văn phòng có bếp.
 - **Shell Gas** — thương hiệu quốc tế; nguồn hàng có thể thay đổi theo khu vực nên nên kiểm tra tình trạng sẵn hàng trước khi đặt.
 - **VT Gas** và **MT Gas** — dòng bình dân dụng có **giá cạnh tranh**, nguồn cung ổn định; phù hợp hộ gia đình, quán ăn nhỏ và khu nhà trọ.

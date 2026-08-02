@@ -26,6 +26,12 @@ Nếu chưa chắc, hãy nói với Qiki số người trong nhà và tần su�
 
 Khi đổi vỏ giữa các thương hiệu, nhân viên sẽ kiểm tra vỏ bình cũ; nếu vỏ quá cũ, mất quai hoặc không đúng chuẩn có thể phát sinh phụ phí — hãy hỏi rõ **giá đổi bình** và **giá mua mới** trước khi đặt.
 
+## Phí đổi vỏ tại Gas Quốc Cường
+
+- **Đổi vỏ bình gas:** phí **100.000đ** cho mỗi lần đổi vỏ.
+- **Bình nước:** phí đổi vỏ **tùy loại** — nhân viên hoặc Qiki sẽ báo cụ thể theo sản phẩm bạn chọn.
+- Ngoài phí đổi vỏ, có thể có khoản **tiền thế vỏ** (đặt cọc vỏ bình) tùy trường hợp — vui lòng liên hệ **090 3026306** để được báo chi tiết trước khi đặt.
+
 ## Kiểm tra bình thật – giả
 
 Bình chính hãng: logo rõ, tem niêm phong nguyên vẹn, màng co chắc chắn, có thông tin kiểm định trên vỏ. Dấu hiệu đáng ngờ: mất tem, vỏ sơn lại sơ sài, van cũ, trọng lượng không ổn định. Khi nghi ngờ, chụp ảnh tem và vỏ bình rồi liên hệ cửa hàng — **không** tiếp tục dùng bình nếu có mùi gas hoặc van không kín.
