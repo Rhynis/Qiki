@@ -30,6 +30,12 @@ const productBaseSchema = z.object({
     .min(1, 'Kích thước không được để trống')
     .regex(/^\d+(\.\d+)?$/, 'Kích thước phải là số'),
   price: z.string().trim().min(1, 'Giá không được để trống').regex(/^\d+$/, 'Giá phải là số'),
+  sale_price: z
+    .string()
+    .trim()
+    .regex(/^\d+$/, 'Giá khuyến mãi phải là số')
+    .optional()
+    .or(z.literal('')),
   stock_quantity: z.coerce.number().int('Tồn kho phải là số nguyên').min(0, 'Tồn kho không âm'),
   description: z.string().trim().optional(),
   long_description: z.string().trim().optional(),
@@ -53,14 +59,36 @@ function validateGasSize(value: { category?: string; size_kg?: string }, context
   }
 }
 
-export const productSchema = productBaseSchema.superRefine(validateGasSize)
+function validateSalePrice(
+  value: { price?: string; sale_price?: string },
+  context: z.RefinementCtx
+) {
+  if (!value.sale_price) return
+  const sale = Number(value.sale_price)
+  const price = Number(value.price)
+  if (!(sale > 0) || (value.price && sale >= price)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Giá khuyến mãi phải lớn hơn 0 và nhỏ hơn giá gốc',
+      path: ['sale_price'],
+    })
+  }
+}
+
+export const productSchema = productBaseSchema.superRefine((value, context) => {
+  validateGasSize(value, context)
+  validateSalePrice(value, context)
+})
 
 export const productUpdateSchema = productBaseSchema
   .partial()
   .extend({
     is_active: z.boolean().optional(),
   })
-  .superRefine(validateGasSize)
+  .superRefine((value, context) => {
+    validateGasSize(value, context)
+    validateSalePrice(value, context)
+  })
 
 export const productFiltersSchema = z
   .object({

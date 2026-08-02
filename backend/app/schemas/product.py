@@ -21,6 +21,16 @@ def validate_gas_size(value: Decimal | None, category: str | None) -> Decimal | 
     return value
 
 
+def validate_sale_price(sale_price: Decimal | None, price: Decimal | None) -> None:
+    """A sale price, when set, must be a positive discount below the list price."""
+    if sale_price is None:
+        return
+    if sale_price <= 0:
+        raise ValueError("sale_price must be greater than 0")
+    if price is not None and sale_price >= price:
+        raise ValueError("sale_price must be less than the list price")
+
+
 class ProductBase(BaseModel):
     """Shared product fields."""
 
@@ -30,6 +40,7 @@ class ProductBase(BaseModel):
     category: ProductCategory = "gas"
     unit: ProductUnit = "kg"
     price: Decimal = Field(gt=0)
+    sale_price: Decimal | None = None
     description: str | None = None
     long_description: str | None = None
     image_url: HttpUrl | None = None
@@ -45,6 +56,7 @@ class ProductBase(BaseModel):
         validate_gas_size(self.size_kg, self.category)
         if self.category == "gas" and self.pricing_note:
             raise ValueError("pricing_note is only supported for nuoc_uong products")
+        validate_sale_price(self.sale_price, self.price)
         return self
 
 
@@ -73,6 +85,7 @@ class ProductUpdate(BaseModel):
     category: ProductCategory | None = None
     unit: ProductUnit | None = None
     price: Decimal | None = Field(default=None, gt=0)
+    sale_price: Decimal | None = None
     description: str | None = None
     long_description: str | None = None
     image_url: HttpUrl | None = None
@@ -91,6 +104,7 @@ class ProductUpdate(BaseModel):
         validate_gas_size(self.size_kg, category)
         if category == "gas" and self.pricing_note:
             raise ValueError("pricing_note is only supported for nuoc_uong products")
+        validate_sale_price(self.sale_price, self.price)
         return self
 
     @field_validator("sku")

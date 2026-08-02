@@ -4,7 +4,8 @@ import { useTranslations } from 'next-intl'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { formatPrice, formatProductSize } from '@/lib/utils/format'
+import { formatProductSize } from '@/lib/utils/format'
+import { PriceDisplay } from '@/components/shop/price-display'
 import { StockBadge } from '@/components/shop/stock-badge'
 import { WishlistButton } from '@/components/shop/wishlist-button'
 import type { Product } from '@/types/product'
@@ -58,12 +59,12 @@ export function ProductCard({ product }: ProductCardProps) {
         </div>
       </CardHeader>
       <CardContent className="flex-1 space-y-3">
-        <p className="text-2xl font-semibold text-primary">
+        <div className="text-2xl font-semibold text-primary">
           {product.parent_id ? (
             <span className="mr-1 text-sm font-normal text-slate-500">{t('priceFrom')}</span>
           ) : null}
-          {formatPrice(product.price)}
-        </p>
+          <PriceDisplay listPrice={product.price} salePrice={product.sale_price} />
+        </div>
         {product.parent_id ? <p className="text-sm text-slate-500">{t('variantOptions')}</p> : null}
         {product.description ? (
           <p className="line-clamp-2 text-sm text-slate-600">{product.description}</p>

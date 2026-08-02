@@ -4881,3 +4881,20 @@ async def test_order_confirmation_summary_follows_english_locale(
     assert "Qiki's summary of your order:" in answer
     assert "Would you like to confirm this order?" in answer
     assert "tóm tắt đơn hàng" not in answer
+
+
+@pytest.mark.asyncio
+async def test_qiki_quotes_sale_price_for_discounted_product() -> None:
+    # The cheapest 12kg (MT Gas, 420k) goes on sale; the deterministic reply must
+    # quote the effective sale price, not the list price.
+    catalog = _price_query_catalog()
+    target = min(catalog, key=lambda product: product.price)
+    target.sale_price = Decimal("400000")
+
+    response, rag = await _send("Gas 12kg loại nào rẻ nhất?", catalog)
+
+    assert response.assistant_message is not None
+    answer = response.assistant_message.content
+    assert "400.000đ" in answer  # the sale price
+    assert "420.000đ" not in answer  # not the list price
+    assert rag.calls == 0

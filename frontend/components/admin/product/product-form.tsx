@@ -32,6 +32,7 @@ type ProductFormState = {
   unit: ProductUnit
   size_kg: string
   price: string
+  sale_price: string
   stock_quantity: string
   description: string
   long_description: string
@@ -57,6 +58,7 @@ const emptyState: ProductFormState = {
   unit: 'kg',
   size_kg: '12',
   price: '',
+  sale_price: '',
   stock_quantity: '0',
   description: '',
   long_description: '',
@@ -78,6 +80,7 @@ function initialState(product?: Product): ProductFormState {
     unit: product.unit,
     size_kg: Number(product.size_kg).toString(),
     price: Number(product.price).toString(),
+    sale_price: product.sale_price != null ? Number(product.sale_price).toString() : '',
     stock_quantity: product.stock_quantity.toString(),
     description: product.description ?? '',
     long_description: product.long_description ?? '',
@@ -98,6 +101,15 @@ function normalizeText(value: string): string | null {
 /** Display the stored integer price with thousands separators (blur/display only). */
 function formatPriceDisplay(raw: string): string {
   return raw ? formatNumber(Number(raw)) : ''
+}
+
+/** Integer discount percent when the sale price is a valid discount below price. */
+function saleDiscountPercent(price: string, salePrice: string): number | null {
+  const list = Number(price)
+  const sale = Number(salePrice)
+  if (!price || !salePrice || Number.isNaN(list) || Number.isNaN(sale)) return null
+  if (!(sale > 0 && sale < list)) return null
+  return Math.round(((list - sale) / list) * 100)
 }
 
 export function ProductForm({ product, isSubmitting = false, onSubmit }: ProductFormProps) {
@@ -141,6 +153,7 @@ export function ProductForm({ product, isSubmitting = false, onSubmit }: Product
     setErrors({})
     await onSubmit({
       ...parsed.data,
+      sale_price: normalizeText(form.sale_price),
       description: normalizeText(form.description),
       long_description: normalizeText(form.long_description),
       image_url: normalizeText(form.image_url),
@@ -225,6 +238,19 @@ export function ProductForm({ product, isSubmitting = false, onSubmit }: Product
             onBlur={() => setPriceFocused(false)}
             onChange={(event) => updateField('price', event.target.value.replace(/\D/g, ''))}
           />
+        </FieldError>
+        <FieldError label="Giá khuyến mãi (tùy chọn)" error={errors.sale_price}>
+          <Input
+            inputMode="numeric"
+            placeholder="Để trống nếu không giảm giá"
+            value={form.sale_price}
+            onChange={(event) => updateField('sale_price', event.target.value.replace(/\D/g, ''))}
+          />
+          {saleDiscountPercent(form.price, form.sale_price) !== null ? (
+            <p className="mt-1 text-xs font-medium text-primary">
+              Giảm {saleDiscountPercent(form.price, form.sale_price)}%
+            </p>
+          ) : null}
         </FieldError>
         <FieldError label="Tồn kho" error={errors.stock_quantity}>
           <Input

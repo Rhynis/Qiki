@@ -26,6 +26,7 @@ function makeProduct(overrides: Partial<Product> = {}): Product {
     category: 'gas',
     unit: 'kg',
     price: '605000.00',
+    sale_price: null,
     stock_quantity: 5,
     description: 'Short listing description',
     long_description: null,

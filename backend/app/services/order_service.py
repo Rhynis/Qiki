@@ -99,7 +99,9 @@ class OrderService:
                     f"Insufficient stock for {product.name}: requested {quantity}, "
                     f"available {product.stock_quantity}"
                 )
-            item_subtotal = product.price * quantity
+            # Charge the effective (sale) price so a discount is honoured everywhere.
+            unit_price = product.effective_price
+            item_subtotal = unit_price * quantity
             subtotal += item_subtotal
             items_data.append(
                 {
@@ -108,7 +110,7 @@ class OrderService:
                     "product_brand": product.brand,
                     "product_size_kg": product.size_kg,
                     "quantity": quantity,
-                    "unit_price": product.price,
+                    "unit_price": unit_price,
                     "subtotal": item_subtotal,
                     "is_exchange": exchange_by_product[product_id],
                 }
@@ -265,7 +267,7 @@ class OrderService:
                     size_kg=product.size_kg,
                     category=product.category,
                     unit=product.unit,
-                    price=product.price,
+                    price=product.effective_price,
                     quantity=quantity,
                     image_url=product.image_url,
                     stock_quantity=product.stock_quantity,

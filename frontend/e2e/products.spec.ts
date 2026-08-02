@@ -57,8 +57,8 @@ test.describe('products', () => {
   test('the variant selector switches the detail price and stock', async ({ page }) => {
     await page.goto('/products/elf-12')
 
-    // The headline price paragraph reflects the currently selected variant.
-    const headlinePrice = page.locator('p.text-3xl.text-primary')
+    // The headline price (rendered by PriceDisplay) reflects the selected variant.
+    const headlinePrice = page.locator('span.text-3xl.text-primary')
     await expect(headlinePrice).toHaveText(/710\.000/)
 
     // The parent has two variants; selecting the 6kg option updates the price.

@@ -11,10 +11,12 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { GasSafetyNotice } from '@/components/shop/gas-safety-notice'
+import { PriceDisplay } from '@/components/shop/price-display'
 import { StockBadge } from '@/components/shop/stock-badge'
 import { WishlistButton } from '@/components/shop/wishlist-button'
 import { useCartStore } from '@/lib/stores/cart-store'
 import { formatPrice, formatProductSize } from '@/lib/utils/format'
+import { effectivePrice } from '@/lib/utils/pricing'
 import type { Product } from '@/types/product'
 
 type ProductDetailProps = {
@@ -88,7 +90,11 @@ export function ProductDetail({ product, variants }: ProductDetailProps) {
             <h1 className="text-3xl font-semibold tracking-normal text-slate-950 md:text-4xl">
               {product.name}
             </h1>
-            <p className="text-3xl font-semibold text-primary">{formatPrice(selected.price)}</p>
+            <PriceDisplay
+              listPrice={selected.price}
+              salePrice={selected.sale_price}
+              priceClassName="text-3xl font-semibold text-primary"
+            />
             <p className="text-sm text-slate-600">SKU {selected.sku}</p>
           </div>
 
@@ -120,7 +126,7 @@ export function ProductDetail({ product, variants }: ProductDetailProps) {
                     >
                       <span className="block font-medium">{variantOptionLabel(variant)}</span>
                       <span className="block text-xs text-slate-500">
-                        {formatPrice(variant.price)}
+                        {formatPrice(effectivePrice(variant))}
                         {soldOut ? ' · tạm hết' : ''}
                       </span>
                     </button>

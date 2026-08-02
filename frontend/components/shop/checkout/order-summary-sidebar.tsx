@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { PriceDisplay } from '@/components/shop/price-display'
 import { validateCoupon } from '@/lib/api/coupons'
 import { calculateCartShipping, useCartStore } from '@/lib/stores/cart-store'
 import { useCheckoutStore } from '@/lib/stores/checkout-store'
@@ -65,7 +66,15 @@ export function OrderSummarySidebar() {
               <p className="truncate font-medium">{item.name}</p>
               <p className="text-slate-600">x{item.quantity}</p>
             </div>
-            <span className="shrink-0">{formatPrice(item.price * item.quantity)}</span>
+            <PriceDisplay
+              className="shrink-0 justify-end text-right"
+              listPrice={(item.listPrice ?? item.price) * item.quantity}
+              salePrice={
+                item.listPrice != null && item.listPrice > item.price
+                  ? item.price * item.quantity
+                  : null
+              }
+            />
           </div>
         ))}
       </div>

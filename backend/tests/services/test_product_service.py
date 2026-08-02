@@ -402,3 +402,43 @@ async def test_product_response_exposes_long_description() -> None:
     response = ProductResponse.model_validate(product)
 
     assert response.long_description == "Detailed multi-paragraph text"
+
+
+async def test_sale_price_validation_rejects_out_of_range() -> None:
+    from pydantic import ValidationError
+
+    # sale_price >= price -> 422 (ValidationError at the schema layer).
+    with pytest.raises(ValidationError):
+        ProductCreate(
+            sku="GAS-12-SALE",
+            name="Binh gas 12kg",
+            brand="Saigon Petro",
+            size_kg=Decimal("12"),
+            price=Decimal("350000"),
+            sale_price=Decimal("350000"),
+            stock_quantity=10,
+        )
+    # sale_price <= 0 -> 422.
+    with pytest.raises(ValidationError):
+        ProductUpdate(price=Decimal("350000"), sale_price=Decimal("0"))
+    # A valid discount is accepted.
+    payload = ProductCreate(
+        sku="GAS-12-SALE",
+        name="Binh gas 12kg",
+        brand="Saigon Petro",
+        size_kg=Decimal("12"),
+        price=Decimal("710000"),
+        sale_price=Decimal("600000"),
+        stock_quantity=10,
+    )
+    assert payload.sale_price == Decimal("600000")
+
+
+async def test_product_effective_price_property() -> None:
+    product = make_product()
+    product.price = Decimal("710000")
+    product.sale_price = Decimal("600000")
+    assert product.effective_price == Decimal("600000")
+
+    product.sale_price = None
+    assert product.effective_price == Decimal("710000")

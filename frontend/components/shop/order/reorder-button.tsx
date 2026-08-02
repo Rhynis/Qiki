@@ -19,7 +19,10 @@ function toProduct(item: ReorderItem): Product {
     size_kg: item.size_kg,
     category: item.category as ProductCategory,
     unit: item.unit as ProductUnit,
+    // The reorder item already carries the effective price charged on the past order;
+    // it has no separate sale, so the cart keeps this exact amount.
     price: item.price,
+    sale_price: null,
     stock_quantity: item.stock_quantity,
     description: null,
     long_description: null,

@@ -2,6 +2,7 @@
 
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
+import { effectivePrice } from '@/lib/utils/pricing'
 import type { Product, ProductCategory } from '@/types/product'
 
 /** Water delivery fee per unit (VND). Mirrors the server's OrderService. */
@@ -14,7 +15,10 @@ export interface CartItem {
   category?: ProductCategory
   sizeKg: number
   unit: string
+  /** The effective (charged) unit price — the sale price when the product is on sale. */
   price: number
+  /** The original list unit price, kept so the summary can strike it through on sale. */
+  listPrice?: number
   quantity: number
   imageUrl?: string | null
 }
@@ -66,7 +70,9 @@ export const useCartStore = create<CartState>()(
               category: product.category,
               sizeKg: Number(product.size_kg),
               unit: product.unit,
-              price: Number(product.price),
+              // Charge the effective (sale) price; keep the list price for display.
+              price: effectivePrice(product),
+              listPrice: Number(product.price),
               quantity,
               imageUrl: product.image_url,
             },
