@@ -17,10 +17,10 @@ Bên cạnh gas, Cửa hàng Gas Quốc Cường còn giao **nước uống đó
 
 Với Vihawa, bạn có thể chọn:
 
-- **Bình thường** — dùng với kệ úp bình hoặc bình bơm tay thông thường.
-- **Bình nóng lạnh** — dùng cho **cây nước nóng lạnh** (máy làm nóng/lạnh), phù hợp văn phòng và gia đình cần nước nóng pha trà, cà phê và nước mát ngay.
+- **Bình thường** — có vòi, dùng với kệ úp bình hoặc bình bơm tay thông thường.
+- **Bình nóng lạnh** — dùng cho **cây nước nóng lạnh** (máy làm nóng/lạnh), phù hợp văn phòng và gia đình cần nước nóng pha trà, cà phê và nước mát ngay. Loại này **không có vòi** vì được úp trực tiếp lên máy; **giá giữ nguyên** như bình thường.
 
-Khi đặt, hãy cho biết bạn dùng loại nào để cửa hàng chuẩn bị đúng bình và báo giá chính xác.
+Khi đặt, hãy cho biết bạn dùng loại nào để cửa hàng chuẩn bị đúng bình. Riêng nước, **phí đổi vỏ tùy loại** — Qiki hoặc nhân viên sẽ báo cụ thể khi bạn đặt.
 
 ## Bảo quản và sử dụng
 
