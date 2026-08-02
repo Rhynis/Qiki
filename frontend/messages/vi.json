@@ -31,6 +31,9 @@
     "track": "Tra cứu",
     "cart": "Giỏ hàng"
   },
+  "nav": {
+    "guide": "Cẩm nang"
+  },
   "userMenu": {
     "login": "Đăng nhập",
     "register": "Đăng ký",

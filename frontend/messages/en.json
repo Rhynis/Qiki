@@ -31,6 +31,9 @@
     "track": "Track order",
     "cart": "Cart"
   },
+  "nav": {
+    "guide": "Guides"
+  },
   "userMenu": {
     "login": "Log in",
     "register": "Sign up",

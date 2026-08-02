@@ -34,7 +34,10 @@ export function PriceDisplay({
   const percent = discountPercentValue(list, sale)
 
   if (percent == null) {
-    return <span className={priceClassName}>{formatPrice(list)}</span>
+    // inline-block so vertical margins apply (e.g. the product-detail space-y
+    // stack); a plain inline <span> ignores margin-top. Matches the on-sale
+    // branch below, which is already an atomic inline-flex box.
+    return <span className={cn('inline-block', priceClassName)}>{formatPrice(list)}</span>
   }
 
   return (
