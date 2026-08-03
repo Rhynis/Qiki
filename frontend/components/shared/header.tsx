@@ -17,6 +17,11 @@ import { UserMenu } from '@/components/shared/user-menu'
 import { SHOP_INFO } from '@/lib/constants'
 import { useCartStore } from '@/lib/stores/cart-store'
 
+// Shared styling for the top-level text nav items so "Sản phẩm", "Tra cứu" and
+// "Cẩm nang" render as evenly spaced, consistent pills.
+const navItemClass =
+  'inline-flex h-9 items-center rounded-md px-2.5 font-medium text-slate-700 transition-colors hover:bg-slate-100 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+
 export function Header() {
   const t = useTranslations('header')
   const tNav = useTranslations('nav')
@@ -50,15 +55,19 @@ export function Header() {
         {/* Wrap on very narrow screens so an extra nav item can never push the
             header past the viewport (horizontal-scroll guard); stays a single
             row from the small breakpoint up. */}
-        <nav className="flex flex-wrap items-center justify-end gap-x-1 gap-y-1 text-sm sm:gap-x-3">
+        <nav className="flex flex-wrap items-center justify-end gap-x-1 gap-y-1 text-sm sm:gap-x-1.5">
+          {/* Products: one pill that reads as a single "Sản phẩm ⌄" control — the
+              label links to the full catalog, the chevron opens the category menu.
+              A single hover background on the wrapper keeps them visually merged
+              (no split seam) while staying two accessible controls. */}
           <div
-            className="flex items-center"
+            className="inline-flex h-9 items-center rounded-md font-medium text-slate-700 transition-colors hover:bg-slate-100 hover:text-primary"
             onMouseEnter={openProductMenu}
             onMouseLeave={scheduleProductMenuClose}
           >
             <DropdownMenu modal={false} open={productMenuOpen} onOpenChange={setProductMenuOpen}>
               <Link
-                className="inline-flex h-9 items-center rounded-l-md px-2 font-medium text-slate-700 transition hover:bg-slate-100 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex h-full items-center rounded-l-md pl-2.5 pr-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 href="/products"
               >
                 {t('products')}
@@ -66,17 +75,14 @@ export function Header() {
               <DropdownMenuTrigger asChild>
                 <button
                   aria-label={t('openCategories')}
-                  className="inline-flex h-9 items-center rounded-r-md px-1.5 font-medium text-slate-700 transition hover:bg-slate-100 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="inline-flex h-full items-center rounded-r-md pl-0.5 pr-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   type="button"
                 >
                   <ChevronDown aria-hidden="true" className="h-4 w-4" />
                 </button>
               </DropdownMenuTrigger>
-              {/* The trigger is the chevron to the right of the "Sản phẩm" link;
-                  shift the menu left so the item labels (not just the box) line up
-                  under the start of "Sản phẩm" instead of drifting right. The extra
-                  ~24px past the label width accounts for the menu's own left inset
-                  (content + item padding) so "Gas"/"Nước Uống" sit under the "S". */}
+              {/* Nudge the menu left so "Gas"/"Nước Uống" line up under the start of
+                  "Sản phẩm" rather than under the chevron on the pill's right edge. */}
               <DropdownMenuContent
                 align="start"
                 alignOffset={-96}
@@ -100,8 +106,12 @@ export function Header() {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-          <Link href="/track">{t('track')}</Link>
-          <Link href="/cam-nang">{tNav('guide')}</Link>
+          <Link href="/track" className={navItemClass}>
+            {t('track')}
+          </Link>
+          <Link href="/cam-nang" className={navItemClass}>
+            {tNav('guide')}
+          </Link>
           <a
             className="hidden items-center gap-2 rounded-md border border-slate-200 px-3 py-2 font-medium text-slate-700 transition hover:bg-slate-100 hover:text-slate-950 md:inline-flex"
             href={SHOP_INFO.hotline.href}
