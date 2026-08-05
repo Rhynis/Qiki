@@ -97,6 +97,9 @@ export function UserMenu() {
           className="w-56"
           onMouseEnter={openMenu}
           onMouseLeave={scheduleMenuClose}
+          // Closing by mouse-leave must not refocus the caret trigger (lingering
+          // focus ring); keyboard open still focuses the first item normally.
+          onCloseAutoFocus={(e) => e.preventDefault()}
         >
           <DropdownMenuItem asChild>
             <Link href="/account">{t('account')}</Link>
