@@ -8,7 +8,10 @@ ignore = ["S101", "S104", "N818"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101", "S105", "S106"]
-"migrations/*" = ["E501"]
+# Data migrations embed verbatim Vietnamese product copy, which legitimately
+# contains long lines (E501) and typographic dashes ruff flags as ambiguous
+# (RUF001); the text must be preserved exactly, so allow both here.
+"migrations/*" = ["E501", "RUF001"]
 
 [tool.mypy]
 python_version = "3.11"
