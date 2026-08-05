@@ -88,6 +88,9 @@ export function Header() {
                 alignOffset={-96}
                 onMouseEnter={openProductMenu}
                 onMouseLeave={scheduleProductMenuClose}
+                // Closing by mouse-leave must not return focus to the trigger,
+                // which would leave a focus ring on the chevron after hovering.
+                onCloseAutoFocus={(e) => e.preventDefault()}
               >
                 <DropdownMenuItem
                   className="cursor-pointer rounded-md hover:bg-primary/10 hover:text-primary focus:bg-primary/10 focus:text-primary"

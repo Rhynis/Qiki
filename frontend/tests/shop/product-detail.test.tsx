@@ -86,4 +86,72 @@ describe('ProductDetail gas-safety notice', () => {
 
     expect(screen.queryByRole('note', { name: 'An toàn sử dụng gas' })).not.toBeInTheDocument()
   })
+
+  it('shows exactly one safety section for a gas product even when safety_info is set', () => {
+    render(
+      <ProductDetail
+        product={makeProduct({
+          category: 'gas',
+          safety_info: 'An toàn sử dụng — Không tự ý sửa van.',
+        })}
+      />
+    )
+
+    // The GasSafetyNotice is the single safety block; the legacy safety_info card
+    // (which duplicated it on gas pages) has been removed.
+    expect(screen.getAllByRole('note', { name: 'An toàn sử dụng gas' })).toHaveLength(1)
+    expect(screen.queryByText('An toàn sử dụng — Không tự ý sửa van.')).not.toBeInTheDocument()
+  })
+})
+
+describe('ProductDetail variant selector', () => {
+  it('renders the variant selector for a water product with multiple variants', () => {
+    const normal = makeProduct({
+      id: 'w1',
+      sku: 'VIHAWA-20L',
+      name: 'Nước Vihawa 20 lít',
+      brand: 'Vihawa',
+      category: 'nuoc_uong',
+      unit: 'lít',
+      size_kg: '20.00',
+      variant_label: 'Bình thường',
+    })
+    const hotCold = makeProduct({
+      ...normal,
+      id: 'w2',
+      sku: 'VIHAWA-20L-NL',
+      name: 'Nước Vihawa 20 lít (bình nóng lạnh)',
+      variant_label: 'Bình nóng lạnh',
+    })
+
+    render(<ProductDetail product={normal} variants={[normal, hotCold]} />)
+
+    expect(screen.getByRole('radiogroup')).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /Bình thường/ })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /Bình nóng lạnh/ })).toBeInTheDocument()
+  })
+
+  it('keeps the selector for a grouped gas product so every size stays reachable', () => {
+    // Gas is grouped one parent per brand (e.g. Elf 12kg + 6kg), so the on-detail
+    // selector is the only way to reach the non-default size — it must stay.
+    const twelve = makeProduct({
+      id: 'g1',
+      sku: 'ELF-12KG-DO',
+      size_kg: '12.00',
+      variant_label: '12 kg (đỏ)',
+    })
+    const six = makeProduct({
+      ...twelve,
+      id: 'g2',
+      sku: 'ELF-6KG-DO',
+      size_kg: '6.00',
+      price: '350000.00',
+      variant_label: '6 kg (đỏ)',
+    })
+
+    render(<ProductDetail product={twelve} variants={[twelve, six]} />)
+
+    expect(screen.getByRole('radiogroup')).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /6 kg/ })).toBeInTheDocument()
+  })
 })

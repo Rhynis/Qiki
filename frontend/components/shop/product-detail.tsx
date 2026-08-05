@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useTranslations } from 'next-intl'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { ArrowLeft, Flame, Info, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, Flame, Info } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -160,20 +160,6 @@ export function ProductDetail({ product, variants }: ProductDetailProps) {
           ) : null}
 
           {selected.category === 'gas' ? <GasSafetyNotice /> : null}
-
-          {(selected.safety_info ?? product.safety_info) ? (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <ShieldCheck className="h-5 w-5 text-primary" />
-                  {t('safety')}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="text-slate-700">
-                {selected.safety_info ?? product.safety_info}
-              </CardContent>
-            </Card>
-          ) : null}
 
           <div className="flex flex-wrap gap-3">
             <Button disabled={!inStock} onClick={addToCart}>
