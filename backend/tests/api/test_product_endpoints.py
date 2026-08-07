@@ -316,22 +316,21 @@ async def _seed_parent_with_variants(session: AsyncSession) -> ProductParent:
     return parent
 
 
-async def test_list_product_parents_returns_price_range(
+async def test_list_product_parents_returns_gas_individually(
     test_client: AsyncClient,
     product_session: AsyncSession,
 ) -> None:
+    """Gas variants are never aggregated: each active SKU is its own card (#342)."""
     await _seed_parent_with_variants(product_session)
 
     response = await test_client.get("/api/v1/products/parents")
 
     assert response.status_code == 200
     data = response.json()
-    assert data["total"] == 1
-    card = data["items"][0]
-    assert card["name"] == "Bình gas Saigon Petro"
-    assert card["variant_count"] == 2
-    assert card["min_price"] == "605000.00"
-    assert card["max_price"] == "2250000.00"
+    assert data["total"] == 2
+    assert {card["variant_count"] for card in data["items"]} == {1}
+    prices = {card["min_price"] for card in data["items"]}
+    assert prices == {"605000.00", "2250000.00"}
 
 
 async def test_get_product_parent_returns_variants(

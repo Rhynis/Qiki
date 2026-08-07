@@ -48,23 +48,57 @@ test.describe('products', () => {
     await expect(page.getByRole('button', { name: 'Thêm vào giỏ' })).toBeVisible()
   })
 
-  test('a grouped product card shows the "Nhiều lựa chọn" hint', async ({ page }) => {
+  test('a grouped water card shows the "Nhiều lựa chọn" hint and links to a selector', async ({
+    page,
+  }) => {
     await page.goto('/products')
-    // Elf 12kg belongs to a parent with siblings, so its card advertises options.
+    // Vihawa's two same-size, different-form bottles collapse into ONE card
+    // (cheapest variant as representative) advertising options (#342).
     await expect(page.getByText('Nhiều lựa chọn màu/loại').first()).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Nước Vihawa 20 lít' })).toBeVisible()
+    // Only the cheapest variant's own card renders — its sibling is folded in.
+    await expect(
+      page.getByRole('heading', { name: 'Nước Vihawa 20 lít (bình nóng lạnh)' })
+    ).toHaveCount(0)
+
+    await page.getByRole('link', { name: 'Xem chi tiết Nước Vihawa 20 lít' }).click()
+    await expect(page).toHaveURL(/\/products\/vihawa-normal$/)
+    await expect(page.getByRole('radiogroup')).toBeVisible()
+    await expect(page.getByRole('radio', { name: /Bình nóng lạnh/ })).toBeVisible()
   })
 
-  test('the variant selector switches the detail price and stock', async ({ page }) => {
+  test('a gas product card never shows the "Nhiều lựa chọn" hint', async ({ page }) => {
+    await page.goto('/products?category=gas')
+    // Elf 12kg/6kg share a brand parent in the DB, but gas is listed
+    // individually — no "from"/"multiple options" hint on gas cards (#342).
+    await expect(page.getByRole('heading', { name: 'Bình gas Elf 12kg (đỏ)' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Bình gas Elf 6kg' })).toBeVisible()
+    await expect(page.getByText('Nhiều lựa chọn màu/loại')).toHaveCount(0)
+  })
+
+  test('a gas detail page never shows a variant selector', async ({ page }) => {
     await page.goto('/products/elf-12')
 
-    // The headline price (rendered by PriceDisplay) reflects the selected variant.
+    // The headline price (rendered by PriceDisplay) always matches this exact
+    // product — gas never offers a selector to switch to a sibling size (#342).
     const headlinePrice = page.locator('span.text-3xl.text-primary')
     await expect(headlinePrice).toHaveText(/710\.000/)
+    await expect(page.getByRole('heading', { name: 'Bình gas Elf 12kg (đỏ)' })).toBeVisible()
+    await expect(page.getByText('SKU ELF-12KG')).toBeVisible()
+    await expect(page.getByRole('radiogroup')).toHaveCount(0)
+  })
 
-    // The parent has two variants; selecting the 6kg option updates the price.
-    const sixKg = page.getByRole('radio', { name: /6 kg/ })
-    await sixKg.click()
-    await expect(sixKg).toHaveAttribute('aria-checked', 'true')
-    await expect(headlinePrice).toHaveText(/350\.000/)
+  test('the water variant selector switches the detail price and stock', async ({ page }) => {
+    await page.goto('/products/vihawa-normal')
+
+    const headlinePrice = page.locator('span.text-3xl.text-primary')
+    await expect(headlinePrice).toHaveText(/55\.000/)
+
+    // Vihawa's two variants (same size, different bottle form); selecting the
+    // hot-cold option updates the price.
+    const hotCold = page.getByRole('radio', { name: /Bình nóng lạnh/ })
+    await hotCold.click()
+    await expect(hotCold).toHaveAttribute('aria-checked', 'true')
+    await expect(headlinePrice).toHaveText(/65\.000/)
   })
 })

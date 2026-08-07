@@ -69,21 +69,96 @@ async def _seed_saigon_petro(session: AsyncSession) -> ProductParent:
     return parent
 
 
+async def _seed_vihawa(session: AsyncSession) -> ProductParent:
+    """Create a water parent with two same-size, different-form variants."""
+    parent = ProductParent(name="Nước Vihawa", brand="Vihawa", category="nuoc_uong")
+    session.add(parent)
+    await session.flush()
+
+    variants = [
+        ("VIHAWA-20L", "Nước Vihawa 20 lít", Decimal("55000"), 50, "Bình thường"),
+        (
+            "VIHAWA-20L-NL",
+            "Nước Vihawa 20 lít (bình nóng lạnh)",
+            Decimal("55000"),
+            30,
+            "Bình nóng lạnh",
+        ),
+    ]
+    for sku, name, price, stock, label in variants:
+        session.add(
+            Product(
+                sku=sku,
+                name=name,
+                brand="Vihawa",
+                size_kg=Decimal("20"),
+                category="nuoc_uong",
+                unit="lít",
+                price=price,
+                stock_quantity=stock,
+                is_active=True,
+                parent_id=parent.id,
+                variant_label=label,
+            )
+        )
+    await session.flush()
+    return parent
+
+
 async def test_grouped_catalog_reports_price_range(product_session: AsyncSession) -> None:
-    parent = await _seed_saigon_petro(product_session)
+    """Water variants (same size, different bottle form) stay grouped under a parent."""
+    parent = await _seed_vihawa(product_session)
     service = ProductService(ProductRepository(product_session))
 
-    result = await service.list_grouped_catalog(limit=20)
+    result = await service.list_grouped_catalog(category="nuoc_uong", limit=20)
 
     assert result.total == 1
     card = result.items[0]
     assert card.id == parent.id
-    assert card.name == "Bình gas Saigon Petro"
-    assert card.variant_count == 3
+    assert card.name == "Nước Vihawa"
+    assert card.variant_count == 2
     # "from {min price}" is driven by min_price; max_price bounds the range.
-    assert card.min_price == Decimal("605000")
-    assert card.max_price == Decimal("2250000")
+    assert card.min_price == Decimal("55000")
+    assert card.max_price == Decimal("55000")
     assert card.in_stock is True
+
+
+async def test_grouped_catalog_returns_gas_individually(product_session: AsyncSession) -> None:
+    """Gas variants (different sizes) are never aggregated into a parent card.
+
+    Grouping gas kept the detail page's title fixed to the originally loaded
+    product while the variant selector switched the shown size, so the title/
+    SKU/price could drift apart (#342) — each active gas SKU is its own card.
+    """
+    await _seed_saigon_petro(product_session)
+    service = ProductService(ProductRepository(product_session))
+
+    result = await service.list_grouped_catalog(category="gas", limit=20)
+
+    assert result.total == 3
+    skus_by_price = {card.min_price: card for card in result.items}
+    assert skus_by_price[Decimal("605000")].variant_count == 1
+    assert skus_by_price[Decimal("605000")].max_price == Decimal("605000")
+    assert skus_by_price[Decimal("605000")].name == "Bình gas Saigon Petro 12kg (xám)"
+    assert {card.variant_count for card in result.items} == {1}
+
+
+async def test_grouped_catalog_combines_gas_individual_and_water_grouped(
+    product_session: AsyncSession,
+) -> None:
+    """With no category filter, gas stays individual and water stays grouped."""
+    await _seed_saigon_petro(product_session)
+    await _seed_vihawa(product_session)
+    service = ProductService(ProductRepository(product_session))
+
+    result = await service.list_grouped_catalog(limit=20)
+
+    assert result.total == 4  # 3 individual gas cards + 1 grouped water card
+    water_card = next(card for card in result.items if card.name == "Nước Vihawa")
+    assert water_card.variant_count == 2
+    gas_cards = [card for card in result.items if card.brand == "Saigon Petro"]
+    assert len(gas_cards) == 3
+    assert {card.variant_count for card in gas_cards} == {1}
 
 
 async def test_parent_detail_returns_variants_price_ascending(

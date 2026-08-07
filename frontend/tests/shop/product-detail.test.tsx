@@ -131,9 +131,11 @@ describe('ProductDetail variant selector', () => {
     expect(screen.getByRole('radio', { name: /Bình nóng lạnh/ })).toBeInTheDocument()
   })
 
-  it('keeps the selector for a grouped gas product so every size stays reachable', () => {
-    // Gas is grouped one parent per brand (e.g. Elf 12kg + 6kg), so the on-detail
-    // selector is the only way to reach the non-default size — it must stay.
+  it('does NOT render the selector for gas even when sibling variants are passed', () => {
+    // Gas varies by size (6/12/45 kg); grouping it under a selector let the page
+    // title (fixed to the originally loaded product) drift from the selected
+    // size (#342) — e.g. a "12kg" title with a 6kg SKU/price selected. Gas
+    // detail pages always show exactly the one product that was navigated to.
     const twelve = makeProduct({
       id: 'g1',
       sku: 'ELF-12KG-DO',
@@ -151,7 +153,40 @@ describe('ProductDetail variant selector', () => {
 
     render(<ProductDetail product={twelve} variants={[twelve, six]} />)
 
-    expect(screen.getByRole('radiogroup')).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: /6 kg/ })).toBeInTheDocument()
+    expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument()
+    expect(screen.queryByRole('radio', { name: /6 kg/ })).not.toBeInTheDocument()
+  })
+})
+
+describe('ProductDetail gas title/SKU consistency', () => {
+  it("always shows the navigated-to gas product's own title, SKU and price", () => {
+    // Regression guard for #342: previously, selecting a sibling in the (now
+    // removed) gas selector changed the SKU/price shown while the <h1> title
+    // stayed fixed to the originally loaded product. With no selector, the
+    // title/SKU/price can never drift apart.
+    const thuduc12 = makeProduct({
+      id: 'g1',
+      sku: 'THUDUC-12KG',
+      name: 'Bình gas Thủ Đức 12kg',
+      size_kg: '12.00',
+      price: '625000.00',
+      variant_label: '12 kg',
+    })
+    const thuduc6 = makeProduct({
+      ...thuduc12,
+      id: 'g2',
+      sku: 'THUDUC-6KG-NHUA',
+      name: 'Bình gas Thủ Đức 6kg (vỏ nhựa)',
+      size_kg: '6.00',
+      price: '320000.00',
+      variant_label: '6 kg (vỏ nhựa)',
+    })
+
+    render(<ProductDetail product={thuduc12} variants={[thuduc12, thuduc6]} />)
+
+    expect(screen.getByRole('heading', { name: 'Bình gas Thủ Đức 12kg' })).toBeInTheDocument()
+    expect(screen.getByText('SKU THUDUC-12KG')).toBeInTheDocument()
+    expect(screen.queryByText('SKU THUDUC-6KG-NHUA')).not.toBeInTheDocument()
+    expect(screen.queryByText(/320\.000/)).not.toBeInTheDocument()
   })
 })

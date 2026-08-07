@@ -17,6 +17,10 @@ type ProductCardProps = {
 export function ProductCard({ product }: ProductCardProps) {
   const t = useTranslations('products')
   const productHref = `/products/${product.id}`
+  // Only water is grouped under a parent on the listing (#342) — a gas product
+  // still carries a parent_id in the DB (brand grouping), but its card is
+  // always individual, so the "from / multiple options" hint is water-only.
+  const isGroupedWater = product.category === 'nuoc_uong' && Boolean(product.parent_id)
 
   return (
     <Card className="group relative flex h-full cursor-pointer flex-col overflow-hidden transition-shadow hover:shadow-md">
@@ -60,12 +64,12 @@ export function ProductCard({ product }: ProductCardProps) {
       </CardHeader>
       <CardContent className="flex-1 space-y-3">
         <div className="text-2xl font-semibold text-primary">
-          {product.parent_id ? (
+          {isGroupedWater ? (
             <span className="mr-1 text-sm font-normal text-slate-500">{t('priceFrom')}</span>
           ) : null}
           <PriceDisplay listPrice={product.price} salePrice={product.sale_price} />
         </div>
-        {product.parent_id ? <p className="text-sm text-slate-500">{t('variantOptions')}</p> : null}
+        {isGroupedWater ? <p className="text-sm text-slate-500">{t('variantOptions')}</p> : null}
         {product.description ? (
           <p className="line-clamp-2 text-sm text-slate-600">{product.description}</p>
         ) : null}

@@ -36,8 +36,15 @@ export function ProductDetail({ product, variants }: ProductDetailProps) {
   const router = useRouter()
   const addItem = useCartStore((state) => state.addItem)
 
-  // Offer a selector only when there is more than one variant to choose from.
-  const options = useMemo(() => (variants && variants.length > 1 ? variants : []), [variants])
+  // Offer a selector only for water with more than one variant to choose from.
+  // Gas varies by size (6/12/45 kg); grouping it under a selector kept the page
+  // title fixed to the originally loaded product while the selected size
+  // changed underneath it, so gas never shows a selector — the detail page
+  // always shows exactly the one product that was navigated to (#342).
+  const options = useMemo(
+    () => (product.category === 'nuoc_uong' && variants && variants.length > 1 ? variants : []),
+    [product.category, variants]
+  )
   const [selectedId, setSelectedId] = useState(product.id)
   const selected = useMemo(
     () => options.find((variant) => variant.id === selectedId) ?? product,
