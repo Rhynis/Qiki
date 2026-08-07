@@ -8,19 +8,38 @@
 const now = '2026-06-15T00:00:00.000Z'
 
 export const PRODUCTS = [
+  // Gas: grouped by brand in the DB (parent-elf), but shown individually on the
+  // listing — no "Nhiều lựa chọn" hint, no on-detail selector (#342).
   product('elf-12', 'ELF-12KG', 'Bình gas Elf 12kg (đỏ)', 'Elf Gas', '12', 'gas', 'kg', '710000', { parent_id: 'parent-elf', colour: 'đỏ', variant_label: '12 kg (đỏ)' }),
   product('sp-12', 'SP-12KG', 'Bình gas Saigon Petro 12kg', 'Saigon Petro', '12', 'gas', 'kg', '605000'),
   product('elf-6', 'ELF-6KG', 'Bình gas Elf 6kg', 'Elf Gas', '6', 'gas', 'kg', '350000', { parent_id: 'parent-elf', colour: null, variant_label: '6 kg' }),
+  // Water: single product, no parent — its own card, no hint.
   product('water-20', 'WATER-20L', 'Nước Hoàn Hảo 20 lít', 'Hoàn Hảo', '20', 'nuoc_uong', 'lít', '55000'),
+  // Water: grouped by parent (same size, different bottle form) — ONE combined
+  // listing card with the "Nhiều lựa chọn" hint, and a detail-page selector.
+  product('vihawa-normal', 'VIHAWA-20L', 'Nước Vihawa 20 lít', 'Vihawa', '20', 'nuoc_uong', 'lít', '55000', { parent_id: 'parent-vihawa', variant_label: 'Bình thường' }),
+  product('vihawa-hotcold', 'VIHAWA-20L-NL', 'Nước Vihawa 20 lít (bình nóng lạnh)', 'Vihawa', '20', 'nuoc_uong', 'lít', '65000', { parent_id: 'parent-vihawa', variant_label: 'Bình nóng lạnh' }),
 ]
 
-// Parent groupings for the grouped catalog + variant-selector journeys.
+// Parent groupings. parent-elf exercises "gas is grouped in the DB but shown
+// individually"; parent-vihawa exercises the water grouped-card + selector journeys.
 const PARENTS = [
   {
     id: 'parent-elf',
     name: 'Bình gas Elf',
     brand: 'Elf Gas',
     category: 'gas',
+    description: 'Sản phẩm mẫu cho kiểm thử.',
+    image_url: null,
+    is_active: true,
+    created_at: now,
+    updated_at: now,
+  },
+  {
+    id: 'parent-vihawa',
+    name: 'Nước Vihawa',
+    brand: 'Vihawa',
+    category: 'nuoc_uong',
     description: 'Sản phẩm mẫu cho kiểm thử.',
     image_url: null,
     is_active: true,

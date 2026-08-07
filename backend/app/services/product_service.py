@@ -10,6 +10,7 @@ from app.models.user import User
 from app.repositories.product_repository import ProductRepository
 from app.schemas.product import (
     ALLOWED_SIZES,
+    ProductCategory,
     ProductCreate,
     ProductListResponse,
     ProductParentCreate,
@@ -131,6 +132,58 @@ class ProductService:
             }
         )
 
+    @staticmethod
+    def _summarize_product(product: Product) -> ProductParentSummary:
+        """Present one product as its own catalog card (no aggregation).
+
+        Gas variants differ by *size* (6/12/45 kg); grouping them under a parent
+        card kept the detail page's title fixed while the variant selector
+        switched the shown size, so the title/SKU/price could drift apart (#342).
+        Each active gas product is therefore its own card with its own price.
+        """
+        return ProductParentSummary.model_validate(
+            {
+                "id": product.id,
+                "name": product.name,
+                "brand": product.brand,
+                "category": product.category,
+                "description": product.description,
+                "image_url": product.image_url,
+                "min_price": product.price,
+                "max_price": product.price,
+                "variant_count": 1,
+                "in_stock": product.stock_quantity > 0,
+            }
+        )
+
+    async def _list_individual(
+        self, *, category: ProductCategory, skip: int, limit: int
+    ) -> tuple[list[ProductParentSummary], int]:
+        """List one category's active products individually, newest-name-first."""
+        params = ProductSearchParams(
+            category=category,
+            sort_by="name",
+            sort_order="asc",
+            skip=skip,
+            limit=limit,
+        )
+        products, total = await self.repository.list_products(params, active_only=True)
+        return [self._summarize_product(product) for product in products], total
+
+    async def _list_grouped(
+        self, *, category: ProductCategory, skip: int, limit: int
+    ) -> tuple[list[ProductParentSummary], int]:
+        """List one category's active parents as aggregated catalog cards."""
+        parents, total = await self.repository.list_parents(
+            category=category, skip=skip, limit=limit
+        )
+        return [self._summarize_parent(parent) for parent in parents], total
+
+    # Internal cap used only when combining both categories into one page (below
+    # ProductSearchParams.limit's own le=100 bound) — the catalog is small enough
+    # that fetching each category in full and paginating the merge is simplest.
+    _COMBINED_FETCH_LIMIT = 100
+
     async def list_grouped_catalog(
         self,
         *,
@@ -138,17 +191,41 @@ class ProductService:
         skip: int = 0,
         limit: int = 20,
     ) -> ProductParentListResponse:
-        """List active parents as catalog cards with an aggregated price range."""
-        parents, total = await self.repository.list_parents(
-            category=category, skip=skip, limit=limit
-        )
+        """List active catalog cards, category-aware.
+
+        Water (``nuoc_uong``) variants share the same size and differ only by
+        bottle form, so they stay grouped under one parent card with a price
+        range. Gas variants differ by size, so each active gas product is
+        returned as its own card — never aggregated into a parent (#342).
+        """
         page = (skip // limit) + 1 if limit else 1
+
+        if category == "gas":
+            items, total = await self._list_individual(category="gas", skip=skip, limit=limit)
+            return ProductParentListResponse(
+                items=items, total=total, page=page, limit=limit, has_more=skip + len(items) < total
+            )
+
+        if category == "nuoc_uong":
+            items, total = await self._list_grouped(category="nuoc_uong", skip=skip, limit=limit)
+            return ProductParentListResponse(
+                items=items, total=total, page=page, limit=limit, has_more=skip + len(items) < total
+            )
+
+        # No category filter: combine individual gas cards with grouped water
+        # cards. The catalog is small, so fetch each category in full and
+        # paginate the sorted, combined result in memory.
+        gas_items, _ = await self._list_individual(
+            category="gas", skip=0, limit=self._COMBINED_FETCH_LIMIT
+        )
+        water_items, _ = await self._list_grouped(
+            category="nuoc_uong", skip=0, limit=self._COMBINED_FETCH_LIMIT
+        )
+        combined = sorted(gas_items + water_items, key=lambda item: item.name)
+        total = len(combined)
+        items = combined[skip : skip + limit]
         return ProductParentListResponse(
-            items=[self._summarize_parent(parent) for parent in parents],
-            total=total,
-            page=page,
-            limit=limit,
-            has_more=skip + len(parents) < total,
+            items=items, total=total, page=page, limit=limit, has_more=skip + len(items) < total
         )
 
     async def get_parent(self, parent_id: UUID) -> ProductParentResponse:

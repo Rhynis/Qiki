@@ -30,9 +30,14 @@ async function getProduct(productId: string): Promise<Product | null> {
   }
 }
 
-/** Fetch the sibling variants so the detail page can offer a variant selector. */
+/** Fetch the sibling variants so the detail page can offer a variant selector.
+ *
+ * Only water (`nuoc_uong`) ever renders the selector (#342) — gas is grouped
+ * by brand in the DB but shown individually, so fetching gas siblings would
+ * be a wasted request for data ProductDetail never uses.
+ */
 async function getVariants(product: Product): Promise<Product[]> {
-  if (!product.parent_id) return [product]
+  if (product.category !== 'nuoc_uong' || !product.parent_id) return [product]
   try {
     const response = await fetch(apiUrl(`/api/v1/products/parents/${product.parent_id}`), {
       next: { revalidate: 60 },
