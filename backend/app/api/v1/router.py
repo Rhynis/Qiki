@@ -7,6 +7,7 @@ from app.api.v1.endpoints import (
     admin_dashboard,
     admin_insights,
     admin_users,
+    agent,
     auth,
     conversations,
     coupons,
@@ -22,6 +23,7 @@ from app.api.v1.endpoints import (
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["Authentication"])
+api_router.include_router(agent.router, tags=["Agent"])
 api_router.include_router(products.router, tags=["Products"])
 api_router.include_router(orders.router, tags=["Orders"])
 api_router.include_router(coupons.router, tags=["Coupons"])

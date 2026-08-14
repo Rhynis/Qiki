@@ -25,3 +25,9 @@ sentry-sdk[fastapi]>=2.8.0,<3.0.0
 email-validator==2.1.0
 aiosmtplib==5.1.1
 pgvector==0.2.5
+# Agent orchestration (feature-flagged, see docs/adr/0001-langgraph-agent-orchestration.md).
+# langgraph-checkpoint-postgres talks to Postgres via psycopg (v3), separate from
+# the asyncpg/SQLAlchemy pool the rest of the app uses for business tables.
+langgraph==1.2.11
+langgraph-checkpoint-postgres==3.1.2
+psycopg[binary,pool]==3.3.4
