@@ -115,6 +115,23 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "http://localhost:3000"
     CORS_ORIGIN_REGEX: str | None = None
 
+    # LangGraph agent orchestration (docs/adr/0001, docs/adr/0002). Default OFF
+    # so the existing /chat RAG endpoint's behavior and startup cost are
+    # completely unaffected until this is explicitly turned on.
+    AGENT_ENABLED: bool = False
+    # Optional override for the checkpointer's Postgres connection string. When
+    # unset, LANGGRAPH_DB_URI derives from DATABASE_URL with the +asyncpg
+    # SQLAlchemy dialect suffix stripped, because the checkpointer connects via
+    # psycopg (v3), not asyncpg (see langgraph_db_uri below).
+    LANGGRAPH_DB_URI: str | None = None
+
+    @property
+    def langgraph_db_uri(self) -> str:
+        """Plain ``postgresql://`` URI for the LangGraph checkpointer (psycopg)."""
+        if self.LANGGRAPH_DB_URI:
+            return self.LANGGRAPH_DB_URI
+        return self.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://", 1)
+
     @property
     def is_production(self) -> bool:
         """Return whether the application runs in production."""

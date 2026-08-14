@@ -4,7 +4,13 @@ import { MessageCircle } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { Button } from '@/components/ui/button'
 import { useChatStore } from '@/lib/stores/chat-store'
+import { AgentChatWindow } from './agent-chat-window'
 import { ChatWindow } from './chat-window'
+
+// Mirrors the backend AGENT_ENABLED flag (default off). Next.js inlines
+// NEXT_PUBLIC_* vars at build time, so this never adds a runtime branch cost
+// when unset — the default customer-facing ChatWindow is unaffected either way.
+const AGENT_ENABLED = process.env.NEXT_PUBLIC_AGENT_ENABLED === 'true'
 
 export function ChatWidget() {
   const t = useTranslations('chat')
@@ -13,7 +19,7 @@ export function ChatWidget() {
 
   return (
     <>
-      {isOpen ? <ChatWindow /> : null}
+      {isOpen ? AGENT_ENABLED ? <AgentChatWindow /> : <ChatWindow /> : null}
       <Button
         type="button"
         size="icon"

@@ -40,6 +40,7 @@ module = [
   "app.api.v1.endpoints.review",
   "app.api.v1.endpoints.price_alerts",
   "app.api.v1.endpoints.wishlist",
+  "app.api.v1.endpoints.agent",
 ]
 disable_error_code = ["type-arg"]
 

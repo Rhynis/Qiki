@@ -10,6 +10,9 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from psycopg.rows import dict_row
+from psycopg_pool import AsyncConnectionPool
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 from slowapi.errors import RateLimitExceeded
@@ -38,10 +41,45 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         sentry_sdk.init(dsn=settings.SENTRY_DSN, traces_sample_rate=0.1)
 
     app.state.redis = Redis.from_url(settings.REDIS_URL, decode_responses=True)
+
+    # LangGraph checkpointer pool (ADR-0002): separate psycopg pool to the same
+    # Postgres instance, only opened when the agent is enabled so the default
+    # (off) deployment has zero extra startup cost or connections.
+    agent_checkpointer_pool: AsyncConnectionPool | None = None
+    if settings.AGENT_ENABLED:
+        agent_checkpointer_pool = AsyncConnectionPool(
+            settings.langgraph_db_uri,
+            kwargs={
+                # prepare_threshold=None disables server-side prepared
+                # statements — required for Supabase's Supavisor pooler in
+                # transaction-pooling mode, the psycopg equivalent of
+                # asyncpg's statement_cache_size=0 in db/session.py (same
+                # underlying pooler constraint).
+                "prepare_threshold": None,
+                "row_factory": dict_row,
+                # checkpointer.setup() runs CREATE INDEX CONCURRENTLY, which
+                # Postgres refuses inside a transaction block; psycopg
+                # defaults to autocommit=False (implicit transactions), so
+                # this must be explicit. AsyncPostgresSaver.from_conn_string()
+                # sets the same flag for the same reason.
+                "autocommit": True,
+            },
+            min_size=1,
+            max_size=5,
+            open=False,
+        )
+        await agent_checkpointer_pool.open()
+        checkpointer = AsyncPostgresSaver(conn=agent_checkpointer_pool)
+        await checkpointer.setup()
+        app.state.agent_checkpointer = checkpointer
+        logger.info("agent_checkpointer_ready")
+
     logger.info("application_started", environment=settings.ENVIRONMENT)
 
     yield
 
+    if agent_checkpointer_pool is not None:
+        await agent_checkpointer_pool.close()
     await app.state.redis.aclose()
     logger.info("application_stopped")
 
