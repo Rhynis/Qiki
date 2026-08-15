@@ -32,13 +32,16 @@ from app.agent.nodes.turn_limit import turn_limit
 from app.agent.nodes.verifier import verifier
 from app.agent.state import MAX_AGENT_TURNS, QikiAgentState
 from app.agent.tools.check_inventory import build_check_inventory_tool
+from app.agent.tools.confirm_gate import ToolConfirmGate
 from app.agent.tools.lookup_safety_policy import build_lookup_safety_policy_tool
 from app.agent.tools.search_products import build_search_products_tool
 from app.llm.base import BaseLLMProvider
 from app.llm.prompts.templates import PromptLibrary
+from app.models.user import User
 from app.rag.context_builder import ContextBuilder
 from app.rag.retriever import BaseRetriever
 from app.rag.safety import SafetyChecker
+from app.repositories.admin_audit_repository import AdminAuditRepository
 from app.services.knowledge_base_service import KnowledgeBaseService
 from app.services.product_service import ProductService
 
@@ -80,8 +83,21 @@ def build_agent_graph(
     prompt_library: PromptLibrary,
     context_builder: ContextBuilder,
     checkpointer: BaseCheckpointSaver[str],
+    current_user: User | None = None,
+    confirm_gate: ToolConfirmGate | None = None,
+    audit_repository: AdminAuditRepository | None = None,
 ) -> CompiledStateGraph[QikiAgentState, None, QikiAgentState, QikiAgentState]:
-    """Wire the nodes/edges above into a compiled, checkpointed graph."""
+    """Wire the nodes/edges above into a compiled, checkpointed graph.
+
+    ``current_user``/``confirm_gate``/``audit_repository`` (issue #348) are
+    threaded into ``tool_executor`` the same way ``product_service``/
+    ``kb_service`` are threaded into the tools themselves: request-scoped
+    dependencies bound via ``functools.partial`` at build time, never stored
+    in the checkpointed ``QikiAgentState``. All 3 default to ``None`` so
+    existing callers (and #346's tests) that only need the 3 public read
+    tools keep working unchanged; a write tool call without them is refused,
+    never silently allowed (see ``tool_executor._authorize``).
+    """
     tools = build_tools(product_service, kb_service)
 
     graph = StateGraph(QikiAgentState)
@@ -89,7 +105,16 @@ def build_agent_graph(
     graph.add_node("safety_emergency", partial(safety_emergency, safety_checker=safety_checker))
     graph.add_node("turn_limit", turn_limit)
     graph.add_node("router", router)
-    graph.add_node("tool_executor", partial(tool_executor, tools=tools))
+    graph.add_node(
+        "tool_executor",
+        partial(
+            tool_executor,
+            tools=tools,
+            current_user=current_user,
+            confirm_gate=confirm_gate,
+            audit_repository=audit_repository,
+        ),
+    )
     graph.add_node("retriever", partial(retriever_node, retriever=retriever))
     graph.add_node("verifier", verifier)
     graph.add_node(

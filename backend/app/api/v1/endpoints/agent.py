@@ -15,13 +15,16 @@ from fastapi.responses import StreamingResponse
 from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph.state import CompiledStateGraph
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.graph import RECURSION_LIMIT, build_agent_graph
 from app.agent.state import QikiAgentState
+from app.agent.tools.confirm_gate import ToolConfirmGate
 from app.api.v1.dependencies.auth import get_current_user_optional
 from app.core.config import get_settings
 from app.core.rate_limit import limiter
+from app.db.redis import get_redis
 from app.db.session import get_db
 from app.llm.base import BaseLLMProvider
 from app.llm.dependencies import get_llm_provider, get_prompt_library
@@ -36,6 +39,7 @@ from app.rag.dependencies import (
 )
 from app.rag.retriever import BaseRetriever
 from app.rag.safety import SafetyChecker
+from app.repositories.admin_audit_repository import AdminAuditRepository
 from app.repositories.product_repository import ProductRepository
 from app.schemas.conversation import SendMessageRequest
 from app.services.knowledge_base_service import KnowledgeBaseService
@@ -49,12 +53,16 @@ AgentGraph = CompiledStateGraph[QikiAgentState, None, QikiAgentState, QikiAgentS
 def get_agent_graph(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_db)],
+    redis: Annotated[Redis, Depends(get_redis)],
     safety_checker: Annotated[SafetyChecker, Depends(get_safety_checker)],
     retriever: Annotated[BaseRetriever, Depends(get_default_retriever)],
     kb_service: Annotated[KnowledgeBaseService, Depends(get_knowledge_base_service)],
     llm_provider: Annotated[BaseLLMProvider, Depends(get_llm_provider)],
     prompt_library: Annotated[PromptLibrary, Depends(get_prompt_library)],
     context_builder: Annotated[ContextBuilder, Depends(get_context_builder)],
+    # Same dependency the route handler resolves for `current_user` below;
+    # FastAPI caches it per-request, so this doesn't re-verify the token.
+    current_user: Annotated[User | None, Depends(get_current_user_optional)] = None,
 ) -> AgentGraph:
     """Build the request-scoped compiled agent graph.
 
@@ -62,6 +70,13 @@ def get_agent_graph(
     checkpointer must have started (``lifespan`` only opens it when the flag
     is on) — surfacing a clear 503 instead of an AttributeError if a deploy
     somehow reaches this endpoint without going through startup correctly.
+
+    ``confirm_gate``/``audit_repository`` (issue #348) are built the same way
+    ``get_admin_chat_service`` builds them for ``AdminChatService`` — a
+    Redis-backed pending-confirmation store and the shared audit repository —
+    so a future real write tool gets the same guard rails for free. No write
+    tool is wired into ``build_tools()`` yet (see agent/tools/registry.py),
+    so these are inert for every tool this endpoint can currently reach.
     """
     settings = get_settings()
     if not settings.AGENT_ENABLED:
@@ -86,6 +101,9 @@ def get_agent_graph(
         prompt_library=prompt_library,
         context_builder=context_builder,
         checkpointer=checkpointer,
+        current_user=current_user,
+        confirm_gate=ToolConfirmGate(redis),
+        audit_repository=AdminAuditRepository(session),
     )
 
 
