@@ -52,6 +52,9 @@ jobs:
       # Enables the optional intent-eval step below. Empty unless the repo secret is set,
       # in which case the step is skipped (the embedding-based classifier needs Gemini).
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      # Enables the optional agent red-team gate step below. Empty (and the step skipped)
+      # until the owner configures it — see that step's comment for what's still needed.
+      REDTEAM_PROVIDER_API_KEY: ${{ secrets.REDTEAM_PROVIDER_API_KEY }}
 
     steps:
       - uses: actions/checkout@v4
@@ -89,6 +92,30 @@ jobs:
         if: ${{ env.GEMINI_API_KEY != '' }}
         continue-on-error: true
         run: python -m scripts.run_evaluation --suite intent
+      # Agent tool-authorization red-team gate (issue #348, evals/promptfooconfig.yaml).
+      # Needs things not yet configured in this repo, so it is currently a documented
+      # no-op: (1) a REDTEAM_PROVIDER_API_KEY secret for the attacker/grading model
+      # (promptfoo's redteam.provider in the config would need to point at whichever
+      # provider that key is for -- Ollama needs no key but also isn't available on a
+      # GitHub-hosted runner without a slow model pull first); (2) an `actions/setup-node`
+      # step pinning Node >= 22 (promptfoo's own minimum -- not yet added here, since
+      # ubuntu-latest's preinstalled Node version isn't guaranteed to satisfy it and this
+      # whole step is skipped today regardless). Wired here so turning it on later is
+      # "add the secret + pin Node", not "write the CI step from scratch" -- see the PR
+      # for #348 for a real local run against Ollama, and evals/run_redteam_gate.py's
+      # docstring for why a thin wrapper (not promptfoo's own exit code) enforces
+      # "fail on CRITICAL only".
+      - name: Agent red-team gate (optional — needs REDTEAM_PROVIDER_API_KEY secret)
+        if: ${{ env.REDTEAM_PROVIDER_API_KEY != '' }}
+        continue-on-error: true
+        working-directory: .
+        env:
+          AGENT_ENABLED: "true"
+          QIKI_AGENT_URL: http://127.0.0.1:8000/api/v1/chat/agent/stream
+        run: |
+          python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --app-dir backend &
+          sleep 5
+          python evals/run_redteam_gate.py --config evals/promptfooconfig.yaml
       # GHSA-8rrh-rw8j-w5fx: dev/build-only `wheel` (deepeval transitive, not in the
       # runtime image); the fix needs packaging>=24 which runtime langfuse pins out.
       # PYSEC-2026-597: nltk 3.9.4 (transitive via underthesea, our VI tokenizer);

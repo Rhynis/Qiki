@@ -10,6 +10,18 @@ routing deterministic and unit-testable without mocking an LLM.
 
 MVP scope: a single tool call per turn (no ReAct-style re-planning loop yet —
 see ADR-0001's "near-zero marginal cost to add a planner step later").
+
+Prompt-injection invariant (issue #348): ``tool_calls`` is derived ONLY from
+``_last_human_text`` — the most recent ``HumanMessage`` — never from
+``AIMessage``/``ToolMessage`` content. Retrieved KB documents and prior tool
+output can end up quoted back into the transcript as AI/tool messages; if the
+router ever read THOSE for routing decisions, injected text there could steer
+a future tool call without a real user ever having typed it. The one
+exception, ``_remembered_product_id``, reads a structurally-typed
+``product_id`` field off a PRIOR ``search_products`` result (itself sourced
+from the real catalog, never free text) — never prose — so it cannot be
+steered by injected wording either. See ``tests/agent/test_tool_authz.py``'s
+``TestPromptInjectionCannotTriggerAWrite`` for regression coverage of both.
 """
 
 from typing import Any
