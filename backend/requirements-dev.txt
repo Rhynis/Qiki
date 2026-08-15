@@ -16,3 +16,7 @@ deepeval==4.0.6
 # because the fix (wheel 0.46.2+) requires packaging>=24, which the runtime `langfuse`
 # pins to <24. wheel is build-only and not shipped in the runtime image, so pip-audit
 # ignores that single advisory (see .github/workflows/ci-backend.yml).
+# Client for deepeval's OllamaModel (app/evaluation/agent_evaluator.py's LLM-judge
+# subset) — lazily imported by deepeval only when a judge call actually runs, so this
+# is a soft requirement in practice, but must be installed for that path to work.
+ollama==0.6.2
