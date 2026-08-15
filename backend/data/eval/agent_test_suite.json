@@ -1,0 +1,436 @@
+[
+  {
+    "id": "agent_product_001",
+    "category": "product_inquiry",
+    "locale": "vi",
+    "turns": [
+      "Bình gas Elf 12kg giá bao nhiêu?"
+    ],
+    "expected_tool_calls": [
+      {
+        "name": "search_products",
+        "args": {
+          "query": "binh gas elf 12kg gia bao nhieu?"
+        }
+      }
+    ],
+    "expected_outcome": "States Elf 12kg's real price/availability from the search_products result; never invents a number.",
+    "judge_eligible": false
+  },
+  {
+    "id": "agent_product_002",
+    "category": "product_inquiry",
+    "locale": "vi",
+    "turns": [
+      "Có bán gas Petrolimex không?"
+    ],
+    "expected_tool_calls": [
+      {
+        "name": "search_products",
+        "args": {
+          "query": "co ban gas petrolimex khong?"
+        }
+      }
+    ],
+    "expected_outcome": "Confirms whether Petrolimex gas is in the catalog, based only on the tool result.",
+    "judge_eligible": false
+  },
+  {
+    "id": "agent_product_003",
+    "category": "product_inquiry",
+    "locale": "vi",
+    "turns": [
+      "Cho tôi xem các loại bình gas 6kg"
+    ],
+    "expected_tool_calls": [
+      {
+        "name": "search_products",
+        "args": {
+          "query": "cho toi xem cac loai binh gas 6kg"
+        }
+      }
+    ],
+    "expected_outcome": "Lists 6kg gas options returned by the tool result.",
+    "judge_eligible": false
+  },
+  {
+    "id": "agent_product_004",
+    "category": "product_inquiry",
+    "locale": "vi",
+    "turns": [
+      "Giá nước uống Vihawa bao nhiêu?"
+    ],
+    "expected_tool_calls": [
+      {
+        "name": "search_products",
+        "args": {
+          "query": "gia nuoc uong vihawa bao nhieu?"
+        }
+      }
+    ],
+    "expected_outcome": "States Vihawa water pricing from the tool result.",
+    "judge_eligible": false
+  },
+  {
+    "id": "agent_product_005",
+    "category": "product_inquiry",
+    "locale": "vi",
+    "turns": [
+      "Bình gas 45kg dùng cho nhà hàng có không?"
+    ],
+    "expected_tool_calls": [
+      {
+        "name": "search_products",
+        "args": {
+          "query": "binh gas 45kg dung cho nha hang co khong?"
+        }
+      }
+    ],
+    "expected_outcome": "Confirms 45kg availability for commercial use from the tool result.",
+    "judge_eligible": false
+  },
+  {
+    "id": "agent_product_006",
+    "category": "product_inquiry",
+    "locale": "vi",
+    "turns": [
+      "Saigon Petro với Gia Đình Gas khác nhau thế nào?"
+    ],
+    "expected_tool_calls": [
+      {
+        "name": "search_products",
+        "args": {
+          "query": "saigon petro voi gia dinh gas khac nhau the nao?"
+        }
+      }
+    ],
+    "expected_outcome": "Compares the two brands using only catalog data the tool returned, not fabricated specs.",
+    "judge_eligible": true
+  },
+  {
+    "id": "agent_product_007",
+    "category": "product_inquiry",
+    "locale": "vi",
+    "turns": [
+      "Cho tôi giá bình gas hôm nay"
+    ],
+    "expected_tool_calls": [
+      {
+        "name": "search_products",
+        "args": {
+          "query": "cho toi gia binh gas hom nay"
+        }
+      }
+    ],
+    "expected_outcome": "Shares today's gas prices from the tool result.",
+    "judge_eligible": false
+  },
+  {
+    "id": "agent_product_008",
+    "category": "product_inquiry",
+    "locale": "vi",
+    "turns": [
+      "Nước uống đóng bình 20 lít giá bao nhiêu?"
+    ],
+    "expected_tool_calls": [
+      {
+        "name": "search_products",
+        "args": {
+          "query": "nuoc uong dong binh 20 lit gia bao nhieu?"
+        }
+      }
+    ],
+    "expected_outcome": "States the 20-liter bottled water price from the tool result.",
+    "judge_eligible": true
+  },
+  {
+    "id": "agent_safety_info_001",
+    "category": "safety_info",
+    "locale": "vi",
+    "turns": [
+      "Cách bảo quản bình gas an toàn tại nhà"
+    ],
+    "expected_tool_calls": [
+      {
+        "name": "lookup_safety_policy",
+        "args": {
+          "query": "cach bao quan binh gas an toan tai nha"
+        }
+      }
+    ],
+    "expected_outcome": "Gives calm, non-emergency storage guidance; must not trigger the emergency short-circuit.",
+    "judge_eligible": true
+  },
+  {
+    "id": "agent_safety_info_002",
+    "category": "safety_info",
+    "locale": "vi",
+    "turns": [
+      "Bao lâu thì nên kiểm tra định kỳ dây dẫn gas?"
+    ],
+    "expected_tool_calls": [
+      {
+        "name": "lookup_safety_policy",
+        "args": {
+          "query": "bao lau thi nen kiem tra dinh ky day dan gas?"
+        }
+      }
+    ],
+    "expected_outcome": "Answers the periodic-inspection question calmly, no emergency framing.",
+    "judge_eligible": false
+  },
+  {
+    "id": "agent_safety_info_003",
+    "category": "safety_info",
+    "locale": "vi",
+    "turns": [
+      "Có cách nào phòng ngừa sự cố với bình gas không?"
+    ],
+    "expected_tool_calls": [
+      {
+        "name": "lookup_safety_policy",
+        "args": {
+          "query": "co cach nao phong ngua su co voi binh gas khong?"
+        }
+      }
+    ],
+    "expected_outcome": "Gives general prevention guidance, calm tone.",
+    "judge_eligible": false
+  },
+  {
+    "id": "agent_safety_info_004",
+    "category": "safety_info",
+    "locale": "en",
+    "turns": [
+      "How to store a gas cylinder safely"
+    ],
+    "expected_tool_calls": [
+      {
+        "name": "lookup_safety_policy",
+        "args": {
+          "query": "how to store a gas cylinder safely"
+        }
+      }
+    ],
+    "expected_outcome": "Gives calm storage guidance in English; must not trigger the emergency short-circuit.",
+    "judge_eligible": false
+  },
+  {
+    "id": "agent_safety_info_005",
+    "category": "safety_info",
+    "locale": "vi",
+    "turns": [
+      "Hướng dẫn kiểm tra định kỳ bếp gas"
+    ],
+    "expected_tool_calls": [
+      {
+        "name": "lookup_safety_policy",
+        "args": {
+          "query": "huong dan kiem tra dinh ky bep gas"
+        }
+      }
+    ],
+    "expected_outcome": "Answers the stove-inspection question calmly.",
+    "judge_eligible": false
+  },
+  {
+    "id": "agent_ambiguous_001",
+    "category": "ambiguous",
+    "locale": "vi",
+    "turns": [
+      "Tôi muốn mua bình gas"
+    ],
+    "expected_tool_calls": [
+      {
+        "name": "search_products",
+        "args": {
+          "query": "toi muon mua binh gas"
+        }
+      }
+    ],
+    "expected_outcome": "Asks a clarifying question about brand/size, or lists the available options — does not silently pick one product.",
+    "judge_eligible": true
+  },
+  {
+    "id": "agent_ambiguous_002",
+    "category": "ambiguous",
+    "locale": "vi",
+    "turns": [
+      "Cho tôi bình gas loại tốt"
+    ],
+    "expected_tool_calls": [
+      {
+        "name": "search_products",
+        "args": {
+          "query": "cho toi binh gas loai tot"
+        }
+      }
+    ],
+    "expected_outcome": "Asks what 'tốt' means to the customer (brand/size/budget) rather than guessing a single product.",
+    "judge_eligible": true
+  },
+  {
+    "id": "agent_ambiguous_003",
+    "category": "ambiguous",
+    "locale": "vi",
+    "turns": [
+      "Bình gas giá rẻ có loại nào"
+    ],
+    "expected_tool_calls": [
+      {
+        "name": "search_products",
+        "args": {
+          "query": "binh gas gia re co loai nao"
+        }
+      }
+    ],
+    "expected_outcome": "Surfaces the lowest-price options from the tool result without overclaiming which is 'best'.",
+    "judge_eligible": true
+  },
+  {
+    "id": "agent_stock_001",
+    "category": "out_of_stock",
+    "locale": "vi",
+    "turns": [
+      "Shop có bán bình gas Zorventa Cam 6kg không?"
+    ],
+    "expected_tool_calls": [
+      {
+        "name": "search_products",
+        "args": {
+          "query": "shop co ban binh gas zorventa cam 6kg khong?"
+        }
+      }
+    ],
+    "expected_outcome": "Tells the customer Zorventa Cam 6kg is currently out of stock per the tool result; offers an alternative or to notify later rather than promising delivery.",
+    "judge_eligible": true
+  },
+  {
+    "id": "agent_checkinv_001",
+    "category": "check_inventory",
+    "locale": "vi",
+    "turns": [
+      "Tìm bình gas Qikiflame Xanh 12kg giúp tôi",
+      "còn hàng không"
+    ],
+    "expected_tool_calls": [
+      {
+        "name": "check_inventory",
+        "args": {
+          "product_id": "*",
+          "quantity": 1
+        }
+      }
+    ],
+    "expected_outcome": "Confirms Qikiflame Xanh 12kg is in stock via the check_inventory result.",
+    "judge_eligible": false
+  },
+  {
+    "id": "agent_checkinv_002",
+    "category": "check_inventory",
+    "locale": "vi",
+    "turns": [
+      "Bình gas Zorventa Cam 6kg giá bao nhiêu?",
+      "còn hàng không"
+    ],
+    "expected_tool_calls": [
+      {
+        "name": "check_inventory",
+        "args": {
+          "product_id": "*",
+          "quantity": 1
+        }
+      }
+    ],
+    "expected_outcome": "Correctly reports Zorventa Cam 6kg has zero stock via the check_inventory result, not a guess.",
+    "judge_eligible": true
+  },
+  {
+    "id": "agent_emergency_001",
+    "category": "safety_emergency",
+    "locale": "vi",
+    "turns": [
+      "Tôi ngửi thấy mùi gas trong nhà"
+    ],
+    "expected_tool_calls": [],
+    "expected_outcome": "Returns the fixed emergency response with the hotline; calls no tool.",
+    "judge_eligible": false
+  },
+  {
+    "id": "agent_emergency_002",
+    "category": "safety_emergency",
+    "locale": "vi",
+    "turns": [
+      "Bình gas nhà tôi đang bốc lửa"
+    ],
+    "expected_tool_calls": [],
+    "expected_outcome": "Returns the fixed emergency response with the hotline; calls no tool.",
+    "judge_eligible": false
+  },
+  {
+    "id": "agent_emergency_003",
+    "category": "safety_emergency",
+    "locale": "vi",
+    "turns": [
+      "Nhà tôi bị rò gas sau khi thay bình"
+    ],
+    "expected_tool_calls": [],
+    "expected_outcome": "Returns the fixed emergency response with the hotline; calls no tool.",
+    "judge_eligible": false
+  },
+  {
+    "id": "agent_emergency_004",
+    "category": "safety_emergency",
+    "locale": "en",
+    "turns": [
+      "I smell gas in my kitchen"
+    ],
+    "expected_tool_calls": [],
+    "expected_outcome": "Returns the fixed English emergency response with the hotline; calls no tool.",
+    "judge_eligible": false
+  },
+  {
+    "id": "agent_faq_001",
+    "category": "generic_faq",
+    "locale": "vi",
+    "turns": [
+      "Cửa hàng mở cửa mấy giờ?"
+    ],
+    "expected_tool_calls": [],
+    "expected_outcome": "Answers using retrieved KB content, no tool call.",
+    "judge_eligible": true
+  },
+  {
+    "id": "agent_faq_002",
+    "category": "generic_faq",
+    "locale": "vi",
+    "turns": [
+      "Shop có ở quận nào?"
+    ],
+    "expected_tool_calls": [],
+    "expected_outcome": "Answers using retrieved KB content, no tool call.",
+    "judge_eligible": false
+  },
+  {
+    "id": "agent_faq_003",
+    "category": "generic_faq",
+    "locale": "vi",
+    "turns": [
+      "Cho tôi số điện thoại hotline hỗ trợ"
+    ],
+    "expected_tool_calls": [],
+    "expected_outcome": "Answers using retrieved KB content, no tool call.",
+    "judge_eligible": false
+  },
+  {
+    "id": "agent_faq_004",
+    "category": "generic_faq",
+    "locale": "vi",
+    "turns": [
+      "Xin chào, tôi cần hỗ trợ"
+    ],
+    "expected_tool_calls": [],
+    "expected_outcome": "Greets back and offers help using retrieved KB content, no tool call.",
+    "judge_eligible": true
+  }
+]

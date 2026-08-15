@@ -72,6 +72,16 @@ jobs:
       - run: pytest --cov --cov-fail-under=70
       - run: pytest tests/eval -v
       - run: python -m scripts.run_evaluation --suite safety
+      # Agent-level eval harness (issue #347) — a SEPARATE suite/layer from the
+      # RAG suites above (tool selection / argument correctness for the
+      # LangGraph agent in app/agent/, not retrieval or generated text). The
+      # deterministic tool-selection/argument-correctness metrics always run
+      # here and hard-gate CI (< 85% tool-selection accuracy, or any
+      # safety-tool regression, fails the build); the LLM-judge subset
+      # (task completion / trajectory) auto-skips when no local Ollama server
+      # is reachable, which is always true in CI, so this step needs no extra
+      # secret or service container.
+      - run: python -m scripts.run_evaluation --suite agent
       # Optional 96-case intent suite. Runs only when the GEMINI_API_KEY secret is set
       # (the hybrid classifier embeds queries via Gemini). Report-only: it never blocks a
       # merge, since intent accuracy depends on non-deterministic LLM fallbacks.

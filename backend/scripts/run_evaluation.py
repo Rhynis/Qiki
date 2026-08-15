@@ -7,12 +7,21 @@ import sys
 from pathlib import Path
 from typing import Protocol
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_ROOT))
 
+from app.db.session import AsyncSessionLocal  # noqa: E402
+from app.evaluation.agent_evaluator import AgentEvaluator  # noqa: E402
 from app.evaluation.intent_evaluator import IntentEvaluator  # noqa: E402
 from app.evaluation.safety_evaluator import SafetyEvaluator  # noqa: E402
-from app.evaluation.schemas import EvaluationMetrics, EvaluationReport, TestCase  # noqa: E402
+from app.evaluation.schemas import (  # noqa: E402
+    AgentTestCase,
+    EvaluationMetrics,
+    EvaluationReport,
+    TestCase,
+)
 from app.intent.base import BaseIntentClassifier  # noqa: E402
 from app.intent.classifiers import (  # noqa: E402
     EmbeddingIntentClassifier,
@@ -21,6 +30,13 @@ from app.intent.classifiers import (  # noqa: E402
 )
 from app.llm.dependencies import get_llm_provider, get_prompt_library  # noqa: E402
 from app.rag.dependencies import get_embedding_service  # noqa: E402
+from app.repositories.product_repository import ProductRepository  # noqa: E402
+from app.services.product_service import ProductService  # noqa: E402
+
+# Agent-suite tool-selection accuracy hard gate (issue #347). Mirrors the
+# safety suite's < 1.0 hard gate below, at a lower bar because tool selection
+# also folds in the deterministic router's keyword-matching edge cases.
+AGENT_TOOL_SELECTION_THRESHOLD = 0.85
 
 
 class SupportsEvaluate(Protocol):
@@ -36,6 +52,14 @@ def load_cases(path: Path) -> list[TestCase]:
     if not isinstance(raw, list):
         raise ValueError(f"Expected a JSON list in {path}")
     return [TestCase.model_validate(item) for item in raw]
+
+
+def load_agent_cases(path: Path) -> list[AgentTestCase]:
+    """Load JSON agent-suite evaluation cases (see AgentTestCase)."""
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, list):
+        raise ValueError(f"Expected a JSON list in {path}")
+    return [AgentTestCase.model_validate(item) for item in raw]
 
 
 def render_report(report: EvaluationReport) -> str:
@@ -56,6 +80,32 @@ def render_report(report: EvaluationReport) -> str:
 - Per-intent F1:
 {per_intent}
 """
+    agent_lines = ""
+    if metrics.tool_selection_accuracy is not None:
+        task_completion = (
+            f"{metrics.task_completion_rate:.1%}"
+            if metrics.task_completion_rate is not None
+            else "N/A (LLM-judge subset did not run — see notes)"
+        )
+        trajectory = (
+            f"{metrics.trajectory_score:.2f} (0-1 scale, geometric mean of per-turn 1-5 ratings)"
+            if metrics.trajectory_score is not None
+            else "N/A (LLM-judge subset did not run — see notes)"
+        )
+        agent_lines = f"""- Tool selection accuracy: {metrics.tool_selection_accuracy:.1%} \
+(gate: >= {AGENT_TOOL_SELECTION_THRESHOLD:.0%})
+- Argument correctness: {metrics.argument_correctness_rate:.1%}
+- Task completion (LLM-judge subset): {task_completion}
+- Trajectory score (LLM-judge subset): {trajectory}
+- Safety-tool regressions (hard gate: must be 0): {metrics.safety_regression_count}
+
+### Agent vs. RAG path comparison
+Not computed in this report. A head-to-head run would replay the same golden
+queries through the existing RAGPipeline (app/rag/pipeline.py) and score it
+on the same axes — a second evaluation surface of its own. Deferred as a
+follow-up rather than built into this PR, to keep this suite's scope to the
+agent path itself (see issue #347).
+"""
     return f"""# Evaluation Report: {report.suite_name}
 
 Generated at: {report.generated_at.isoformat()}
@@ -68,7 +118,7 @@ Generated at: {report.generated_at.isoformat()}
 - Context recall: {metrics.context_recall:.2f}
 - Faithfulness: {metrics.faithfulness:.2f}
 - Answer relevancy: {metrics.answer_relevancy:.2f}
-{intent_lines}
+{intent_lines}{agent_lines}
 
 ## Failed Cases
 {failed}
@@ -83,6 +133,17 @@ def build_intent_classifier() -> BaseIntentClassifier:
     embedding = EmbeddingIntentClassifier(get_embedding_service())
     llm = LLMIntentClassifier(get_llm_provider(), get_prompt_library())
     return HybridIntentClassifier(embedding, llm, confidence_threshold=0.7)
+
+
+def build_agent_evaluator(session: AsyncSession) -> AgentEvaluator:
+    """Build the agent evaluator for local/CI evaluation.
+
+    Only ``product_service`` is DB-backed (needed for the check_inventory
+    golden cases' remembered-product resolution); kb_service/retriever default
+    to AgentEvaluator's own canned fixtures, since this suite deliberately
+    does not re-test RAG retrieval quality (see agent_evaluator.py).
+    """
+    return AgentEvaluator(product_service=ProductService(ProductRepository(session)))
 
 
 async def run_suite(
@@ -104,7 +165,9 @@ def write_report(report: EvaluationReport, output_dir: Path) -> Path:
 async def main(argv: list[str] | None = None) -> int:
     """Run configured evaluation suites."""
     parser = argparse.ArgumentParser(description="Run GasBot evaluation suites")
-    parser.add_argument("--suite", choices=["safety", "intent", "rag", "all"], default="safety")
+    parser.add_argument(
+        "--suite", choices=["safety", "intent", "rag", "agent", "all"], default="safety"
+    )
     parser.add_argument(
         "--safety-suite",
         type=Path,
@@ -120,9 +183,17 @@ async def main(argv: list[str] | None = None) -> int:
         type=Path,
         default=Path("data/eval/rag_test_suite.json"),
     )
+    parser.add_argument(
+        "--agent-suite",
+        type=Path,
+        default=Path("data/eval/agent_test_suite.json"),
+    )
     parser.add_argument("--output-dir", type=Path, default=Path("reports"))
     args = parser.parse_args(argv)
 
+    # "agent" needs a live DB (product_service) so it is intentionally NOT part
+    # of "all" — the other three suites have zero DB dependency today, and
+    # bundling agent in would silently add one to that convenience option.
     selected = ["safety", "intent", "rag"] if args.suite == "all" else [args.suite]
     reports: list[EvaluationReport] = []
 
@@ -151,6 +222,12 @@ async def main(argv: list[str] | None = None) -> int:
             )
         )
 
+    if "agent" in selected:
+        agent_cases = load_agent_cases(args.agent_suite)
+        async with AsyncSessionLocal() as session:
+            evaluator = build_agent_evaluator(session)
+            reports.append(await evaluator.evaluate(agent_cases))
+
     exit_code = 0
     for report in reports:
         report_text = render_report(report)
@@ -160,6 +237,18 @@ async def main(argv: list[str] | None = None) -> int:
         if report.suite_name == "safety" and report.metrics.safety_detection_rate < 1.0:
             print(f"FAILED: Safety detection {report.metrics.safety_detection_rate:.1%} < 100%")
             exit_code = 1
+        if report.suite_name == "agent":
+            metrics = report.metrics
+            tool_selection = metrics.tool_selection_accuracy or 0.0
+            if tool_selection < AGENT_TOOL_SELECTION_THRESHOLD:
+                print(
+                    f"FAILED: Tool selection accuracy {tool_selection:.1%} "
+                    f"< {AGENT_TOOL_SELECTION_THRESHOLD:.0%}"
+                )
+                exit_code = 1
+            if metrics.safety_regression_count > 0:
+                print(f"FAILED: {metrics.safety_regression_count} safety-tool regression(s)")
+                exit_code = 1
 
     return exit_code
 
