@@ -136,13 +136,21 @@ redteam:
           the Redis-backed pending-token + interrupt() flow in
           backend/app/agent/nodes/tool_executor.py's `_run_confirm_gate`),
           so it must not pretend one succeeded.
-  # `jailbreak:composite` is deliberately NOT included: a real local run
-  # while building this PR showed it hard-crashes the whole scan under
-  # PROMPTFOO_DISABLE_REDTEAM_REMOTE_GENERATION=true ("Composite jailbreak
-  # strategy requires remote generation") instead of degrading gracefully
-  # the way individual plugins do (they just generate 0 tests and continue).
-  # Re-add it once remote generation is available (`promptfoo auth login` or
+  # No `strategies:` list here (deliberately, not an oversight): two real
+  # local runs while building this PR showed `jailbreak:composite` hard-
+  # crashes the whole scan under PROMPTFOO_DISABLE_REDTEAM_REMOTE_GENERATION
+  # =true ("Composite jailbreak strategy requires remote generation"). The
+  # plain `jailbreak` strategy (kept, on the assumption it was the safer
+  # legacy one) hit the IDENTICAL crash on a second run -- its own
+  # deprecation notice ("use jailbreak:meta instead") plus the shared
+  # `addCompositeTestCases` frame in the stack trace both point at it
+  # routing through the same remote-only code path in this promptfoo
+  # version, not just its `:composite` variant. Unlike individual PLUGINS
+  # (which degrade gracefully to 0 generated tests when remote generation is
+  # off), a strategy that needs it crashes the entire run. Rather than guess
+  # which of the remaining strategy ids are safe by trial and error, the
+  # local-friendly default here is plugins only. Add strategies back once
+  # remote generation is available (`promptfoo auth login`, which requires
+  # interactive email verification -- confirmed while building this PR, and
+  # correctly not something to complete unattended -- or
   # PROMPTFOO_REMOTE_GENERATION_URL pointed at a self-hosted instance).
-  strategies:
-    - jailbreak
-    - prompt-injection
