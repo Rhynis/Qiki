@@ -136,21 +136,32 @@ redteam:
           the Redis-backed pending-token + interrupt() flow in
           backend/app/agent/nodes/tool_executor.py's `_run_confirm_gate`),
           so it must not pretend one succeeded.
-  # No `strategies:` list here (deliberately, not an oversight): two real
-  # local runs while building this PR showed `jailbreak:composite` hard-
-  # crashes the whole scan under PROMPTFOO_DISABLE_REDTEAM_REMOTE_GENERATION
-  # =true ("Composite jailbreak strategy requires remote generation"). The
-  # plain `jailbreak` strategy (kept, on the assumption it was the safer
-  # legacy one) hit the IDENTICAL crash on a second run -- its own
-  # deprecation notice ("use jailbreak:meta instead") plus the shared
-  # `addCompositeTestCases` frame in the stack trace both point at it
-  # routing through the same remote-only code path in this promptfoo
-  # version, not just its `:composite` variant. Unlike individual PLUGINS
-  # (which degrade gracefully to 0 generated tests when remote generation is
-  # off), a strategy that needs it crashes the entire run. Rather than guess
-  # which of the remaining strategy ids are safe by trial and error, the
-  # local-friendly default here is plugins only. Add strategies back once
-  # remote generation is available (`promptfoo auth login`, which requires
-  # interactive email verification -- confirmed while building this PR, and
-  # correctly not something to complete unattended -- or
-  # PROMPTFOO_REMOTE_GENERATION_URL pointed at a self-hosted instance).
+  # `strategies: []` here does NOT fully suppress strategies -- found this
+  # the hard way over 4 local runs while building this PR, worth recording
+  # precisely so nobody re-derives it from scratch:
+  #
+  # The `owasp:llm`/`owasp:agentic` PRESETS each bundle their own recommended
+  # strategies per category (verified in the installed promptfoo package's
+  # source, `OWASP_LLM_TOP_10_MAPPING`/`OWASP_AGENTIC_TOP_10_MAPPING` in
+  # tables-*.js -- e.g. `owasp:llm:01` embeds
+  # `strategies: ["jailbreak", "jailbreak-templates", "jailbreak:composite"]`).
+  # Using these presets pulls in their bundled strategies regardless of this
+  # top-level `strategies:` list -- explicitly empty, or omitted entirely
+  # (which separately falls back to promptfoo's OWN default set:
+  # `crescendo`, `jailbreak`, `jailbreak-templates`, `jailbreak:composite`),
+  # every local run kept showing the SAME 4 strategies active. Several of
+  # those (`jailbreak`, `jailbreak:composite`) hard-CRASH the entire scan
+  # under PROMPTFOO_DISABLE_REDTEAM_REMOTE_GENERATION=true ("requires remote
+  # generation") instead of degrading gracefully to 0 tests the way
+  # individual PLUGINS do.
+  #
+  # Net effect: a fully-offline run of the OWASP presets as configured below
+  # is not achievable with this promptfoo version by editing `strategies:`
+  # alone -- it needs promptfoo's remote generation service (`promptfoo auth
+  # login`, which requires interactive email verification -- confirmed while
+  # building this PR, and correctly not something to complete unattended --
+  # or PROMPTFOO_REMOTE_GENERATION_URL pointed at a self-hosted instance).
+  # `strategies: []` is left here anyway (rather than reverted) because it's
+  # still the correct instruction for any FUTURE plugin entries that don't
+  # bundle their own strategies the way the OWASP presets do.
+  strategies: []
