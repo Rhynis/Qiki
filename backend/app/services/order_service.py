@@ -37,6 +37,22 @@ logger = get_logger(__name__)
 WATER_DELIVERY_FEE_PER_UNIT = Decimal("5000")
 
 
+def calculate_delivery_fee(category: str, quantity: int) -> Decimal:
+    """Return the flat per-unit delivery fee for one product line.
+
+    Water (``nuoc_uong``) is charged a flat per-unit fee; every other category
+    (gas cylinders included) ships free. This is a pure, side-effect-free
+    function — no session, no I/O — so it is safe to call outside
+    ``OrderService``'s transactional checkout flow (e.g. the MCP
+    ``calculate_delivery_fee`` read tool, see app/mcp_server/tools/). It is
+    the single source of truth for this fee: ``_calculate_shipping`` below
+    (the real checkout path) delegates to it rather than recomputing.
+    """
+    if category == "nuoc_uong":
+        return WATER_DELIVERY_FEE_PER_UNIT * quantity
+    return Decimal("0")
+
+
 class OrderService:
     """Business logic for order management."""
 
@@ -357,12 +373,13 @@ class OrderService:
         requested_by_product: Mapping[UUID, int],
     ) -> Decimal:
         """Charge water delivery per unit; gas and other products ship free."""
-        water_units = sum(
-            quantity
-            for product_id, quantity in requested_by_product.items()
-            if products[product_id].category == "nuoc_uong"
+        return sum(
+            (
+                calculate_delivery_fee(products[product_id].category, quantity)
+                for product_id, quantity in requested_by_product.items()
+            ),
+            start=Decimal("0"),
         )
-        return WATER_DELIVERY_FEE_PER_UNIT * water_units
 
     @staticmethod
     def _to_response(order: Order) -> OrderResponse:

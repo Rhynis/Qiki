@@ -1,7 +1,7 @@
 """FastAPI application entrypoint."""
 
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from typing import Any
 
 import sentry_sdk
@@ -36,52 +36,62 @@ logger = get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Initialize and close application resources."""
-    configure_logging()
-    if settings.is_production and settings.SENTRY_DSN:
-        sentry_sdk.init(dsn=settings.SENTRY_DSN, traces_sample_rate=0.1)
+    async with AsyncExitStack() as stack:
+        # The MCP session manager's Streamable HTTP task group only starts if
+        # its own lifespan runs inside ours (see app/mcp_server/server.py and
+        # docs/mcp.md). ``app.state.mcp_app`` is only set when MCP_ENABLED
+        # mounted the app in create_app() below, so this is a no-op — zero
+        # extra startup cost — when the flag is off.
+        mcp_app = getattr(app.state, "mcp_app", None)
+        if mcp_app is not None:
+            await stack.enter_async_context(mcp_app.lifespan(app))
 
-    app.state.redis = Redis.from_url(settings.REDIS_URL, decode_responses=True)
+        configure_logging()
+        if settings.is_production and settings.SENTRY_DSN:
+            sentry_sdk.init(dsn=settings.SENTRY_DSN, traces_sample_rate=0.1)
 
-    # LangGraph checkpointer pool (ADR-0002): separate psycopg pool to the same
-    # Postgres instance, only opened when the agent is enabled so the default
-    # (off) deployment has zero extra startup cost or connections.
-    agent_checkpointer_pool: AsyncConnectionPool | None = None
-    if settings.AGENT_ENABLED:
-        agent_checkpointer_pool = AsyncConnectionPool(
-            settings.langgraph_db_uri,
-            kwargs={
-                # prepare_threshold=None disables server-side prepared
-                # statements — required for Supabase's Supavisor pooler in
-                # transaction-pooling mode, the psycopg equivalent of
-                # asyncpg's statement_cache_size=0 in db/session.py (same
-                # underlying pooler constraint).
-                "prepare_threshold": None,
-                "row_factory": dict_row,
-                # checkpointer.setup() runs CREATE INDEX CONCURRENTLY, which
-                # Postgres refuses inside a transaction block; psycopg
-                # defaults to autocommit=False (implicit transactions), so
-                # this must be explicit. AsyncPostgresSaver.from_conn_string()
-                # sets the same flag for the same reason.
-                "autocommit": True,
-            },
-            min_size=1,
-            max_size=5,
-            open=False,
-        )
-        await agent_checkpointer_pool.open()
-        checkpointer = AsyncPostgresSaver(conn=agent_checkpointer_pool)
-        await checkpointer.setup()
-        app.state.agent_checkpointer = checkpointer
-        logger.info("agent_checkpointer_ready")
+        app.state.redis = Redis.from_url(settings.REDIS_URL, decode_responses=True)
 
-    logger.info("application_started", environment=settings.ENVIRONMENT)
+        # LangGraph checkpointer pool (ADR-0002): separate psycopg pool to the same
+        # Postgres instance, only opened when the agent is enabled so the default
+        # (off) deployment has zero extra startup cost or connections.
+        agent_checkpointer_pool: AsyncConnectionPool | None = None
+        if settings.AGENT_ENABLED:
+            agent_checkpointer_pool = AsyncConnectionPool(
+                settings.langgraph_db_uri,
+                kwargs={
+                    # prepare_threshold=None disables server-side prepared
+                    # statements — required for Supabase's Supavisor pooler in
+                    # transaction-pooling mode, the psycopg equivalent of
+                    # asyncpg's statement_cache_size=0 in db/session.py (same
+                    # underlying pooler constraint).
+                    "prepare_threshold": None,
+                    "row_factory": dict_row,
+                    # checkpointer.setup() runs CREATE INDEX CONCURRENTLY, which
+                    # Postgres refuses inside a transaction block; psycopg
+                    # defaults to autocommit=False (implicit transactions), so
+                    # this must be explicit. AsyncPostgresSaver.from_conn_string()
+                    # sets the same flag for the same reason.
+                    "autocommit": True,
+                },
+                min_size=1,
+                max_size=5,
+                open=False,
+            )
+            await agent_checkpointer_pool.open()
+            checkpointer = AsyncPostgresSaver(conn=agent_checkpointer_pool)
+            await checkpointer.setup()
+            app.state.agent_checkpointer = checkpointer
+            logger.info("agent_checkpointer_ready")
 
-    yield
+        logger.info("application_started", environment=settings.ENVIRONMENT)
 
-    if agent_checkpointer_pool is not None:
-        await agent_checkpointer_pool.close()
-    await app.state.redis.aclose()
-    logger.info("application_stopped")
+        yield
+
+        if agent_checkpointer_pool is not None:
+            await agent_checkpointer_pool.close()
+        await app.state.redis.aclose()
+        logger.info("application_stopped")
 
 
 def create_app() -> FastAPI:
@@ -182,6 +192,25 @@ def create_app() -> FastAPI:
         }
 
     app.include_router(api_router, prefix="/api/v1")
+
+    # MCP server (docs/mcp.md), mounted last so it never shadows a route
+    # above — Starlette matches routes in registration order, so /health,
+    # /api/v1/*, /docs etc. all still resolve first regardless of this mount.
+    # Reads settings fresh (not the module-level `settings` above) so tests
+    # can monkeypatch MCP_ENABLED + get_settings.cache_clear() and observe a
+    # freshly built app reflect it (see tests/mcp/test_server.py).
+    if get_settings().MCP_ENABLED:
+        from app.mcp_server.server import MCP_PATH, create_mcp_server
+
+        mcp_app = create_mcp_server().http_app(path=MCP_PATH, transport="http")
+        # FastMCP's Streamable HTTP app already answers at MCP_PATH
+        # internally (see app/mcp_server/server.py's MCP_PATH comment) —
+        # mounting at "/mcp" again here would double the prefix to
+        # "/mcp/mcp" (verified empirically). Mounting at "/" makes the
+        # external URL exactly http://host/mcp, as docs/mcp.md documents.
+        app.state.mcp_app = mcp_app
+        app.mount("/", mcp_app)
+
     return app
 
 
