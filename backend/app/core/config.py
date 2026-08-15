@@ -125,6 +125,12 @@ class Settings(BaseSettings):
     # psycopg (v3), not asyncpg (see langgraph_db_uri below).
     LANGGRAPH_DB_URI: str | None = None
 
+    # MCP server (docs/mcp.md) exposing the agent's read-only tools over
+    # Streamable HTTP, mounted into this same FastAPI app. Default OFF so the
+    # app's existing startup cost and route surface are unaffected until this
+    # is explicitly turned on (mirrors AGENT_ENABLED above).
+    MCP_ENABLED: bool = False
+
     @property
     def langgraph_db_uri(self) -> str:
         """Plain ``postgresql://`` URI for the LangGraph checkpointer (psycopg)."""
