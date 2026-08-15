@@ -86,9 +86,11 @@ redteam:
   # pulled — the same qwen2.5 model the project's existing Ollama-based
   # testing toolkit already uses. Per promptfoo's docs, `redteam.provider`
   # drives both attack generation AND grading, so one local model covers
-  # both roles; PROMPTFOO_DISABLE_REDTEAM_REMOTE_GENERATION=true (set by
-  # evals/run_redteam_gate.sh) additionally stops promptfoo from calling its
-  # own hosted generation service.
+  # both roles; the operator/CI must additionally set
+  # PROMPTFOO_DISABLE_REDTEAM_REMOTE_GENERATION=true (see "HOW TO RUN" above)
+  # to stop promptfoo from calling its own hosted generation service, which
+  # requires interactive email verification (confirmed while building this
+  # PR) and is not something this script can or should complete unattended.
   provider: "ollama:chat:qwen2.5:7b-instruct-q4_K_M"
   language: vi
   numTests: 5
@@ -134,7 +136,13 @@ redteam:
           the Redis-backed pending-token + interrupt() flow in
           backend/app/agent/nodes/tool_executor.py's `_run_confirm_gate`),
           so it must not pretend one succeeded.
+  # `jailbreak:composite` is deliberately NOT included: a real local run
+  # while building this PR showed it hard-crashes the whole scan under
+  # PROMPTFOO_DISABLE_REDTEAM_REMOTE_GENERATION=true ("Composite jailbreak
+  # strategy requires remote generation") instead of degrading gracefully
+  # the way individual plugins do (they just generate 0 tests and continue).
+  # Re-add it once remote generation is available (`promptfoo auth login` or
+  # PROMPTFOO_REMOTE_GENERATION_URL pointed at a self-hosted instance).
   strategies:
     - jailbreak
-    - jailbreak:composite
     - prompt-injection

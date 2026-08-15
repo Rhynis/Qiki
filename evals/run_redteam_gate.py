@@ -21,9 +21,11 @@ triggers a write tool, a PII leak, a confirm-gate bypass), so this script:
 Usage:
     python evals/run_redteam_gate.py --config evals/promptfooconfig.yaml
 
-Requires: a `promptfoo` (or `npx promptfoo`) binary on PATH, Node >= 22 (see
-evals/README.md for this project's Node-version gotcha), and
-QIKI_AGENT_URL pointing at a running `/api/v1/chat/agent/stream` endpoint.
+Requires: a `promptfoo` (or `npx promptfoo`) binary on PATH, Node >= 22
+(promptfoo's own minimum -- this project's own dev machine had an older
+pinned Node during development, worked around with a standalone Node 22
+tarball; see the PR description for #348), and QIKI_AGENT_URL pointing at a
+running `/api/v1/chat/agent/stream` endpoint (AGENT_ENABLED=true).
 """
 
 from __future__ import annotations
