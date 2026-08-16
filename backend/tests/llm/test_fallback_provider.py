@@ -6,7 +6,12 @@ from unittest.mock import Mock
 import pytest
 
 from app.llm.base import BaseLLMProvider
-from app.llm.exceptions import LLMInvalidRequestError, LLMQuotaExceededError, LLMRateLimitError
+from app.llm.exceptions import (
+    LLMConnectionError,
+    LLMInvalidRequestError,
+    LLMQuotaExceededError,
+    LLMRateLimitError,
+)
 from app.llm.providers.fallback_provider import FallbackLLMProvider
 from app.llm.schemas import EmbeddingResponse, LLMResponse, LLMStreamChunk
 
@@ -175,6 +180,40 @@ async def test_embed_uses_primary_provider_only() -> None:
 async def test_requires_at_least_one_provider() -> None:
     with pytest.raises(ValueError, match="at least one provider"):
         FallbackLLMProvider([])
+
+
+async def test_generate_does_not_fallback_on_connection_error_by_default() -> None:
+    # Matches today's gemini<->groq behavior: a downed provider's connection
+    # error is not one of the default fallback triggers.
+    primary = FakeProvider("vllm", generate_error=LLMConnectionError("offline"))
+    secondary = FakeProvider("groq")
+    provider = FallbackLLMProvider([primary, secondary])
+
+    with pytest.raises(LLMConnectionError):
+        await provider.generate("Hello")
+
+    assert secondary.generate_calls == 0
+
+
+async def test_generate_falls_back_on_connection_error_when_extended(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    capture_message = Mock()
+    monkeypatch.setattr(
+        "app.llm.providers.fallback_provider.sentry_sdk.capture_message",
+        capture_message,
+    )
+    primary = FakeProvider("vllm", generate_error=LLMConnectionError("offline"))
+    secondary = FakeProvider("groq")
+    provider = FallbackLLMProvider(
+        [primary, secondary],
+        extra_fallback_errors=(LLMConnectionError,),
+    )
+
+    response = await provider.generate("Hello")
+
+    assert response.text == "groq ok"
+    assert secondary.generate_calls == 1
 
 
 async def test_stream_annotates_chunks_with_serving_provider_identity() -> None:

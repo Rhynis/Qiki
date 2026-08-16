@@ -36,7 +36,7 @@ class Settings(BaseSettings):
 
     REDIS_URL: str = "redis://localhost:6379/0"
 
-    LLM_PROVIDER: Literal["ollama", "gemini", "groq"] = "ollama"
+    LLM_PROVIDER: Literal["ollama", "gemini", "groq", "vllm"] = "ollama"
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "qwen2.5:7b-instruct-q4_K_M"
     OLLAMA_EMBED_MODEL: str = "nomic-embed-text"
@@ -52,6 +52,14 @@ class Settings(BaseSettings):
     GROQ_MODEL: str = "llama-3.3-70b-versatile"
     JINA_API_KEY: str | None = None
     JINA_EMBED_MODEL: str = "jina-embeddings-v3"
+    # Self-hosted vLLM (OpenAI-compatible) serving endpoint. Off by default —
+    # LLM_PROVIDER stays "ollama" unless explicitly set to "vllm". No GPU is
+    # available in CI or on Railway; this is a benchmark/demo layer the owner
+    # runs against a GPU box (RunPod/Kaggle/HF ZeroGPU), not a prod swap.
+    VLLM_BASE_URL: str = "http://localhost:8000/v1"
+    VLLM_MODEL: str = "Qwen/Qwen3-4B-Instruct-AWQ"
+    VLLM_API_KEY: str | None = None
+    VLLM_TIMEOUT: int = 120
 
     EMBEDDING_DIMENSIONS: int = 768
     # Retrieval embedding backend. "gemini" keeps Gemini primary -> Jina fallback;
