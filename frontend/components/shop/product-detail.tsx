@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { GasSafetyNotice } from '@/components/shop/gas-safety-notice'
 import { PriceDisplay } from '@/components/shop/price-display'
+import { RecommendedProducts } from '@/components/shop/recommended-products'
 import { StockBadge } from '@/components/shop/stock-badge'
 import { WishlistButton } from '@/components/shop/wishlist-button'
 import { useCartStore } from '@/lib/stores/cart-store'
@@ -186,6 +187,8 @@ export function ProductDetail({ product, variants }: ProductDetailProps) {
           </div>
         </div>
       </div>
+
+      <RecommendedProducts productId={selected.id} />
     </section>
   )
 }

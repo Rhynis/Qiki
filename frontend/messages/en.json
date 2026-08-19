@@ -422,5 +422,8 @@
   "bestSellers": {
     "title": "Best sellers",
     "subtitle": "The products our customers order most."
+  },
+  "recommendations": {
+    "title": "Recommended for you"
   }
 }

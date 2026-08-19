@@ -1,11 +1,11 @@
 """LangChain tools wrapping existing Qiki services, plus their authorization
 matrix.
 
-``build_tools()`` in ``agent/graph.py`` still wires up only the 3 read-only
-MVP tools (search_products, check_inventory, lookup_safety_policy) — no
-mutations reach production yet. Errors are returned as structured results,
-never raised, so a tool-calling loop always gets a value to reason about
-instead of an unhandled exception.
+``build_tools()`` in ``agent/graph.py`` wires up the read-only tools
+(search_products, check_inventory, lookup_safety_policy, recommend_products)
+— no mutations reach production yet. Errors are returned as structured
+results, never raised, so a tool-calling loop always gets a value to reason
+about instead of an unhandled exception.
 
 ``registry.py`` (issue #348) declares each tool's authorization policy
 (read/write, requires_auth, requires_confirm), enforced by

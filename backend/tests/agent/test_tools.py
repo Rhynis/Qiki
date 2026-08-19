@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.tools.check_inventory import build_check_inventory_tool
 from app.agent.tools.lookup_safety_policy import build_lookup_safety_policy_tool
+from app.agent.tools.recommend_products import build_recommend_products_tool
 from app.agent.tools.search_products import build_search_products_tool
 from app.repositories.product_repository import ProductRepository
 from app.schemas.knowledge_base import KnowledgeBaseSearchResult
@@ -134,6 +135,63 @@ class TestCheckInventoryTool:
         tool = build_check_inventory_tool(service)
 
         result = await tool.ainvoke({"product_id": "not-a-uuid", "quantity": 1})
+
+        assert result["ok"] is False
+        assert result["error"] == "invalid_product_id"
+
+
+class TestRecommendProductsTool:
+    async def test_recommends_related_active_products_excluding_the_viewed_one(
+        self, product_session: AsyncSession
+    ) -> None:
+        viewed = await _seed_gas_product(product_session)
+        same_brand = await _seed_gas_product(
+            product_session, sku="ELF-6KG-DO", name="Bình gas Elf 6kg (đỏ)", size_kg=Decimal("6")
+        )
+        service = ProductService(ProductRepository(product_session))
+        tool = build_recommend_products_tool(service)
+
+        result = await tool.ainvoke({"product_id": str(viewed.id)})
+
+        assert result["ok"] is True
+        ids = [row["id"] for row in result["recommendations"]]
+        assert str(viewed.id) not in ids
+        assert str(same_brand.id) in ids
+        assert result["recommendations"][0]["reason"]
+
+    async def test_cold_start_with_no_product_id_still_returns_a_ranked_list(
+        self, product_session: AsyncSession
+    ) -> None:
+        await _seed_gas_product(product_session)
+        service = ProductService(ProductRepository(product_session))
+        tool = build_recommend_products_tool(service)
+
+        result = await tool.ainvoke({})
+
+        assert result["ok"] is True
+        assert len(result["recommendations"]) == 1
+
+    async def test_unknown_product_id_returns_structured_error(
+        self, product_session: AsyncSession
+    ) -> None:
+        service = ProductService(ProductRepository(product_session))
+        tool = build_recommend_products_tool(service)
+
+        result = await tool.ainvoke({"product_id": str(uuid4())})
+
+        assert result == {
+            "ok": False,
+            "error": "product_not_found",
+            "message": "No active product with that id. Use search_products first.",
+        }
+
+    async def test_malformed_product_id_returns_structured_error_not_a_crash(
+        self, product_session: AsyncSession
+    ) -> None:
+        service = ProductService(ProductRepository(product_session))
+        tool = build_recommend_products_tool(service)
+
+        result = await tool.ainvoke({"product_id": "not-a-uuid"})
 
         assert result["ok"] is False
         assert result["error"] == "invalid_product_id"

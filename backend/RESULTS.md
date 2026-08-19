@@ -52,3 +52,30 @@ whether it was worth it.
 | Base model | AWQ model | Cases | Base recall | AWQ recall | Delta |
 |---|---|---|---|---|---|
 | base-mock | awq-mock | 50 | 23.0% | 9.0% | -14.0% |
+
+## Recommendations (simulated eval)
+
+`bench/recsys_eval.py` evaluates `RecommendationService` against a SEEDED,
+deterministic SIMULATED interaction log generated over the real catalog —
+**not real user behavior**. Qiki has ~1 real customer and a handful of
+self-test orders, nowhere near enough to evaluate a recommender against real
+ground truth (see `docs/adr/0004-recommendations-thin-data.md`). The warm-session
+table below is a self-consistency check ("does the ranker line up with
+plausible structure"), not an accuracy claim. The cold-start table is the one
+place this touches real data: precision@k against the actual best-sellers
+list from real order history — reported as "N/A" honestly when there's no
+order history to compare against yet.
+
+```bash
+cd backend && python -m bench.recsys_eval --simulate --seed 42
+```
+
+| Seed | Sessions | K | Recall@K | NDCG@K | MAP | Coverage |
+|---|---|---|---|---|---|---|
+| 42 | 300 | 5 | 80.0% | 0.601 | 0.534 | 84.2% |
+| 42 | 300 | 5 | 80.0% | 0.601 | 0.534 | 84.2% |
+
+| Seed | Sessions | K | Precision@K vs real best-sellers | Note |
+|---|---|---|---|---|
+| 42 | 60 | 5 | N/A | no order history yet -- cold-start precision not measurable |
+| 42 | 60 | 5 | N/A | no order history yet -- cold-start precision not measurable |

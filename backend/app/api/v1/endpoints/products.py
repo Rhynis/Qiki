@@ -10,6 +10,7 @@ from app.api.v1.dependencies.auth import get_current_admin
 from app.core.rate_limit import limiter
 from app.db.session import get_db
 from app.models.user import User
+from app.repositories.order_repository import OrderRepository
 from app.repositories.product_repository import ProductRepository
 from app.schemas.product import (
     ProductCategory,
@@ -22,8 +23,11 @@ from app.schemas.product import (
     ProductResponse,
     ProductSearchParams,
     ProductUpdate,
+    RecommendedProduct,
 )
+from app.services.order_service import OrderService
 from app.services.product_service import ProductService
+from app.services.recommendation_service import DEFAULT_LIMIT, RecommendationService
 
 router = APIRouter()
 
@@ -31,6 +35,16 @@ router = APIRouter()
 def get_product_service(session: Annotated[AsyncSession, Depends(get_db)]) -> ProductService:
     """Build a request-scoped product service."""
     return ProductService(ProductRepository(session))
+
+
+def get_recommendation_service(
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> RecommendationService:
+    """Build a request-scoped recommendation service."""
+    return RecommendationService(
+        ProductService(ProductRepository(session)),
+        OrderService(OrderRepository(session), ProductRepository(session)),
+    )
 
 
 @router.get(
@@ -174,6 +188,28 @@ async def get_product(
 ) -> ProductResponse:
     """Return one active product by ID."""
     return await service.get_product(product_id)
+
+
+@router.get(
+    "/products/{product_id}/recommendations",
+    response_model=list[RecommendedProduct],
+    summary="Get product recommendations",
+)
+@limiter.limit("60/minute")
+async def get_product_recommendations(
+    request: Request,
+    product_id: UUID,
+    service: Annotated[RecommendationService, Depends(get_recommendation_service)],
+    limit: Annotated[int, Query(ge=1, le=20)] = DEFAULT_LIMIT,
+) -> list[RecommendedProduct]:
+    """Return ranked "you might also like" recommendations for one product."""
+    candidates = await service.recommend(product_id=product_id, limit=limit)
+    return [
+        RecommendedProduct(
+            **candidate.product.model_dump(), score=candidate.score, reason=candidate.reason
+        )
+        for candidate in candidates
+    ]
 
 
 @router.post(
