@@ -13,6 +13,7 @@ from app.llm.providers.fallback_provider import FallbackLLMProvider
 from app.llm.providers.gemini_provider import GeminiProvider
 from app.llm.providers.groq_provider import GroqProvider
 from app.llm.providers.ollama_provider import OllamaProvider
+from app.llm.providers.vllm_provider import VLLMProvider
 from app.llm.schemas import LLMResponse
 
 
@@ -99,6 +100,55 @@ def test_create_returns_fallback_provider_when_groq_key_configured() -> None:
     assert isinstance(provider.providers[0], GeminiProvider)
     assert isinstance(provider.providers[1], GroqProvider)
     assert provider.providers[1].model == "llama-test"
+
+
+def test_create_returns_vllm_provider_standalone_without_fallback_configured() -> None:
+    settings = Settings(
+        _env_file=None,
+        LLM_PROVIDER="vllm",
+        VLLM_BASE_URL="http://vllm.test/v1",
+        VLLM_MODEL="qwen-awq-test",
+        GROQ_API_KEY=None,
+        GEMINI_API_KEY=None,
+        GEMINI_USE_VERTEX=False,
+    )
+
+    provider = LLMProviderFactory.create(settings=settings)
+
+    assert isinstance(provider, VLLMProvider)
+    assert provider.base_url == "http://vllm.test/v1"
+    assert provider.model == "qwen-awq-test"
+
+
+def test_create_vllm_primary_falls_back_to_groq_when_configured() -> None:
+    settings = Settings(
+        _env_file=None,
+        LLM_PROVIDER="vllm",
+        GROQ_API_KEY="groq-secret",
+        GEMINI_API_KEY=None,
+        GEMINI_USE_VERTEX=False,
+    )
+
+    provider = LLMProviderFactory.create(settings=settings)
+
+    assert isinstance(provider, FallbackLLMProvider)
+    assert isinstance(provider.providers[0], VLLMProvider)
+    assert isinstance(provider.providers[1], GroqProvider)
+
+
+def test_create_vllm_primary_falls_back_to_gemini_when_groq_not_configured() -> None:
+    settings = Settings(
+        _env_file=None,
+        LLM_PROVIDER="vllm",
+        GROQ_API_KEY=None,
+        GEMINI_API_KEY="gemini-secret",
+    )
+
+    provider = LLMProviderFactory.create(settings=settings)
+
+    assert isinstance(provider, FallbackLLMProvider)
+    assert isinstance(provider.providers[0], VLLMProvider)
+    assert isinstance(provider.providers[1], GeminiProvider)
 
 
 def test_create_with_invalid_provider_raises() -> None:

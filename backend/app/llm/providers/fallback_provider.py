@@ -5,20 +5,33 @@ from collections.abc import AsyncIterator
 import sentry_sdk
 
 from app.llm.base import BaseLLMProvider
-from app.llm.exceptions import LLMQuotaExceededError, LLMRateLimitError
+from app.llm.exceptions import LLMProviderError, LLMQuotaExceededError, LLMRateLimitError
 from app.llm.schemas import EmbeddingResponse, LLMResponse, LLMStreamChunk
 
-FALLBACK_ERRORS = (LLMQuotaExceededError, LLMRateLimitError)
+FALLBACK_ERRORS: tuple[type[LLMProviderError], ...] = (LLMQuotaExceededError, LLMRateLimitError)
 
 
 class FallbackLLMProvider(BaseLLMProvider):
-    """Try providers in order, falling back only on quota/rate-limit errors."""
+    """Try providers in order, falling back only on quota/rate-limit errors.
 
-    def __init__(self, providers: list[BaseLLMProvider]) -> None:
+    ``extra_fallback_errors`` extends that set for chains where an earlier
+    provider's dominant failure mode isn't quota/rate-limit — e.g. a
+    self-hosted vLLM box being unreachable should fail over just like a
+    quota error would, so ``factory.py``'s ``vllm`` branch passes
+    ``(LLMConnectionError, LLMTimeoutError)`` here. Defaults to empty so
+    every existing chain (gemini<->groq) keeps its exact current behavior.
+    """
+
+    def __init__(
+        self,
+        providers: list[BaseLLMProvider],
+        extra_fallback_errors: tuple[type[LLMProviderError], ...] = (),
+    ) -> None:
         if not providers:
             raise ValueError("FallbackLLMProvider requires at least one provider")
         super().__init__(providers[0].model)
         self.providers = providers
+        self._fallback_errors = FALLBACK_ERRORS + extra_fallback_errors
 
     @property
     def provider_name(self) -> str:
@@ -41,7 +54,7 @@ class FallbackLLMProvider(BaseLLMProvider):
         **kwargs: object,
     ) -> LLMResponse:
         """Generate with the first provider that is not quota/rate limited."""
-        last_error: LLMQuotaExceededError | LLMRateLimitError | None = None
+        last_error: LLMProviderError | None = None
         for provider in self.providers:
             try:
                 return await provider.generate(
@@ -52,7 +65,7 @@ class FallbackLLMProvider(BaseLLMProvider):
                     stop_sequences=stop_sequences,
                     **kwargs,
                 )
-            except FALLBACK_ERRORS as exc:
+            except self._fallback_errors as exc:
                 last_error = exc
                 if provider is not self.providers[-1]:
                     self._capture_fallback(provider)
@@ -70,7 +83,7 @@ class FallbackLLMProvider(BaseLLMProvider):
         **kwargs: object,
     ) -> AsyncIterator[LLMStreamChunk]:
         """Stream with fallback if quota/rate fails before the first chunk."""
-        last_error: LLMQuotaExceededError | LLMRateLimitError | None = None
+        last_error: LLMProviderError | None = None
         for provider in self.providers:
             yielded = False
             try:
@@ -91,7 +104,7 @@ class FallbackLLMProvider(BaseLLMProvider):
                         }
                     )
                 return
-            except FALLBACK_ERRORS as exc:
+            except self._fallback_errors as exc:
                 if yielded:
                     raise
                 last_error = exc

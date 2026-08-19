@@ -1,0 +1,13 @@
+# GPU-only serving dependency — installed by the OWNER on a CUDA host, never
+# by CI or Railway. Neither requirements.txt nor requirements-dev.txt
+# reference this file, so `pip install -r requirements.txt -r requirements-dev.txt`
+# (what CI and Railway run) never pulls in vllm or its CUDA-specific torch build.
+#
+# Install on a GPU box with:
+#   pip install -r requirements-serving.txt
+#
+# vLLM ships new releases frequently and each one pulls in a matching CUDA
+# toolkit / torch build — pin to a specific patch version validated against
+# your GPU driver before a real run; check https://pypi.org/project/vllm/
+# for the current release.
+vllm>=0.9,<0.10
