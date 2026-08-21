@@ -231,6 +231,13 @@ export function resolveApi({ method, path, query, body = {}, cookie }) {
       knowledge_gaps: [],
     })
   }
+  const recMatch = /^\/api\/v1\/products\/([^/]+)\/recommendations$/.exec(path)
+  if (method === 'GET' && recMatch) {
+    const recs = PRODUCTS.filter((p) => p.id !== recMatch[1])
+      .slice(0, 3)
+      .map((p, i) => ({ ...p, score: 1 - i * 0.1, reason: 'Sản phẩm liên quan' }))
+    return json(200, recs)
+  }
   const productMatch = /^\/api\/v1\/products\/([^/]+)$/.exec(path)
   if (method === 'GET' && productMatch) {
     const found = PRODUCTS.find((p) => p.id === productMatch[1])
