@@ -34,6 +34,7 @@ from app.agent.state import MAX_AGENT_TURNS, QikiAgentState
 from app.agent.tools.check_inventory import build_check_inventory_tool
 from app.agent.tools.confirm_gate import ToolConfirmGate
 from app.agent.tools.lookup_safety_policy import build_lookup_safety_policy_tool
+from app.agent.tools.recommend_products import build_recommend_products_tool
 from app.agent.tools.search_products import build_search_products_tool
 from app.llm.base import BaseLLMProvider
 from app.llm.prompts.templates import PromptLibrary
@@ -55,11 +56,12 @@ RECURSION_LIMIT = 25
 def build_tools(
     product_service: ProductService, kb_service: KnowledgeBaseService
 ) -> dict[str, BaseTool]:
-    """Build the 3 read-only MVP tools, bound to request-scoped services."""
+    """Build the read-only tools, bound to request-scoped services."""
     tools = [
         build_search_products_tool(product_service),
         build_check_inventory_tool(product_service),
         build_lookup_safety_policy_tool(kb_service),
+        build_recommend_products_tool(product_service),
     ]
     return {tool.name: tool for tool in tools}
 
@@ -94,7 +96,7 @@ def build_agent_graph(
     ``kb_service`` are threaded into the tools themselves: request-scoped
     dependencies bound via ``functools.partial`` at build time, never stored
     in the checkpointed ``QikiAgentState``. All 3 default to ``None`` so
-    existing callers (and #346's tests) that only need the 3 public read
+    existing callers (and #346's tests) that only need the public read
     tools keep working unchanged; a write tool call without them is refused,
     never silently allowed (see ``tool_executor._authorize``).
     """

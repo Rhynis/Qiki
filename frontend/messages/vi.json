@@ -422,5 +422,8 @@
   "bestSellers": {
     "title": "Bán chạy",
     "subtitle": "Những sản phẩm được khách đặt nhiều nhất."
+  },
+  "recommendations": {
+    "title": "Gợi ý cho bạn"
   }
 }

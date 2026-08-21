@@ -10,6 +10,7 @@ import type {
   ProductParentUpdateInput,
   ProductSearchParams,
   ProductUpdateInput,
+  RecommendedProduct,
 } from '@/types/product'
 
 export async function getProducts(params: ProductSearchParams = {}): Promise<ProductListResponse> {
@@ -24,6 +25,17 @@ export async function getProduct(productId: string): Promise<Product> {
 
 export async function getProductBySku(sku: string): Promise<Product> {
   const response = await apiClient.get<Product>(`/api/v1/products/sku/${sku}`)
+  return response.data
+}
+
+export async function getProductRecommendations(
+  productId: string,
+  limit = 6
+): Promise<RecommendedProduct[]> {
+  const response = await apiClient.get<RecommendedProduct[]>(
+    `/api/v1/products/${productId}/recommendations`,
+    { params: { limit } }
+  )
   return response.data
 }
 

@@ -10,15 +10,61 @@ const now = '2026-06-15T00:00:00.000Z'
 export const PRODUCTS = [
   // Gas: grouped by brand in the DB (parent-elf), but shown individually on the
   // listing — no "Nhiều lựa chọn" hint, no on-detail selector (#342).
-  product('elf-12', 'ELF-12KG', 'Bình gas Elf 12kg (đỏ)', 'Elf Gas', '12', 'gas', 'kg', '710000', { parent_id: 'parent-elf', colour: 'đỏ', variant_label: '12 kg (đỏ)' }),
-  product('sp-12', 'SP-12KG', 'Bình gas Saigon Petro 12kg', 'Saigon Petro', '12', 'gas', 'kg', '605000'),
-  product('elf-6', 'ELF-6KG', 'Bình gas Elf 6kg', 'Elf Gas', '6', 'gas', 'kg', '350000', { parent_id: 'parent-elf', colour: null, variant_label: '6 kg' }),
+  product('elf-12', 'ELF-12KG', 'Bình gas Elf 12kg (đỏ)', 'Elf Gas', '12', 'gas', 'kg', '710000', {
+    parent_id: 'parent-elf',
+    colour: 'đỏ',
+    variant_label: '12 kg (đỏ)',
+  }),
+  product(
+    'sp-12',
+    'SP-12KG',
+    'Bình gas Saigon Petro 12kg',
+    'Saigon Petro',
+    '12',
+    'gas',
+    'kg',
+    '605000'
+  ),
+  product('elf-6', 'ELF-6KG', 'Bình gas Elf 6kg', 'Elf Gas', '6', 'gas', 'kg', '350000', {
+    parent_id: 'parent-elf',
+    colour: null,
+    variant_label: '6 kg',
+  }),
   // Water: single product, no parent — its own card, no hint.
-  product('water-20', 'WATER-20L', 'Nước Hoàn Hảo 20 lít', 'Hoàn Hảo', '20', 'nuoc_uong', 'lít', '55000'),
+  product(
+    'water-20',
+    'WATER-20L',
+    'Nước Hoàn Hảo 20 lít',
+    'Hoàn Hảo',
+    '20',
+    'nuoc_uong',
+    'lít',
+    '55000'
+  ),
   // Water: grouped by parent (same size, different bottle form) — ONE combined
   // listing card with the "Nhiều lựa chọn" hint, and a detail-page selector.
-  product('vihawa-normal', 'VIHAWA-20L', 'Nước Vihawa 20 lít', 'Vihawa', '20', 'nuoc_uong', 'lít', '55000', { parent_id: 'parent-vihawa', variant_label: 'Bình thường' }),
-  product('vihawa-hotcold', 'VIHAWA-20L-NL', 'Nước Vihawa 20 lít (bình nóng lạnh)', 'Vihawa', '20', 'nuoc_uong', 'lít', '65000', { parent_id: 'parent-vihawa', variant_label: 'Bình nóng lạnh' }),
+  product(
+    'vihawa-normal',
+    'VIHAWA-20L',
+    'Nước Vihawa 20 lít',
+    'Vihawa',
+    '20',
+    'nuoc_uong',
+    'lít',
+    '55000',
+    { parent_id: 'parent-vihawa', variant_label: 'Bình thường' }
+  ),
+  product(
+    'vihawa-hotcold',
+    'VIHAWA-20L-NL',
+    'Nước Vihawa 20 lít (bình nóng lạnh)',
+    'Vihawa',
+    '20',
+    'nuoc_uong',
+    'lít',
+    '65000',
+    { parent_id: 'parent-vihawa', variant_label: 'Bình nóng lạnh' }
+  ),
 ]
 
 // Parent groupings. parent-elf exercises "gas is grouped in the DB but shown
@@ -231,13 +277,32 @@ export function resolveApi({ method, path, query, body = {}, cookie }) {
       knowledge_gaps: [],
     })
   }
+  const recMatch = /^\/api\/v1\/products\/([^/]+)\/recommendations$/.exec(path)
+  if (method === 'GET' && recMatch) {
+    const recs = PRODUCTS.filter((p) => p.id !== recMatch[1])
+      .slice(0, 3)
+      .map((p, i) => ({ ...p, score: 1 - i * 0.1, reason: 'Sản phẩm liên quan' }))
+    return json(200, recs)
+  }
   const productMatch = /^\/api\/v1\/products\/([^/]+)$/.exec(path)
   if (method === 'GET' && productMatch) {
     const found = PRODUCTS.find((p) => p.id === productMatch[1])
     return found ? json(200, found) : json(404, { detail: 'Not found' })
   }
   if (method === 'POST' && path === '/api/v1/products') {
-    return json(201, product('new-1', body.sku ?? 'NEW', body.name ?? 'Mới', body.brand ?? 'Elf Gas', '12', body.category ?? 'gas', 'kg', String(body.price ?? '100000')))
+    return json(
+      201,
+      product(
+        'new-1',
+        body.sku ?? 'NEW',
+        body.name ?? 'Mới',
+        body.brand ?? 'Elf Gas',
+        '12',
+        body.category ?? 'gas',
+        'kg',
+        String(body.price ?? '100000')
+      )
+    )
   }
 
   // --- Wishlist ------------------------------------------------------------
@@ -298,12 +363,15 @@ export function resolveApi({ method, path, query, body = {}, cookie }) {
 
   // --- Orders --------------------------------------------------------------
   if (method === 'POST' && path === '/api/v1/orders/checkout') {
-    return json(201, buildOrder({
-      customer_name: body.customer_name,
-      customer_phone: body.customer_phone,
-      delivery_ward: body.delivery_ward,
-      payment_method: body.payment_method ?? 'cod',
-    }))
+    return json(
+      201,
+      buildOrder({
+        customer_name: body.customer_name,
+        customer_phone: body.customer_phone,
+        delivery_ward: body.delivery_ward,
+        payment_method: body.payment_method ?? 'cod',
+      })
+    )
   }
   if (method === 'POST' && path === '/api/v1/orders/lookup') {
     return json(200, buildOrder({ order_number: body.order_number ?? 'QC-000123' }))
@@ -354,17 +422,42 @@ export function resolveApi({ method, path, query, body = {}, cookie }) {
   if (method === 'POST' && path === '/api/v1/auth/login') {
     return json(200, {
       token_type: 'bearer',
-      user: { id: 'user-1', email: body.email ?? 'customer@example.com', email_verified: true, full_name: 'Khách Hàng Test', phone: '0903026306', role: 'customer', is_active: true, created_at: now },
+      user: {
+        id: 'user-1',
+        email: body.email ?? 'customer@example.com',
+        email_verified: true,
+        full_name: 'Khách Hàng Test',
+        phone: '0903026306',
+        role: 'customer',
+        is_active: true,
+        created_at: now,
+      },
     })
   }
   if (method === 'POST' && path === '/api/v1/auth/register') {
-    return json(201, { id: 'user-1', email: body.email ?? 'new@example.com', full_name: body.full_name ?? 'Khách Hàng Mới', phone: body.phone ?? '0903026306', role: 'customer', is_active: true, created_at: now })
+    return json(201, {
+      id: 'user-1',
+      email: body.email ?? 'new@example.com',
+      full_name: body.full_name ?? 'Khách Hàng Mới',
+      phone: body.phone ?? '0903026306',
+      role: 'customer',
+      is_active: true,
+      created_at: now,
+    })
   }
   if (method === 'POST' && path === '/api/v1/auth/refresh') {
     const user = userFromCookie(cookie)
-    return user ? json(200, { token_type: 'bearer', user }) : json(401, { detail: 'Not authenticated' })
+    return user
+      ? json(200, { token_type: 'bearer', user })
+      : json(401, { detail: 'Not authenticated' })
   }
-  if (method === 'POST' && (path === '/api/v1/auth/password/reset-request' || path === '/api/v1/auth/password/reset' || path === '/api/v1/auth/logout' || path === '/api/v1/auth/password/change')) {
+  if (
+    method === 'POST' &&
+    (path === '/api/v1/auth/password/reset-request' ||
+      path === '/api/v1/auth/password/reset' ||
+      path === '/api/v1/auth/logout' ||
+      path === '/api/v1/auth/password/change')
+  ) {
     return json(200, { message: 'ok' })
   }
 
@@ -383,24 +476,66 @@ export function resolveApi({ method, path, query, body = {}, cookie }) {
     return json(200, { items: [buildOrder()], total: 1, page: 1, limit: 50, has_more: false })
   }
   if (method === 'GET' && path === '/api/v1/admin/orders/statistics') {
-    return json(200, { pending: 1, confirmed: 0, shipping: 0, delivered: 0, cancelled: 0, total: 1 })
+    return json(200, {
+      pending: 1,
+      confirmed: 0,
+      shipping: 0,
+      delivered: 0,
+      cancelled: 0,
+      total: 1,
+    })
   }
   if (method === 'GET' && path === '/api/v1/admin/users') {
-    return json(200, { items: [{ id: 'user-1', email: 'customer@example.com', full_name: 'Khách Hàng Test', phone: '0903026306', role: 'customer', is_active: true, created_at: now }], total: 1, page: 1, limit: 20, has_more: false })
+    return json(200, {
+      items: [
+        {
+          id: 'user-1',
+          email: 'customer@example.com',
+          full_name: 'Khách Hàng Test',
+          phone: '0903026306',
+          role: 'customer',
+          is_active: true,
+          created_at: now,
+        },
+      ],
+      total: 1,
+      page: 1,
+      limit: 20,
+      has_more: false,
+    })
   }
   if (method === 'GET' && path === '/api/v1/staff/conversations/assigned') {
     return json(200, {
-      items: [{
-        id: 'conv-1',
-        session_id: 'sess-abc',
-        status: 'escalated',
-        messages: [
-          { id: 'm1', conversation_id: 'conv-1', role: 'user', content: 'Giá gas 12kg bao nhiêu? sđt 0903026306', intent: 'product_inquiry', flagged_for_review: false, is_emergency: false, created_at: now },
-          { id: 'm2', conversation_id: 'conv-1', role: 'assistant', content: 'Dạ bình gas 12kg giá 710.000đ ạ.', flagged_for_review: false, is_emergency: false, created_at: now },
-        ],
-        created_at: now,
-        updated_at: now,
-      }],
+      items: [
+        {
+          id: 'conv-1',
+          session_id: 'sess-abc',
+          status: 'escalated',
+          messages: [
+            {
+              id: 'm1',
+              conversation_id: 'conv-1',
+              role: 'user',
+              content: 'Giá gas 12kg bao nhiêu? sđt 0903026306',
+              intent: 'product_inquiry',
+              flagged_for_review: false,
+              is_emergency: false,
+              created_at: now,
+            },
+            {
+              id: 'm2',
+              conversation_id: 'conv-1',
+              role: 'assistant',
+              content: 'Dạ bình gas 12kg giá 710.000đ ạ.',
+              flagged_for_review: false,
+              is_emergency: false,
+              created_at: now,
+            },
+          ],
+          created_at: now,
+          updated_at: now,
+        },
+      ],
       total: 1,
       skip: 0,
       limit: 100,
@@ -412,7 +547,14 @@ export function resolveApi({ method, path, query, body = {}, cookie }) {
 
   // --- Conversations (chat widget) -----------------------------------------
   if (method === 'POST' && path === '/api/v1/conversations/start') {
-    return json(201, { id: 'conv-widget', session_id: 'sess-widget', status: 'active', messages: [], created_at: now, updated_at: now })
+    return json(201, {
+      id: 'conv-widget',
+      session_id: 'sess-widget',
+      status: 'active',
+      messages: [],
+      created_at: now,
+      updated_at: now,
+    })
   }
   if (method === 'GET' && path === '/api/v1/conversations/active') return json(200, null)
   const convMessages = /^\/api\/v1\/conversations\/([^/]+)\/messages$/.exec(path)
@@ -420,15 +562,45 @@ export function resolveApi({ method, path, query, body = {}, cookie }) {
     const conversationId = convMessages[1]
     if (method === 'GET') return json(200, { items: [], total: 0, skip: 0, limit: 50 })
     return json(200, {
-      user_message: { id: `msg-u-${Date.now()}`, conversation_id: conversationId, role: 'user', content: body.content ?? '', flagged_for_review: false, is_emergency: false, created_at: now },
-      assistant_message: { id: `msg-a-${Date.now()}`, conversation_id: conversationId, role: 'assistant', content: 'Dạ Qiki đã nhận tin nhắn của bạn, cửa hàng sẽ hỗ trợ ngay ạ.', flagged_for_review: false, is_emergency: false, created_at: now },
-      conversation: { id: conversationId, session_id: 'sess-widget', status: 'active', messages: [], created_at: now, updated_at: now },
+      user_message: {
+        id: `msg-u-${Date.now()}`,
+        conversation_id: conversationId,
+        role: 'user',
+        content: body.content ?? '',
+        flagged_for_review: false,
+        is_emergency: false,
+        created_at: now,
+      },
+      assistant_message: {
+        id: `msg-a-${Date.now()}`,
+        conversation_id: conversationId,
+        role: 'assistant',
+        content: 'Dạ Qiki đã nhận tin nhắn của bạn, cửa hàng sẽ hỗ trợ ngay ạ.',
+        flagged_for_review: false,
+        is_emergency: false,
+        created_at: now,
+      },
+      conversation: {
+        id: conversationId,
+        session_id: 'sess-widget',
+        status: 'active',
+        messages: [],
+        created_at: now,
+        updated_at: now,
+      },
       products: [],
     })
   }
   const convDetail = /^\/api\/v1\/conversations\/([^/]+)$/.exec(path)
   if (method === 'GET' && convDetail) {
-    return json(200, { id: convDetail[1], session_id: 'sess-widget', status: 'active', messages: [], created_at: now, updated_at: now })
+    return json(200, {
+      id: convDetail[1],
+      session_id: 'sess-widget',
+      status: 'active',
+      messages: [],
+      created_at: now,
+      updated_at: now,
+    })
   }
 
   // Default: empty 200 so an unmocked call never crashes a page.

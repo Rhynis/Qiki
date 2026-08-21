@@ -16,6 +16,10 @@ vi.mock('@/lib/hooks/use-wishlist', () => ({
   useToggleWishlist: () => ({ mutate: vi.fn(), isPending: false }),
 }))
 
+vi.mock('@/lib/hooks/use-recommendations', () => ({
+  useRecommendedProducts: () => ({ data: [], isLoading: false }),
+}))
+
 function makeProduct(overrides: Partial<Product> = {}): Product {
   return {
     id: 'p1',

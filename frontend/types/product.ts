@@ -75,6 +75,11 @@ export interface BestSellerProduct extends Product {
   total_sold: number
 }
 
+export interface RecommendedProduct extends Product {
+  score: number
+  reason: string
+}
+
 export interface ProductListResponse {
   items: Product[]
   total: number

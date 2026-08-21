@@ -173,8 +173,13 @@ def _config(thread_id: str) -> dict[str, Any]:
 
 
 class TestRegistry:
-    def test_the_3_mvp_read_tools_need_neither_auth_nor_confirm(self) -> None:
-        for name in ("search_products", "check_inventory", "lookup_safety_policy"):
+    def test_the_mvp_read_tools_need_neither_auth_nor_confirm(self) -> None:
+        for name in (
+            "search_products",
+            "check_inventory",
+            "lookup_safety_policy",
+            "recommend_products",
+        ):
             policy = get_tool_policy(name)
             assert policy == ToolAuthPolicy(
                 mode="read", requires_auth=False, requires_confirm=False
@@ -201,6 +206,7 @@ class TestRegistry:
             "search_products",
             "check_inventory",
             "lookup_safety_policy",
+            "recommend_products",
             MOCK_WRITE_TOOL_NAME,
             MOCK_READ_TOOL_NAME,
         }
@@ -652,7 +658,12 @@ class TestMockToolsNotWiredIntoProduction:
 
         assert MOCK_WRITE_TOOL_NAME not in tools
         assert MOCK_READ_TOOL_NAME not in tools
-        assert set(tools) == {"search_products", "check_inventory", "lookup_safety_policy"}
+        assert set(tools) == {
+            "search_products",
+            "check_inventory",
+            "lookup_safety_policy",
+            "recommend_products",
+        }
 
 
 # -- 8. confirm_gate.py's Redis primitives, tested directly ------------------

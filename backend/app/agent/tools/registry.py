@@ -47,6 +47,9 @@ TOOL_AUTH_REGISTRY: dict[str, ToolAuthPolicy] = {
     "search_products": _READ_PUBLIC,
     "check_inventory": _READ_PUBLIC,
     "lookup_safety_policy": _READ_PUBLIC,
+    # Recommendations are catalog + aggregate popularity, never per-customer
+    # data, so an anonymous storefront visitor can call this too (#356).
+    "recommend_products": _READ_PUBLIC,
     # --- Worked examples only (issue #348) -------------------------------
     # Neither is wired into `build_tools()` (agent/graph.py) or reachable
     # from the production `/chat/agent/stream` endpoint. They exist so

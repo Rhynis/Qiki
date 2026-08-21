@@ -145,6 +145,13 @@ class BestSellerProduct(ProductResponse):
     total_sold: int
 
 
+class RecommendedProduct(ProductResponse):
+    """An active product annotated with its recommendation score and reason."""
+
+    score: float
+    reason: str
+
+
 class ProductParentBase(BaseModel):
     """Shared parent product fields."""
 
